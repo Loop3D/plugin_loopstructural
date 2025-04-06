@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.2...v0.1.3) (2025-04-06)
+
+
+### Bug Fixes
+
+* stratigraphic column scope issues ([cfaf265](https://github.com/Loop3D/plugin_loopstructural/commit/cfaf265864fdd7b7a206270035e3895dae36e2be))
+
 ## [0.1.2](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.1...v0.1.2) (2025-04-04)
 
 
