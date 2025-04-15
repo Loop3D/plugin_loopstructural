@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.3...v0.1.4) (2025-04-15)
+
+
+### Bug Fixes
+
+* bump ([e3bedf4](https://github.com/Loop3D/plugin_loopstructural/commit/e3bedf41e38ba99d46b515d4cadae72107fe7b68))
+
 ## [0.1.3](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.2...v0.1.3) (2025-04-15)
 
 
