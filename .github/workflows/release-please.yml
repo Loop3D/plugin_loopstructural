@@ -26,11 +26,18 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger build for pypi and upload
+      - name: Extract tag name
+        id: tag
+        run: |
+          full_tag="${{ needs.release-please.outputs.tag_name }}"
+          tag="${full_tag#*--}"  # removes everything before the --
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+
+      - name: Trigger release.yml
         run: |
           curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/Loop3d/${{env.PACKAGE_NAME}}/actions/workflows/release.yml/dispatches \
-          -d '{"ref":"master"}'
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Loop3d/${{ env.PACKAGE_NAME }}/actions/workflows/release.yml/dispatches \
+            -d "{\"ref\":\"${{ steps.tag.outputs.tag }}\"}"
         
