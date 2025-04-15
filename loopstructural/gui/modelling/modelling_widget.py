@@ -782,9 +782,12 @@ class ModellingWidget(QWidget):
             return pick_color
 
         for i, (unit, value) in enumerate(self._getSortedStratigraphicColumn()):
+            # Add stretch factor to first column
+            
+
             label = QLineEdit(unit)
             label.editingFinished.connect(lambda unit=unit, label=label: self.stratigraphicColumnUnitNameChanged(unit, label.text()))
-            spin_box = QDoubleSpinBox(maximum=10000, minimum=0)
+            spin_box = QDoubleSpinBox(maximum=100000, minimum=0)
             spin_box.setValue(value['thickness'])
             order = QLabel()
             order.setText(str(value['order']))
@@ -828,6 +831,7 @@ class ModellingWidget(QWidget):
                 lambda value, unit=unit: self.stratigraphicColumnRemoveClicked(unit)
             )
             self.stratigraphicColumnContainer.addWidget(remove_button, i, 6)
+        
         self.updateGroups()
     def stratigraphicColumnChanged(self, text, unit):
         self._units[unit]['contact'] = text
