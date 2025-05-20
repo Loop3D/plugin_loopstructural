@@ -1,0 +1,5 @@
+pyvistaqt
+pyvista
+LoopStructural
+loopstructural-visualisation
+geoh5py
