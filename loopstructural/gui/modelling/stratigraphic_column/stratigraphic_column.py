@@ -1,4 +1,3 @@
-from PyQt5 import uic
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QListWidget,
@@ -28,7 +27,19 @@ class StratColumnWidget(QWidget):
 
     def add_unit(self):
         unit_widget = StratigraphicUnitWidget()
+        unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
+        print("Unit added and delete signal connected")  # Debug print
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unit_widget)
+
+    def delete_unit(self, unit_widget):
+        print("delete_unit method triggered")  # Debug print
+        print("Delete unit requested")  # Debug print
+        for i in range(self.unitList.count()):
+            item = self.unitList.item(i)
+            if self.unitList.itemWidget(item) == unit_widget:
+                print(f"Deleting unit at index {i}")  # Debug print
+                self.unitList.takeItem(i)
+                break

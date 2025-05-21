@@ -5,7 +5,7 @@ from qgis.PyQt import uic
 
 from loopstructural.gui.modelling.fault_graph.fault_graph import FaultGraph
 from loopstructural.gui.modelling.geological_history_tab import GeologialHistoryTab
-from loopstructural.gui.modelling.model_definition_tab import ModelDefinitionTab
+from loopstructural.gui.modelling.model_definition import ModelDefinitionTab
 from loopstructural.gui.modelling.stratigraphic_column.stratigraphic_column import StratColumnWidget
 
 
