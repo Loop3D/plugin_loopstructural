@@ -13,7 +13,7 @@ class GeologialHistoryTab(BaseTab):
         super().__init__(parent)
         # Load the UI file for Tab 1
         stratigraphic_column_widget = StratColumnWidget(self)
-
+        
         # Add the loaded UI widget to the container layout
         self.add_widget(stratigraphic_column_widget, group_box=False)
-        
+
