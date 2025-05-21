@@ -11,9 +11,10 @@ from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtWidgets import QPushButton, QWidget
 from qgis.utils import iface
 
+import loopstructural.toolbelt.preferences as plg_prefs_hdlr
+
 # project package
 from loopstructural.__about__ import __title__
-import loopstructural.toolbelt.preferences as plg_prefs_hdlr
 
 # ############################################################################
 # ########## Classes ###############

@@ -1,7 +1,6 @@
 #! python3
 
-"""
-    Plugin settings form integrated into QGIS 'Options' menu.
+"""Plugin settings form integrated into QGIS 'Options' menu.
 """
 
 # standard
@@ -84,7 +83,8 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
     def apply(self):
         """Called to permanently apply the settings shown in the options page (e.g. \
         save them to QgsSettings objects). This is usually called when the options \
-        dialog is accepted."""
+        dialog is accepted.
+        """
         settings = self.plg_settings.get_plg_settings()
 
         # misc

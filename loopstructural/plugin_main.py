@@ -1,20 +1,19 @@
 #! python3
 
-"""
-    Main plugin module.
+"""Main plugin module.
 """
 
 # standard
+import os
 from functools import partial
 from pathlib import Path
-import os
 
 # PyQGIS
 from qgis.core import QgsApplication, QgsSettings
 from qgis.gui import QgisInterface
-from qgis.PyQt.QtCore import QCoreApplication, QLocale, QTranslator, QUrl, Qt
+from qgis.PyQt.QtCore import QCoreApplication, QLocale, Qt, QTranslator, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QIcon
-from qgis.PyQt.QtWidgets import QAction, QMenu, QDockWidget
+from qgis.PyQt.QtWidgets import QAction, QDockWidget
 
 # project
 from loopstructural.__about__ import (

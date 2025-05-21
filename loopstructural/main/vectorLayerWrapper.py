@@ -1,5 +1,5 @@
 import pandas as pd
-from qgis.core import QgsWkbTypes, QgsRaster
+from qgis.core import QgsRaster, QgsWkbTypes
 
 
 def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:

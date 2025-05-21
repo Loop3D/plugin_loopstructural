@@ -1,7 +1,6 @@
 #!python3
 
-"""
-    Configuration for project documentation using Sphinx.
+"""Configuration for project documentation using Sphinx.
 """
 
 # standard
@@ -12,7 +11,6 @@ from os import environ, path
 sys.path.insert(0, path.abspath(".."))  # move into project package
 
 # 3rd party
-import sphinx_rtd_theme  # theme of Read the Docs
 
 # Package
 from loopstructural import __about__

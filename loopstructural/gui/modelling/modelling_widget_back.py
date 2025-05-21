@@ -1,9 +1,19 @@
-from calendar import c
+import json
 import os
 import random
-import json
-from PyQt5.QtCore import QVariant
+
 import numpy as np
+from LoopStructural.utils import random_hex_colour
+from pyvistaqt import QtInteractor
+from qgis.core import (
+    QgsEllipse,
+    QgsFeature,
+    QgsFieldProxyModel,
+    QgsMapLayerProxyModel,
+    QgsPoint,
+    QgsProject,
+    QgsVectorLayer,
+)
 from qgis.PyQt import uic
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
@@ -13,31 +23,16 @@ from qgis.PyQt.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QLabel,
+    QLineEdit,
     QListWidgetItem,
     QPushButton,
     QWidget,
-    QLineEdit,
 )
-from qgis.core import (
-    QgsEllipse,
-    QgsFeature,
-    QgsField,
-    QgsMapLayerProxyModel,
-    QgsFieldProxyModel,
-    QgsPoint,
-    QgsProject,
-    QgsVectorLayer,
-)
-
-from pyvistaqt import QtInteractor
-import pyvista as pv
-from LoopStructural.utils import random_hex_colour
 
 from ...main import QgsProcessInputData
+from ...main.callableToLayer import callableToLayer
 from ...main.geometry.calculateLineAzimuth import calculateAverageAzimuth
 from ...main.rasterFromModel import callableToRaster
-from ...main.callableToLayer import callableToLayer
-
 
 # from .feature_widget import FeatureWidget
 # from LoopStructural.visualisation import Loop3DView
@@ -917,7 +912,7 @@ class ModellingWidget(QWidget):
                 fileFormat = 'pkl'
                 self.model.to_file(os.path.join(path, name + "." + fileFormat))
                 with open(os.path.join(path, name + "." + 'py'), 'w') as f:
-                    f.write(f"from loopstructural import GeologicalModel\n")
+                    f.write("from loopstructural import GeologicalModel\n")
                     f.write(f"model = GeologicalModel.from_file('{name + '.' + fileFormat}')\n")
                 return
 

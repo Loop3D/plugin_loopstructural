@@ -2,7 +2,6 @@ from qgis.core import QgsGeometry, QgsPoint
 
 
 def calculateAverageAzimuth(line: QgsGeometry):
-
     """Calculate the average azimuth of a line geometry.
 
     Args:
@@ -10,6 +9,7 @@ def calculateAverageAzimuth(line: QgsGeometry):
 
     Returns:
         float: The average azimuth of the line.
+
     """
     if line.isMultipart():
         lines = line.asMultiPolyline()

@@ -1,15 +1,16 @@
+import os
+import tempfile
+import uuid
+
 import numpy as np
 from osgeo import gdal, osr
 from qgis.core import QgsRasterLayer
+
 from .geometry.mapGrid import createGrid
-import uuid
-import tempfile
-import os
 
 
 def callableToRaster(callable, dtm, bounding_box, crs, layer_name):
-    """
-    Convert a feature to a raster and store it in QGIS as a temporary layer.
+    """Convert a feature to a raster and store it in QGIS as a temporary layer.
 
     :param feature: The object that has an `evaluate_value` method for computing values.
     :param dtm: Digital terrain model (if needed for processing).

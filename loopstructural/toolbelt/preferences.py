@@ -1,7 +1,6 @@
 #! python3
 
-"""
-    Plugin settings.
+"""Plugin settings.
 """
 
 # standard

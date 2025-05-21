@@ -1,5 +1,4 @@
 import os
-import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtSvg import QGraphicsSvgItem
