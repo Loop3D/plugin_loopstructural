@@ -1,17 +1,19 @@
 import os
+from tokenize import group
 
 from PyQt5.QtWidgets import QWidget
 from qgis.PyQt import uic
 
 from loopstructural.gui.modelling.base_tab import BaseTab
+from loopstructural.gui.modelling.stratigraphic_column.stratigraphic_column import StratColumnWidget
 
 
 class GeologialHistoryTab(BaseTab):
     def __init__(self, parent=None):
         super().__init__(parent)
         # Load the UI file for Tab 1
-        ui_widget = QWidget()
-        uic.loadUi(os.path.join(os.path.dirname(__file__), "geological_history_tab.ui"), ui_widget)
+        stratigraphic_column_widget = StratColumnWidget(self)
 
         # Add the loaded UI widget to the container layout
-        self.container_layout.addWidget(ui_widget)
+        self.add_widget(stratigraphic_column_widget, group_box=False)
+        

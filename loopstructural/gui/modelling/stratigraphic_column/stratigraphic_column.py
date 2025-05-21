@@ -7,6 +7,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
+
 from .stratigraphic_unit import StratigraphicUnitWidget
 
 
@@ -21,25 +23,35 @@ class StratColumnWidget(QWidget):
         layout.addWidget(self.unitList)
 
         # Add unit button
-        addButton = QPushButton("Add Unit")
-        addButton.clicked.connect(self.add_unit)
-        layout.addWidget(addButton)
+        addUnitButton = QPushButton("Add Unit")
+        addUnitButton.clicked.connect(self.add_unit)
+        layout.addWidget(addUnitButton)
+
+        # Add unconformity button
+        addUnconformityButton = QPushButton("Add Unconformity")
+        addUnconformityButton.clicked.connect(self.add_unconformity)
+        layout.addWidget(addUnconformityButton)
 
     def add_unit(self):
         unit_widget = StratigraphicUnitWidget()
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
-        print("Unit added and delete signal connected")  # Debug print
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unit_widget)
 
+    def add_unconformity(self):
+        unconformity_widget = UnconformityWidget()
+        unconformity_widget.deleteRequested.connect(self.delete_unit)
+        item = QListWidgetItem()
+        item.setSizeHint(unconformity_widget.sizeHint())
+        self.unitList.addItem(item)
+        self.unitList.setItemWidget(item, unconformity_widget)
+
     def delete_unit(self, unit_widget):
-        print("delete_unit method triggered")  # Debug print
-        print("Delete unit requested")  # Debug print
+
         for i in range(self.unitList.count()):
             item = self.unitList.item(i)
             if self.unitList.itemWidget(item) == unit_widget:
-                print(f"Deleting unit at index {i}")  # Debug print
                 self.unitList.takeItem(i)
                 break
