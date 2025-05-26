@@ -11,8 +11,8 @@ from .stratigraphic_layers import StratigraphicLayersWidget
 
 
 class ModelDefinitionTab(BaseTab):
-    def __init__(self, parent=None):
-        super().__init__(parent, scrollable=True)
+    def __init__(self, parent=None, data_manager=None):
+        super().__init__(parent, data_manager, scrollable=True)
         # Load the UI file for Tab 1
 
         # Create a QToolBox for collapsible sections
@@ -20,9 +20,9 @@ class ModelDefinitionTab(BaseTab):
         # self.add_widget(self.toolBox)
 
         # Add widgets to the QToolBox
-        bounding_box = BoundingBoxWidget(self)
-        fault_layers = FaultLayersWidget(self)
-        stratigraphy_layers = StratigraphicLayersWidget(self)
+        bounding_box = BoundingBoxWidget(self, data_manager)
+        fault_layers = FaultLayersWidget(self, data_manager)
+        stratigraphy_layers = StratigraphicLayersWidget(self, data_manager)
 
         # Set uniform size policy for all widgets
         for widget in [bounding_box, fault_layers, stratigraphy_layers]:

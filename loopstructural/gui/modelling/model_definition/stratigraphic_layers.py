@@ -6,7 +6,10 @@ from qgis.PyQt import uic
 
 
 class StratigraphicLayersWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
+        if data_manager is None:
+            raise ValueError("data_manager must be provided")
+        self.data_manager = data_manager
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "stratigraphic_layers.ui")
         uic.loadUi(ui_path, self)
@@ -23,6 +26,7 @@ class StratigraphicLayersWidget(QWidget):
 
     def onBasalContactsChanged(self, layer):
         self.unitNameField.setLayer(layer)
+        self.data_manager.set_basal_contacts(layer, self.unitNameField.fieldName())
 
     def onStructuralDataLayerChanged(self, layer):
         self.orientationField.setLayer(layer)
@@ -30,5 +34,6 @@ class StratigraphicLayersWidget(QWidget):
         self.structuralDataUnitName.setLayer(layer)
 
     def onUnitFieldChanged(self, field):
-        pass
+        self.data_manager.set_basal_contacts(self.basalContactsLayer.layer(), field)
+
         # self.updateDataManager()

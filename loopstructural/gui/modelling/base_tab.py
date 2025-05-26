@@ -4,9 +4,9 @@ from qgis.gui import QgsCollapsibleGroupBox
 
 
 class BaseTab(QWidget):
-    def __init__(self, parent=None, scrollable=False):
+    def __init__(self, parent=None, data_manager=None, scrollable=False):
         super().__init__(parent)
-        self.data_manager = None
+        self.data_manager = data_manager
         # Initialize a default layout for all tabs
         if scrollable:
             self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
