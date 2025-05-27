@@ -17,8 +17,7 @@ class ModellingWidget(QWidget):
         uic.loadUi(os.path.join(os.path.dirname(__file__), "modelling_widget.ui"), self)
         self.mapCanvas = mapCanvas
         self.logger = logger
-        self.data_manager = ModellingDataManager()
-        self.model_definition_tab_widget = None
+        self.data_manager = ModellingDataManager(mapCanvas=mapCanvas, logger=logger)
         self.geological_history_tab_widget = None
         self.stratigraphic_column_tab_widget = None
         self.fault_graph_tab_widget = None
@@ -32,10 +31,14 @@ class ModellingWidget(QWidget):
             self.model_setup_tab.setLayout(QVBoxLayout())
         if not self.topology_tab.layout():
             self.topology_tab.setLayout(QVBoxLayout())
-        self.model_definition_tab_widget = ModelDefinitionTab(self, self.data_manager)
-        self.geological_history_tab_widget = GeologialHistoryTab(self, self.data_manager)
-        self.stratigraphic_column_tab_widget = StratColumnWidget(self, self.data_manager)
-        self.fault_graph_tab_widget = FaultGraph(self, self.data_manager)
+        self.model_definition_tab_widget = ModelDefinitionTab(self, data_manager=self.data_manager)
+        self.geological_history_tab_widget = GeologialHistoryTab(
+            self, data_manager=self.data_manager
+        )
+        self.stratigraphic_column_tab_widget = StratColumnWidget(
+            self, data_manager=self.data_manager
+        )
+        self.fault_graph_tab_widget = FaultGraph(self, data_manager=self.data_manager)
         self.load_data_tab.layout().addWidget(self.model_definition_tab_widget)
         self.geological_history_tab.layout().addWidget(self.geological_history_tab_widget)
         self.model_setup_tab.layout().addWidget(self.stratigraphic_column_tab_widget)

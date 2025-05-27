@@ -2,16 +2,37 @@ from LoopStructural.datatypes import BoundingBox
 
 
 class ModellingDataManager:
-    def __init__(self):
-        self._bounding_box = BoundingBox()
+    def __init__(self, mapCanvas=None, logger=None):
+        self._bounding_box = BoundingBox(origin=[0, 0, 0], maximum=[1000, 1000, 1000])
         self._basal_contacts = None
         self._fault_traces = None
         self._structural_orientations = None
         self._unique_basal_units = []
+        self.map_canvas = mapCanvas
+        self.logger = logger
 
-    def set_bounding_box(self, east, west, north, south, top, bottom):
+    def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
         """Set the bounding box for the model."""
-        self._bounding_box.update([west, south, bottom], [east, north, top])
+        origin = self._bounding_box.origin
+        maximum = self._bounding_box.maximum
+
+        if xmin is not None:
+            origin[0] = xmin
+        if xmax is not None:
+            maximum[0] = xmax
+        if ymin is not None:
+            origin[1] = ymin
+        if ymax is not None:
+            maximum[1] = ymax
+        if zmin is not None:
+            origin[2] = zmin
+        if zmax is not None:
+            maximum[2] = zmax
+        self._bounding_box.origin = origin
+        self._bounding_box.maximum = maximum
+        self._bounding_box.origin = origin
+        self._bounding_box.maximum = maximum
+        # self._bounding_box.update([west, south, bottom], [east, north, top])
 
     def get_bounding_box(self):
         """Get the current bounding box."""
@@ -21,7 +42,6 @@ class ModellingDataManager:
         """Set the basal contacts for the model."""
         self._basal_contacts = basal_contacts
         self._unitname_field = unitname_field
-        self.calculate_unique_basal_units()
 
     def calculate_unique_basal_units(self):
         if self._basal_contacts is not None and self._unitname_field is not None:

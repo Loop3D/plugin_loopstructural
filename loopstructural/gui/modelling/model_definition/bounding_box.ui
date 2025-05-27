@@ -50,30 +50,30 @@
      <item row="1" column="1">
       <widget class="QDoubleSpinBox" name="originXSpinBox">
        <property name="minimum">
-        <double>-10000.000000000000000</double>
+        <double>0.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>10000.000000000000000</double>
+        <double>1000000.000000000000000</double>
        </property>
       </widget>
      </item>
      <item row="1" column="2">
       <widget class="QDoubleSpinBox" name="originYSpinBox">
        <property name="minimum">
-        <double>-10000.000000000000000</double>
+        <double>0.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>10000.000000000000000</double>
+        <double>1000000.000000000000000</double>
        </property>
       </widget>
      </item>
      <item row="1" column="3">
       <widget class="QDoubleSpinBox" name="originZSpinBox">
        <property name="minimum">
-        <double>-10000.000000000000000</double>
+        <double>0.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>10000.000000000000000</double>
+        <double>1000000.000000000000000</double>
        </property>
       </widget>
      </item>
@@ -87,20 +87,20 @@
      <item row="2" column="1">
       <widget class="QDoubleSpinBox" name="maxXSpinBox">
        <property name="minimum">
-        <double>-10000.000000000000000</double>
+        <double>0.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>10000.000000000000000</double>
+        <double>1000000.000000000000000</double>
        </property>
       </widget>
      </item>
      <item row="2" column="2">
       <widget class="QDoubleSpinBox" name="maxYSpinBox">
        <property name="minimum">
-        <double>-10000.000000000000000</double>
+        <double>0.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>10000.000000000000000</double>
+        <double>1000000.000000000000000</double>
        </property>
       </widget>
      </item>
@@ -163,21 +163,21 @@
     </layout>
    </item>
    <item>
-    <widget class="QPushButton" name="pushButton">
+    <widget class="QPushButton" name="selectFromCurrentLayerButton">
      <property name="text">
       <string>Select from layer current</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="pushButton_3">
+    <widget class="QPushButton" name="useCurrentViewExtentButton">
      <property name="text">
       <string>Use current view extent</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="pushButton_2">
+    <widget class="QPushButton" name="drawOnMapButton">
      <property name="text">
       <string>Draw on map</string>
      </property>

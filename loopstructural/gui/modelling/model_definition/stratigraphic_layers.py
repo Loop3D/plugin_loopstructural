@@ -26,7 +26,7 @@ class StratigraphicLayersWidget(QWidget):
 
     def onBasalContactsChanged(self, layer):
         self.unitNameField.setLayer(layer)
-        self.data_manager.set_basal_contacts(layer, self.unitNameField.fieldName())
+        self.data_manager.set_basal_contacts(layer, self.unitNameField.currentField())
 
     def onStructuralDataLayerChanged(self, layer):
         self.orientationField.setLayer(layer)
@@ -34,6 +34,6 @@ class StratigraphicLayersWidget(QWidget):
         self.structuralDataUnitName.setLayer(layer)
 
     def onUnitFieldChanged(self, field):
-        self.data_manager.set_basal_contacts(self.basalContactsLayer.layer(), field)
+        self.data_manager.set_basal_contacts(self.basalContactsLayer.currentLayer(), field)
 
         # self.updateDataManager()

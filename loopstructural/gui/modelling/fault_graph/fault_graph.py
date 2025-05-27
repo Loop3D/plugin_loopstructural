@@ -235,7 +235,7 @@ class TopologyScene(QtWidgets.QGraphicsScene):
 
 
 class FaultGraph(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         super().__init__()
         layout = QtWidgets.QVBoxLayout(self)
         self.view = QtWidgets.QGraphicsView()

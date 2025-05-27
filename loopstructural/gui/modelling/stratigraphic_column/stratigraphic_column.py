@@ -13,10 +13,10 @@ from .stratigraphic_unit import StratigraphicUnitWidget
 
 
 class StratColumnWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         super().__init__()
         layout = QVBoxLayout(self)
-
+        self.data_manager = data_manager
         # Main list widget
         self.unitList = QListWidget()
         self.unitList.setDragDropMode(QAbstractItemView.InternalMove)
