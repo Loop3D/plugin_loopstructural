@@ -12,6 +12,8 @@ class UnconformityWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         uic.loadUi(os.path.join(os.path.dirname(__file__), 'unconformity.ui'), self)
+        # Add delete button
+        self.buttonDelete.clicked.connect(self.request_delete)
 
     def request_delete(self):
 

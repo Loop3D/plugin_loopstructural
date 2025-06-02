@@ -1,5 +1,7 @@
 from LoopStructural.datatypes import BoundingBox
 
+from .stratigraphic_column import StratigraphicColumn
+
 
 class ModellingDataManager:
     def __init__(self, mapCanvas=None, logger=None):
@@ -10,6 +12,7 @@ class ModellingDataManager:
         self._unique_basal_units = []
         self.map_canvas = mapCanvas
         self.logger = logger
+        self._stratigraphic_column = StratigraphicColumn()
 
     def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
         """Set the bounding box for the model."""
@@ -42,6 +45,7 @@ class ModellingDataManager:
         """Set the basal contacts for the model."""
         self._basal_contacts = basal_contacts
         self._unitname_field = unitname_field
+        self.calculate_unique_basal_units()
 
     def calculate_unique_basal_units(self):
         if self._basal_contacts is not None and self._unitname_field is not None:
@@ -51,6 +55,38 @@ class ModellingDataManager:
                 if unit_name not in self._unique_basal_units:
                     self._unique_basal_units.append(unit_name)
         return len(self._unique_basal_units)
+
+    def init_stratigraphic_column_from_basal_contacts(self):
+        if len(self._unique_basal_units) == 0:
+            self.logger(message="No basal contacts set, cannot initialise stratigraphic column.")
+            return
+        else:
+            for unit_name in self._unique_basal_units:
+                self._stratigraphic_column.add_unit(name=unit_name, colour=None)
+
+    def add_to_stratigraphic_column(self, unit_data):
+        """Add a unit or unconformity to the stratigraphic column."""
+
+        if isinstance(unit_data, dict):
+            if unit_data.get('type') == 'unit':
+                self._stratigraphic_column.add_unit(
+                    name=unit_data.get('name'), colour=unit_data.get('colour')
+                )
+            elif unit_data.get('type') == 'unconformity':
+                self._stratigraphic_column.add_unconformity(name=unit_data.get('name'))
+        else:
+            print('unit_data', unit_data)
+            raise ValueError("unit_data must be a dictionary with 'type' key.")
+
+    def remove_from_stratigraphic_column(self, unit_name):
+        """Remove a unit or unconformity from the stratigraphic column."""
+        self._stratigraphic_column.remove_unit(name=unit_name)
+
+    def update_stratigraphic_column_order(self, new_order):
+        """Update the order of units in the stratigraphic column."""
+        if not isinstance(new_order, list):
+            raise ValueError("new_order must be a list of unit names.")
+        self._stratigraphic_column.update_order(new_order)
 
     def get_basal_contacts(self):
         """Get the basal contacts."""
@@ -72,7 +108,7 @@ class ModellingDataManager:
         """Get the structural orientations."""
         return self._structural_orientations
 
-    def updatestratigraphic_column(self, stratigraphic_column):
+    def update_stratigraphic_column(self, stratigraphic_column):
         """Set the stratigraphic column for the model."""
         self._stratigraphic_column = stratigraphic_column
 

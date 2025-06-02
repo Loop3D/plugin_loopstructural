@@ -8,11 +8,18 @@ from PyQt5.QtWidgets import (
 )
 
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
+from loopstructural.main.stratigraphic_column import StratigraphicColumnElementType
 
 from .stratigraphic_unit import StratigraphicUnitWidget
 
 
 class StratColumnWidget(QWidget):
+    """In control of building the stratigraphic column
+
+    :param QWidget: _description_
+    :type QWidget: _type_
+    """
+
     def __init__(self, parent=None, data_manager=None):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -20,6 +27,7 @@ class StratColumnWidget(QWidget):
         # Main list widget
         self.unitList = QListWidget()
         self.unitList.setDragDropMode(QAbstractItemView.InternalMove)
+        self.unitList.model().rowsMoved.connect(self.update_order)
         layout.addWidget(self.unitList)
 
         # Add unit button
@@ -32,15 +40,48 @@ class StratColumnWidget(QWidget):
         addUnconformityButton.clicked.connect(self.add_unconformity)
         layout.addWidget(addUnconformityButton)
 
-    def add_unit(self):
+        # add init from basal contacts button
+        initFromBasalContactsButton = QPushButton("Initialise from map")
+        initFromBasalContactsButton.clicked.connect(
+            self.init_stratigraphic_column_from_basal_contacts
+        )
+        layout.addWidget(initFromBasalContactsButton)
+
+        # Update display from data manager
+        self.update_display()
+
+    def update_display(self):
+        """Update the widget display based on the data manager's stratigraphic column."""
+        self.unitList.clear()
+        if self.data_manager and self.data_manager._stratigraphic_column:
+            for unit in self.data_manager._stratigraphic_column.order:
+                if unit.element_type == StratigraphicColumnElementType.UNIT:
+                    self.add_unit(unit_data=unit.to_dict())
+                elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
+                    self.add_unconformity(unconformity_data=unit.to_dict())
+
+    def init_stratigraphic_column_from_basal_contacts(self):
+        if self.data_manager:
+            self.data_manager.init_stratigraphic_column_from_basal_contacts()
+            self.update_display()
+        else:
+            print("Error: Data manager is not initialized.")
+
+    def add_unit(self, *, unit_data=None):
         unit_widget = StratigraphicUnitWidget()
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unit_widget)
+        unit_widget.setData(unit_data)  # Set data for the unit widget
+        # Update data manager
+        if self.data_manager:
+            if unit_data is None:
+                unit_data = {'type': 'unit', 'name': unit_widget.name}
+            self.data_manager.add_to_stratigraphic_column(unit_data)
 
-    def add_unconformity(self):
+    def add_unconformity(self, *, unconformity_data=None):
         unconformity_widget = UnconformityWidget()
         unconformity_widget.deleteRequested.connect(self.delete_unit)
         item = QListWidgetItem()
@@ -48,10 +89,30 @@ class StratColumnWidget(QWidget):
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unconformity_widget)
 
-    def delete_unit(self, unit_widget):
+        # Update data manager
+        if self.data_manager:
+            if unconformity_data is None:
+                unconformity_data = {'type': 'unconformity', 'name': unconformity_widget.name}
+            self.data_manager.add_to_stratigraphic_column(unconformity_data)
 
+    def delete_unit(self, unit_widget):
         for i in range(self.unitList.count()):
             item = self.unitList.item(i)
             if self.unitList.itemWidget(item) == unit_widget:
                 self.unitList.takeItem(i)
                 break
+
+        # Update data manager
+        if self.data_manager:
+            self.data_manager.remove_from_stratigraphic_column(unit_widget.name)
+
+    def update_order(self, parent, start, end, destination, row):
+        """Update the data manager when the order of items changes."""
+        if self.data_manager:
+            ordered_names = []
+            for i in range(self.unitList.count()):
+                item = self.unitList.item(i)
+                widget = self.unitList.itemWidget(item)
+                if widget:
+                    ordered_names.append(widget.name)
+            self.data_manager.update_stratigraphic_column_order(ordered_names)
