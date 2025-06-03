@@ -1,7 +1,6 @@
 #! python3
 
-"""Main plugin module.
-"""
+"""Main plugin module."""
 
 # standard
 import os
@@ -24,6 +23,7 @@ from loopstructural.__about__ import (
 )
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.modelling.modelling_widget import ModellingWidget as Modelling
+from loopstructural.gui.visualisation.visualisation_widget import VisualisationWidget
 from loopstructural.toolbelt import PlgLogger
 
 # ############################################################################
@@ -62,7 +62,6 @@ class LoopstructuralPlugin:
         self.options_factory = PlgOptionsFactory()
         self.iface.registerOptionsWidgetFactory(self.options_factory)
 
-        
         # -- Actions
         self.action_help = QAction(
             QgsApplication.getThemeIcon("mActionHelpContents.svg"),
@@ -82,12 +81,17 @@ class LoopstructuralPlugin:
             lambda: self.iface.showOptionsDialog(currentPage="mOptionsPage{}".format(__title__))
         )
         self.action_modelling = QAction(
-            QIcon(os.path.dirname(__file__)+"/icon.png"),
+            QIcon(os.path.dirname(__file__) + "/icon.png"),
             self.tr("LoopStructural Modelling"),
             self.iface.mainWindow(),
         )
-
+        self.action_visualisation = QAction(
+            QIcon(os.path.dirname(__file__) + "/icon.png"),
+            self.tr("LoopStructural Visualisation"),
+            self.iface.mainWindow(),
+        )
         self.toolbar.addAction(self.action_modelling)
+        self.toolbar.addAction(self.action_visualisation)
 
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
@@ -116,11 +120,11 @@ class LoopstructuralPlugin:
         self.modelling_dockwidget.setWidget(self.model_setup_widget)
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
         right_docks = [
-                d
-                for d in self.iface.mainWindow().findChildren(QDockWidget)
-                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
-            ]
-         # If there are other dock widgets, tab this one with the first one found
+            d
+            for d in self.iface.mainWindow().findChildren(QDockWidget)
+            if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+        ]
+        # If there are other dock widgets, tab this one with the first one found
         if right_docks:
             for dock in right_docks:
                 if dock != self.modelling_dockwidget:
@@ -131,13 +135,39 @@ class LoopstructuralPlugin:
         self.modelling_dockwidget.show()
 
         self.modelling_dockwidget.close()
+
+        ## -- visualisation dock widget
+        self.visualisation_dockwidget = QDockWidget(
+            self.tr("Visualisation"), self.iface.mainWindow()
+        )
+        self.visualisation_widget = VisualisationWidget(
+            self.iface.mainWindow(), mapCanvas=self.iface.mapCanvas(), logger=self.log
+        )
+        self.visualisation_dockwidget.setWidget(self.visualisation_widget)
+        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
+        right_docks = [
+            d
+            for d in self.iface.mainWindow().findChildren(QDockWidget)
+            if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+        ]
+        # If there are other dock widgets, tab this one with the first one found
+        if right_docks:
+            for dock in right_docks:
+                if dock != self.visualisation_dockwidget:
+                    self.iface.mainWindow().tabifyDockWidget(dock, self.visualisation_dockwidget)
+                    # Optionally, bring your plugin tab to the front
+                    self.visualisation_dockwidget.raise_()
+                    break
+        self.visualisation_dockwidget.show()
+        self.visualisation_dockwidget.close()
+
+        # -- Connect actions
         self.action_modelling.triggered.connect(
             self.modelling_dockwidget.toggleViewAction().trigger
         )
-
-
-
-
+        self.action_visualisation.triggered.connect(
+            self.visualisation_dockwidget.toggleViewAction().trigger
+        )
 
     def tr(self, message: str) -> str:
         """Get the translation for a string using Qt translation API.
