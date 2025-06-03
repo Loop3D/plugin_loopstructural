@@ -1,5 +1,7 @@
 from LoopStructural.datatypes import BoundingBox
 
+from tests import unit
+
 from .stratigraphic_column import StratigraphicColumn
 
 
@@ -69,23 +71,22 @@ class ModellingDataManager:
 
         if isinstance(unit_data, dict):
             if unit_data.get('type') == 'unit':
-                self._stratigraphic_column.add_unit(
+                return self._stratigraphic_column.add_unit(
                     name=unit_data.get('name'), colour=unit_data.get('colour')
                 )
             elif unit_data.get('type') == 'unconformity':
-                self._stratigraphic_column.add_unconformity(name=unit_data.get('name'))
+                return self._stratigraphic_column.add_unconformity(name=unit_data.get('name'))
         else:
-            print('unit_data', unit_data)
             raise ValueError("unit_data must be a dictionary with 'type' key.")
 
-    def remove_from_stratigraphic_column(self, unit_name):
+    def remove_from_stratigraphic_column(self, unit_uuid):
         """Remove a unit or unconformity from the stratigraphic column."""
-        self._stratigraphic_column.remove_unit(name=unit_name)
+        self._stratigraphic_column.remove_unit(uuid=unit_uuid)
 
     def update_stratigraphic_column_order(self, new_order):
         """Update the order of units in the stratigraphic column."""
         if not isinstance(new_order, list):
-            raise ValueError("new_order must be a list of unit names.")
+            raise ValueError("new_order must be a list of unit uuids.")
         self._stratigraphic_column.update_order(new_order)
 
     def get_basal_contacts(self):

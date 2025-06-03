@@ -23,6 +23,8 @@ class StratColumnWidget(QWidget):
     def __init__(self, parent=None, data_manager=None):
         super().__init__()
         layout = QVBoxLayout(self)
+        if data_manager is None:
+            raise ValueError("Data manager must be provided.")
         self.data_manager = data_manager
         # Main list widget
         self.unitList = QListWidget()
@@ -68,7 +70,10 @@ class StratColumnWidget(QWidget):
             print("Error: Data manager is not initialized.")
 
     def add_unit(self, *, unit_data=None):
-        unit_widget = StratigraphicUnitWidget()
+        if unit_data is None:
+            unit_data = {'type': 'unit', 'name': ''}
+        unit = self.data_manager.add_to_stratigraphic_column(unit_data)
+        unit_widget = StratigraphicUnitWidget(uuid=unit.uuid)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
@@ -76,13 +81,12 @@ class StratColumnWidget(QWidget):
         self.unitList.setItemWidget(item, unit_widget)
         unit_widget.setData(unit_data)  # Set data for the unit widget
         # Update data manager
-        if self.data_manager:
-            if unit_data is None:
-                unit_data = {'type': 'unit', 'name': unit_widget.name}
-            self.data_manager.add_to_stratigraphic_column(unit_data)
 
     def add_unconformity(self, *, unconformity_data=None):
-        unconformity_widget = UnconformityWidget()
+        if unconformity_data is None:
+            unconformity_data = {'type': 'unconformity', 'unconformity_type': 'erode'}
+        unconformity = self.data_manager.add_to_stratigraphic_column(unconformity_data)
+        unconformity_widget = UnconformityWidget(uuid=unconformity.uuid)
         unconformity_widget.deleteRequested.connect(self.delete_unit)
         item = QListWidgetItem()
         item.setSizeHint(unconformity_widget.sizeHint())
@@ -90,10 +94,6 @@ class StratColumnWidget(QWidget):
         self.unitList.setItemWidget(item, unconformity_widget)
 
         # Update data manager
-        if self.data_manager:
-            if unconformity_data is None:
-                unconformity_data = {'type': 'unconformity', 'name': unconformity_widget.name}
-            self.data_manager.add_to_stratigraphic_column(unconformity_data)
 
     def delete_unit(self, unit_widget):
         for i in range(self.unitList.count()):
@@ -104,15 +104,15 @@ class StratColumnWidget(QWidget):
 
         # Update data manager
         if self.data_manager:
-            self.data_manager.remove_from_stratigraphic_column(unit_widget.name)
+            self.data_manager.remove_from_stratigraphic_column(unit_widget.uuid)
 
     def update_order(self, parent, start, end, destination, row):
         """Update the data manager when the order of items changes."""
         if self.data_manager:
-            ordered_names = []
+            ordered_uuids = []
             for i in range(self.unitList.count()):
                 item = self.unitList.item(i)
                 widget = self.unitList.itemWidget(item)
                 if widget:
-                    ordered_names.append(widget.name)
-            self.data_manager.update_stratigraphic_column_order(ordered_names)
+                    ordered_uuids.append(widget.uuid)
+            self.data_manager.update_stratigraphic_column_order(ordered_uuids)

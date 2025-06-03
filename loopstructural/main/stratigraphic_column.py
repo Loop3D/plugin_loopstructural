@@ -25,11 +25,15 @@ class StratigraphicColumnElement:
     for example unconformity.
     """
 
-    def __init__(self, name):
+    def __init__(self, uuid=None):
         """
         Initializes the StratigraphicColumnElement with a name and an optional description.
         """
-        self.name = name
+        if uuid is None:
+            import uuid as uuid_module
+
+            uuid = str(uuid_module.uuid4())
+        self.uuid = uuid
 
 
 class StratigraphicUnit(StratigraphicColumnElement):
@@ -37,11 +41,12 @@ class StratigraphicUnit(StratigraphicColumnElement):
     A class to represent a stratigraphic unit, which is a distinct layer of rock with specific characteristics.
     """
 
-    def __init__(self, name, colour, thickness=None):
+    def __init__(self, *, uuid=None, name=None, colour=None, thickness=None):
         """
         Initializes the StratigraphicUnit with a name and an optional description.
         """
-        super().__init__(name)
+        super().__init__(uuid)
+        self.name = name
         self.colour = colour
         self.thickness = thickness
         self.element_type = StratigraphicColumnElementType.UNIT
@@ -62,7 +67,16 @@ class StratigraphicUnit(StratigraphicColumnElement):
         name = data.get("name")
         colour = data.get("colour")
         thickness = data.get("thickness", None)
-        return cls(name, colour, thickness)
+        uuid = data.get("uuid", None)
+        return cls(uuid=uuid, name=name, colour=colour, thickness=thickness)
+
+    def __str__(self):
+        """
+        Returns a string representation of the stratigraphic unit.
+        """
+        return (
+            f"StratigraphicUnit(name={self.name}, colour={self.colour}, thickness={self.thickness})"
+        )
 
 
 class StratigraphicUnconformity(StratigraphicColumnElement):
@@ -70,11 +84,14 @@ class StratigraphicUnconformity(StratigraphicColumnElement):
     A class to represent a stratigraphic unconformity, which is a surface of discontinuity in the stratigraphic record.
     """
 
-    def __init__(self, name, unconformity_type: UnconformityType = UnconformityType.ERODE):
+    def __init__(
+        self, *, uuid=None, name=None, unconformity_type: UnconformityType = UnconformityType.ERODE
+    ):
         """
         Initializes the StratigraphicUnconformity with a name and an optional description.
         """
-        super().__init__(name)
+        super().__init__(uuid)
+        self.name = name
         if unconformity_type not in [UnconformityType.ERODE, UnconformityType.ONLAP]:
             raise ValueError("Invalid unconformity type")
         self.unconformity_type = unconformity_type
@@ -84,7 +101,20 @@ class StratigraphicUnconformity(StratigraphicColumnElement):
         """
         Converts the stratigraphic unconformity to a dictionary representation.
         """
-        return {"name": self.name, "unconformity_type": self.unconformity_type.value}
+        return {
+            "uuid": self.uuid,
+            "name": self.name,
+            "unconformity_type": self.unconformity_type.value,
+        }
+
+    def __str__(self):
+        """
+        Returns a string representation of the stratigraphic unconformity.
+        """
+        return (
+            f"StratigraphicUnconformity(name={self.name}, "
+            f"unconformity_type={self.unconformity_type.value})"
+        )
 
     @classmethod
     def from_dict(cls, data):
@@ -97,7 +127,8 @@ class StratigraphicUnconformity(StratigraphicColumnElement):
         unconformity_type = UnconformityType(
             data.get("unconformity_type", UnconformityType.ERODE.value)
         )
-        return cls(name, unconformity_type)
+        uuid = data.get("uuid", None)
+        return cls(uuid=uuid, name=name, unconformity_type=unconformity_type)
 
 
 class StratigraphicColumn:
@@ -113,23 +144,25 @@ class StratigraphicColumn:
         self.order = []
 
     def add_unit(self, name, colour, thickness=None):
-        unit = StratigraphicUnit(name, colour, thickness)
+        unit = StratigraphicUnit(name=name, colour=colour, thickness=thickness)
 
         self.order.append(unit)
         return unit
 
-    def remove_unit(self, name):
+    def remove_unit(self, uuid):
         """
-        Removes a unit or unconformity from the stratigraphic column by its name.
+        Removes a unit or unconformity from the stratigraphic column by its uuid.
         """
         for i, element in enumerate(self.order):
-            if element.name == name:
+            if element.uuid == uuid:
                 del self.order[i]
                 return True
         return False
 
     def add_unconformity(self, name, unconformity_type=UnconformityType.ERODE):
-        unconformity = StratigraphicUnconformity(name, unconformity_type)
+        unconformity = StratigraphicUnconformity(
+            uuid=None, name=name, unconformity_type=unconformity_type
+        )
 
         self.order.append(unconformity)
         return unconformity
@@ -147,8 +180,9 @@ class StratigraphicColumn:
         Retrieves a unit by its name from the stratigraphic column.
         """
         for unit in self.order:
-            if unit.name == name:
+            if isinstance(unit, StratigraphicUnit) and unit.name == name:
                 return unit
+
         return None
 
     def add_element(self, element):
@@ -180,6 +214,15 @@ class StratigraphicColumn:
             groups.append(group)
         return groups
 
+    def __getitem__(self, uuid):
+        """
+        Retrieves an element by its uuid from the stratigraphic column.
+        """
+        for element in self.order:
+            if element.uuid == uuid:
+                return element
+        raise KeyError(f"No element found with uuid: {uuid}")
+
     def update_order(self, new_order):
         """
         Updates the order of elements in the stratigraphic column based on a new order list.
@@ -187,9 +230,7 @@ class StratigraphicColumn:
         if not isinstance(new_order, list):
             raise TypeError("New order must be a list")
         self.order = [
-            self.get_unit_by_name(name)
-            for name in new_order
-            if self.get_unit_by_name(name) is not None
+            self.__getitem__(uuid) for uuid in new_order if self.__getitem__(uuid) is not None
         ]
 
     def clear(self):
@@ -202,7 +243,7 @@ class StratigraphicColumn:
         """
         Returns a string representation of the stratigraphic column, listing all elements.
         """
-        return "\n".join([f"{i+1}. {element.name}" for i, element in enumerate(self.order)])
+        return "\n".join([f"{i+1}. {element}" for i, element in enumerate(self.order)])
 
     def to_dict(self):
         """

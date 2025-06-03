@@ -35,11 +35,8 @@ class ModellingWidget(QWidget):
         self.geological_history_tab_widget = GeologialHistoryTab(
             self, data_manager=self.data_manager
         )
-        self.stratigraphic_column_tab_widget = StratColumnWidget(
-        #     self, data_manager=self.data_manager
-        # )
+        #
         self.fault_graph_tab_widget = FaultGraph(self, data_manager=self.data_manager)
         self.load_data_tab.layout().addWidget(self.model_definition_tab_widget)
         self.geological_history_tab.layout().addWidget(self.geological_history_tab_widget)
-        # self.model_setup_tab.layout().addWidget(self.stratigraphic_column_tab_widget)
         self.topology_tab.layout().addWidget(self.fault_graph_tab_widget)
