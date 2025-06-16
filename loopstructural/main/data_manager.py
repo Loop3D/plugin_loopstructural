@@ -1,12 +1,14 @@
 from LoopStructural.datatypes import BoundingBox
 
-from tests import unit
-
 from .stratigraphic_column import StratigraphicColumn
 
 
 class ModellingDataManager:
-    def __init__(self, mapCanvas=None, logger=None):
+    def __init__(self, *, mapCanvas=None, logger=None):
+        if mapCanvas is None:
+            raise ValueError("mapCanvas cannot be None")
+        if logger is None:
+            raise ValueError("logger cannot be None")
         self._bounding_box = BoundingBox(origin=[0, 0, 0], maximum=[1000, 1000, 1000])
         self._basal_contacts = None
         self._fault_traces = None
@@ -15,6 +17,15 @@ class ModellingDataManager:
         self.map_canvas = mapCanvas
         self.logger = logger
         self._stratigraphic_column = StratigraphicColumn()
+        self._model_manager = None
+
+    def set_model_manager(self, model_manager):
+        """Set the model manager for the data manager."""
+        if model_manager is None:
+            raise ValueError("model_manager cannot be None")
+        self._model_manager = model_manager
+        self._model_manager.update_bounding_box(self._bounding_box)
+        self._model_manager.update_stratigraphic_column(self._stratigraphic_column)
 
     def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
         """Set the bounding box for the model."""
@@ -38,6 +49,7 @@ class ModellingDataManager:
         self._bounding_box.origin = origin
         self._bounding_box.maximum = maximum
         # self._bounding_box.update([west, south, bottom], [east, north, top])
+        self._model_manager.update_bounding_box(self._bounding_box)
 
     def get_bounding_box(self):
         """Get the current bounding box."""
@@ -96,6 +108,7 @@ class ModellingDataManager:
     def set_fault_traces(self, fault_traces):
         """Set the fault traces for the model."""
         self._fault_traces = fault_traces
+        self.update_faults()
 
     def get_fault_traces(self):
         """Get the fault traces."""
@@ -116,6 +129,20 @@ class ModellingDataManager:
     def get_stratigraphic_column(self):
         """Get the stratigraphic column."""
         return self._stratigraphic_column
+
+    def update_stratigraphys(self):
+        """Update the foliation features in the model manager."""
+        if self._model_manager is not None:
+            self._model_manager.update_foliation_features()
+        else:
+            self.logger(message="Model manager is not set, cannot update foliation features.")
+
+    def update_faults(self):
+        """Update the faults in the model manager."""
+        if self._model_manager is not None:
+            self._model_manager.update_fault_points(self._fault_traces)
+        else:
+            self.logger(message="Model manager is not set, cannot update faults.")
 
     def clear_data(self):
         """Clear all data in the manager."""

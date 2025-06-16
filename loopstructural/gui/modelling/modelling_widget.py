@@ -1,3 +1,4 @@
+from LoopStructural import GeologicalModel
 from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from loopstructural.gui.modelling.fault_graph.fault_graph import FaultGraph
@@ -6,6 +7,7 @@ from loopstructural.gui.modelling.geological_model_tab import GeologicalModelTab
 from loopstructural.gui.modelling.model_definition import ModelDefinitionTab
 from loopstructural.gui.modelling.stratigraphic_column.stratigraphic_column import StratColumnWidget
 from loopstructural.main.data_manager import ModellingDataManager
+from loopstructural.main.model_manager import GeologicalModelManager
 
 
 class ModellingWidget(QWidget):
@@ -16,6 +18,7 @@ class ModellingWidget(QWidget):
         self.mapCanvas = mapCanvas
         self.logger = logger
         self.data_manager = ModellingDataManager(mapCanvas=mapCanvas, logger=logger)
+        self.model_manager = GeologicalModelManager()
         self.geological_history_tab_widget = None
         self.stratigraphic_column_tab_widget = None
         self.fault_graph_tab_widget = None
