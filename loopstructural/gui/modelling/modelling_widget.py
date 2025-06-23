@@ -13,12 +13,11 @@ from loopstructural.main.model_manager import GeologicalModelManager
 class ModellingWidget(QWidget):
     def __init__(self, parent: QWidget = None, mapCanvas=None, logger=None):
         super().__init__(parent)
-        # Load the UI file for Tab 1
-        # uic.loadUi(os.path.join(os.path.dirname(__file__), "modelling_widget.ui"), self)
         self.mapCanvas = mapCanvas
         self.logger = logger
         self.data_manager = ModellingDataManager(mapCanvas=mapCanvas, logger=logger)
         self.model_manager = GeologicalModelManager()
+        self.data_manager.set_model_manager(self.model_manager)
         self.geological_history_tab_widget = None
         self.stratigraphic_column_tab_widget = None
         self.fault_graph_tab_widget = None
@@ -26,7 +25,7 @@ class ModellingWidget(QWidget):
         self.geological_history_tab_widget = GeologialHistoryTab(
             self, data_manager=self.data_manager
         )
-        self.geological_model_tab_widget = GeologicalModelTab(self)
+        self.geological_model_tab_widget = GeologicalModelTab(self, model_manager = self.model_manager)
         mainLayout = QVBoxLayout(self)
         self.setLayout(mainLayout)
         tabWidget = QTabWidget(self)

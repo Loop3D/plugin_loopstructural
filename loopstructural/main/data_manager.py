@@ -1,7 +1,7 @@
 from LoopStructural.datatypes import BoundingBox
 
 from .stratigraphic_column import StratigraphicColumn
-
+from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
 class ModellingDataManager:
     def __init__(self, *, mapCanvas=None, logger=None):
@@ -105,9 +105,18 @@ class ModellingDataManager:
         """Get the basal contacts."""
         return self._basal_contacts
 
-    def set_fault_traces(self, fault_traces):
+    def set_fault_trace_layer(self, fault_trace_layer,  fault_name_field=None, fault_dip_field=None, fault_displacement_field=None):
         """Set the fault traces for the model."""
-        self._fault_traces = fault_traces
+        if fault_trace_layer is None:
+            print("Fault trace layer is None, cannot set fault traces.")
+            return
+        if fault_trace_layer.featureCount()==0:
+            self.logger(message="Fault trace layer is empty, cannot set fault traces.")
+            return
+
+        self._fault_traces = {'layer': fault_trace_layer, 'fault_name_field': fault_name_field,
+                              'fault_dip_field': fault_dip_field,
+                              'fault_displacement_field': fault_displacement_field}
         self.update_faults()
 
     def get_fault_traces(self):
@@ -140,7 +149,8 @@ class ModellingDataManager:
     def update_faults(self):
         """Update the faults in the model manager."""
         if self._model_manager is not None:
-            self._model_manager.update_fault_points(self._fault_traces)
+            self._model_manager.update_fault_points(qgsLayerToGeoDataFrame(self._fault_traces['layer']), 
+                                                    fault_name_field = self._fault_traces['fault_name_field'], fault_dip_field = self._fault_traces['fault_dip_field'], fault_displacement_field = self._fault_traces['fault_displacement_field'])
         else:
             self.logger(message="Model manager is not set, cannot update faults.")
 
