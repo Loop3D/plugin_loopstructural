@@ -30,29 +30,10 @@ class FaultLayersWidget(QWidget):
         self.faultDipField.setLayer(layer)
         self.faultDisplacementField.setLayer(layer)
 
-    def onFaultFieldChanged(self, field):
-        name_field = self.faultNameField.currentField()
-        dip_field = self.faultDipField.currentField()
-        displacement_field = self.faultDisplacementField.currentField()
-        layer = self.faultNameField.layer()
-
-        if name_field and layer:
-            self._faults = {}
-            for feature in layer.getFeatures():
-                self._faults[str(feature[name_field])] = {
-                    'fault_dip': feature.attributeMap().get(dip_field, 90),
-                    'displacement': feature.attributeMap().get(
-                        displacement_field, 0.1 * feature.geometry().length()
-                    ),
-                    'fault_centre': {
-                        'x': feature.geometry().centroid().asPoint().x(),
-                        'y': feature.geometry().centroid().asPoint().y(),
-                    },
-                    'major_axis': feature.geometry().length(),
-                    'intermediate_axis': feature.geometry().length(),
-                    'minor_axis': feature.geometry().length() / 3,
-                    'active': True,
-                    "azimuth": calculateAverageAzimuth(feature.geometry()),
-                    "fault_pitch": feature.attributeMap().get('pitch', 90),
-                    "crs": layer.crs().authid(),
-                }
+    def onFaultFieldChanged(self):
+        self.data_manager.set_fault_trace_layer(
+            self.faultTraceLayer.currentLayer(),
+            fault_name_field = self.faultNameField.currentField(),
+            fault_dip_field = self.faultDipField.currentField(),
+            fault_displacement_field = self.faultDisplacementField.currentField(),
+        )
