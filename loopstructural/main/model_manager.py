@@ -10,7 +10,25 @@ from loopstructural.main.stratigraphic_column import StratigraphicColumn
 
 class AllSampler:
     def __call__(self, line: gpd.GeoDataFrame) -> pd.DataFrame:
-        return
+        points = []
+        feature_id = 0
+        for geom in line.geometry:
+            attributes = line.iloc[feature_id].to_dict()
+            attributes.pop('geometry', None)  # Remove geometry from attributes
+            if geom.geom_type == 'LineString':
+                coords = list(geom.coords)
+                for x, y in coords:
+                    points.append({'X': x, 'Y': y, 'Z': 0, 'feature_id': feature_id, **attributes   })
+            elif geom.geom_type == 'MultiLineString':
+                for line in geom.geoms:
+                    coords = list(line.coords)
+                    for x, y in coords:
+                        points.append({'X': x, 'Y': y, 'Z': 0, 'feature_id': feature_id, **attributes})
+            
+            elif geom.geom_type == 'Point':
+                points.append({'X': geom.x, 'Y': geom.y, 'Z': 0, 'feature_id': feature_id, **attributes})
+            feature_id += 1
+        return pd.DataFrame(points)
 
 
 class GeologicalModelManager:
@@ -19,19 +37,24 @@ class GeologicalModelManager:
         self.stratigraphy = {}
         self.groups = []
         self.faults = defaultdict(dict)
-
+        self.stratigraphy = defaultdict(dict)
     def update_bounding_box(self, bounding_box: BoundingBox):
         self.model.bounding_box = bounding_box
 
-    def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, sampler=AllSampler):
+    def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, sampler=AllSampler()):
         """Add fault trace data to the geological model."""
         # sample fault trace
+        self.faults.clear()  # Clear existing faults
         fault_points = sampler(fault_trace)
-
+        if fault_name_field is not None:
+            fault_points['fault_name'] = fault_points[fault_name_field]
+        else:
+            fault_points['fault_name'] = fault_points['feature_id'].astype(str)
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
                 fault_points['fault_name'] == fault_name, ['X', 'Y', 'Z']
             ]
+            
 
     def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler):
         unit_points = sampler(basal_contacts)
@@ -105,17 +128,20 @@ class GeologicalModelManager:
 
     def update_model(self):
         """Update the geological model with the current stratigraphy and faults."""
-        if not self.valid:
-            raise ValueError("Model is not valid. Please check the data.")
+        # if not self.valid:
+        #     raise ValueError("Model is not valid. Please check the data.")
 
         # Update the model with stratigraphy
         for unit_name, unit_data in self.stratigraphy.items():
-            self.model.add_stratigraphic_unit(unit_name, unit_data)
+            self.model.create_and_add_foliation(unit_name, series_surface_data=unit_data)
 
         # Update the model with faults
         for fault_name, fault_data in self.faults.items():
             if 'data' in fault_data and not fault_data['data'].empty:
-                self.model.add_fault(fault_name, fault_data['data'])
+                data = fault_data['data'].copy()
+                data['feature_name'] = fault_name
+                data['val'] = 0
+                self.model.create_and_add_fault(fault_name, 10,fault_data=data)
 
-        # Finalize the model
-        self.model.finalize()
+    def features(self):
+        return self.model.features
