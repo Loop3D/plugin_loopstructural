@@ -1,6 +1,25 @@
 import pandas as pd
+import geopandas as gpd
 from qgis.core import QgsRaster, QgsWkbTypes
 
+def qgsLayerToGeoDataFrame(layer) -> gpd.GeoDataFrame:
+    if layer is None:
+        return None
+    features = layer.getFeatures()
+    fields = layer.fields()
+    data = {
+        'geometry': []
+    }
+    for f in fields:
+        data[f.name()] = []
+    for feature in features:
+        geom = feature.geometry()
+        if geom.isEmpty():
+            continue
+        data['geometry'].append(geom)
+        for f in fields:
+            data[f.name()].append(feature[f.name()])
+    return gpd.GeoDataFrame(data, crs=layer.crs().authid())
 
 def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:
     """Convert a vector layer to a pandas DataFrame
