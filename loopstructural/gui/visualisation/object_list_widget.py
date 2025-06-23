@@ -1,36 +1,49 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
-    QHBoxLayout,
+    QVBoxLayout,
     QLabel,
     QMenu,
     QTreeWidget,
     QTreeWidgetItem,
     QWidget,
+    QPushButton,
+    QDialog,
+    QRadioButton,
+    QButtonGroup,
+    QDialogButtonBox,
+    QFileDialog,
+    QHBoxLayout,  # Add missing import
 )
+import pyvista as pv
 
 
-class ObjectListWidget(QTreeWidget):
+class ObjectListWidget(QWidget):
     def __init__(self, parent=None, *, viewer=None):
         super().__init__(parent)
+        self.mainLayout = QVBoxLayout(self)
+        self.treeWidget = QTreeWidget(self)
+        self.treeWidget.setHeaderHidden(True)  # Hide the header
+        self.mainLayout.addWidget(self.treeWidget)
+        addButton = QPushButton("Add Object", self)
+        addButton.setContextMenuPolicy(Qt.CustomContextMenu)
+        addButton.clicked.connect(self.show_add_object_menu)
+        self.mainLayout.addWidget(addButton)
+        self.setLayout(self.mainLayout)
         self.viewer = viewer
         self.viewer.objectAdded.connect(self.update_object_list)
 
-        # Set header labels for the tree widget
-        self.setHeaderLabels(["Object Name", "Visibility"])
-
     def update_object_list(self, new_object):
+        
         for object_name in self.viewer.actors:
-            print(f"Adding object: {object_name}")
-
-            self.add_actor(object_name)
+            if not self.treeWidget.findItems(object_name, Qt.MatchExactly):
+                self.add_actor(object_name  )
 
     def add_actor(self, actor_name):
         # Create a tree item for the object
-        objectItem = QTreeWidgetItem(self)
-        objectItem.setText(0, self.viewer.actors[actor_name].name)
+        objectItem = QTreeWidgetItem(self.treeWidget)
 
-        # Add a checkbox for visibility toggle
+        # Add a checkbox for visibility toggle in front of the name
         visibilityCheckbox = QCheckBox()
         visibilityCheckbox.setChecked(self.viewer.actors[actor_name].visibility)
         visibilityCheckbox.stateChanged.connect(
@@ -38,16 +51,16 @@ class ObjectListWidget(QTreeWidget):
                 name, state == Qt.Checked
             )
         )
-        self.setItemWidget(objectItem, 1, visibilityCheckbox)
 
-        # # Add child items for properties
-        # properties = self.viewer.actors[
-        #     actor_name
-        # ].properties  # Assuming `properties` is a dictionary
-        # for prop_name, prop_value in properties.items():
-        #     propertyItem = QTreeWidgetItem(objectItem)
-        #     propertyItem.setText(0, f"{prop_name}: {prop_value}")
+        # Create a widget to hold the checkbox and name on a single line
+        itemWidget = QWidget()
+        itemLayout = QHBoxLayout(itemWidget)  # Use horizontal layout for single line
+        itemLayout.setContentsMargins(0, 0, 0, 0)
+        itemLayout.addWidget(visibilityCheckbox)
+        itemLayout.addWidget(QLabel(self.viewer.actors[actor_name].name))
+        itemWidget.setLayout(itemLayout)
 
+        self.treeWidget.setItemWidget(objectItem, 0, itemWidget)
         objectItem.setExpanded(False)  # Initially collapsed
 
     def set_object_visibility(self, object_name, visibility):
@@ -70,7 +83,7 @@ class ObjectListWidget(QTreeWidget):
             self.remove_selected_object()
 
     def export_selected_object(self):
-        selected_items = self.selectedItems()
+        selected_items = self.treeWidget.selectedItems()
         if not selected_items:
             return
 
@@ -79,12 +92,47 @@ class ObjectListWidget(QTreeWidget):
         print(f"Exporting object: {object_name}")
 
     def remove_selected_object(self):
-        selected_items = self.selectedItems()
+        selected_items = self.treeWidget.selectedItems()
         if not selected_items:
             return
 
         object_name = selected_items[0].text(0)
         # Logic for removing the object
         self.viewer.remove_object(object_name)
-        self.takeTopLevelItem(self.indexOfTopLevelItem(selected_items[0]))
+        self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(selected_items[0]))
         print(f"Removing object: {object_name}")
+
+    def show_add_object_menu(self):
+        menu = QMenu(self)
+
+        addFeatureAction = menu.addAction("Surface from model")
+        loadFeatureAction = menu.addAction("Load from file")
+
+        buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
+        action = menu.exec_(buttonPosition)
+
+        if action == addFeatureAction:
+            self.add_feature_from_geological_model()
+        elif action == loadFeatureAction:
+            self.load_feature_from_file()
+
+    def add_feature_from_geological_model(self):
+        # Logic to add a feature from the geological model
+        print("Adding feature from geological model")
+
+    def load_feature_from_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Mesh File", "", "Mesh Files (*.vtk *.vtp *.obj *.stl *.ply)")
+        file_name = file_path.split("/")[-1] if file_path else "Unnamed Mesh"
+        if not file_path:
+            return
+
+        try:
+            mesh = pv.read(file_path)
+            if not isinstance(mesh, pv.PolyData):
+                raise ValueError("The file does not contain a valid mesh.")
+
+            # Add the mesh to the viewer
+            self.viewer.add_mesh(mesh,name=file_name)
+            print(f"Loaded mesh from file: {file_path}")
+        except Exception as e:
+            print(f"Failed to load mesh: {e}")

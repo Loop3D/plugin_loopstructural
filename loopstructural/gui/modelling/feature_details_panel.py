@@ -47,7 +47,7 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         self.displacement_slider = QSlider(Qt.Horizontal)
         self.displacement_slider.setRange(0, 1000)  # Example range
         self.displacement_slider.setValue(self.fault.displacement)
-        self.displacement_label = QLabel("Fault Displacement: 0")
+        self.displacement_label = QLabel(f"Fault Displacement: {self.fault.displacement}")
         self.displacement_slider.valueChanged.connect(
             lambda value: self.displacement_label.setText(f"Fault Displacement: {value}")
         )
@@ -59,14 +59,14 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         self.major_axis_spinbox = QDoubleSpinBox()
         self.major_axis_spinbox.setRange(0, float('inf'))
         self.major_axis_spinbox.setValue(self.fault_parameters['major_axis_length'])
-        self.major_axis_spinbox.setPrefix("Major Axis Length: ")
+        # self.major_axis_spinbox.setPrefix("Major Axis Length: ")
         self.major_axis_spinbox.valueChanged.connect(
             lambda value: self.fault_parameters.__setitem__('major_axis_length', value)
         )
         self.minor_axis_spinbox = QDoubleSpinBox()
         self.minor_axis_spinbox.setRange(0, float('inf'))
         self.minor_axis_spinbox.setValue(self.fault_parameters['minor_axis_length'])
-        self.minor_axis_spinbox.setPrefix("Minor Axis Length: ")
+        # self.minor_axis_spinbox.setPrefix("Minor Axis Length: ")
         self.minor_axis_spinbox.valueChanged.connect(
             lambda value: self.fault_parameters.__setitem__('minor_axis_length', value)
         )
@@ -76,13 +76,13 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         self.intermediate_axis_spinbox.valueChanged.connect(
             lambda value: self.fault_parameters.__setitem__('intermediate_axis_length', value)
         )
-        self.intermediate_axis_spinbox.setPrefix("Intermediate Axis Length: ")
+        # self.intermediate_axis_spinbox.setPrefix("Intermediate Axis Length: ")
 
         # Fault dip field
         self.dip_spinbox = QDoubleSpinBox()
         self.dip_spinbox.setRange(0, 90)  # Dip angle range
         self.dip_spinbox.setValue(self.fault_parameters['dip'])
-        self.dip_spinbox.setPrefix("Fault Dip: ")
+        # self.dip_spinbox.setPrefix("Fault Dip: ")
         self.dip_spinbox.valueChanged.connect(
             lambda value: self.fault_parameters.__setitem__('dip', value)
         )

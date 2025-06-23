@@ -27,7 +27,7 @@ class VisualisationWidget(QWidget):
         # Create the viewer
         self.plotter = LoopPyVistaQTPlotter(parent)
         # self.plotter.add_axes()
-
+        
         self.objectList = ObjectListWidget(viewer=self.plotter)
         splitter.addWidget(self.objectList)
         splitter.addWidget(self.plotter)
