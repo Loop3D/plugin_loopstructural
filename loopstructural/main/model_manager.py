@@ -56,15 +56,35 @@ class GeologicalModelManager:
             ]
             
 
-    def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler):
+    def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None):
         unit_points = sampler(basal_contacts)
+        if unit_name_field is not None:
+            unit_points['unit_name'] = unit_points[unit_name_field]
+        else:
+            return 
         for unit_name in unit_points['unit_name'].unique():
             self.stratigraphy[unit_name] = unit_points.loc[
-                unit_points['unit_name'] == unit_name, [['X', 'Y', 'Z']]
+                unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
             ]
 
-    def update_structural_data(self, structural_orientations: gpd.GeoDataFrame):
+    def update_structural_data(self, structural_orientations: gpd.GeoDataFrame, *, strike_field=None, dip_field=None, unit_name_field=None,dip_direction=False):
         """Add structural orientation data to the geological model."""
+        if strike_field is None or dip_field is None:
+            return
+        if unit_name_field is not None:
+            return
+        structural_orientations = structural_orientations.copy()
+        structural_orientations['unit_name'] = structural_orientations[unit_name_field] 
+        structural_orientations['X'] = structural_orientations.geometry.x
+        structural_orientations['Y'] = structural_orientations.geometry.y
+        structural_orientations['Z'] = structural_orientations.geometry.z
+        structural_orientations['dip'] = structural_orientations[dip_field]
+        structural_orientations['strike'] = structural_orientations[strike_field]
+        structural_orientations = structural_orientations[['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']]
+        if dip_direction:
+            structural_orientations['dip'] = structural_orientations[dip_field]
+            structural_orientations['strike'] = structural_orientations[strike_field]+90
+
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
@@ -81,13 +101,16 @@ class GeologicalModelManager:
         self.groups = stratigraphic_column.get_groups()
         self.update_foliation_features()
 
+    def update_stratigraphic_unit(self, unit_data):
+        self.data
+
     def update_foliation_features(self):
         for i, units in enumerate(self.groups):
             val = 0
             data = []
             groupname = f"Group_{i + 1}"
             for u in reversed(units):
-                unit_data = self.stratigraphy.get(u, None)
+                unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is None:
                     continue
                 else:
@@ -96,7 +119,8 @@ class GeologicalModelManager:
                     unit_data['feature_name'] = groupname
                     data.append(unit_data)
                 val += u.thickness
-
+            if len(data) == 0:
+                continue
             data = pd.concat(data, ignore_index=True)
             self.model.create_and_add_foliation(groupname, series_surface_data=data)
 
@@ -132,8 +156,7 @@ class GeologicalModelManager:
         #     raise ValueError("Model is not valid. Please check the data.")
 
         # Update the model with stratigraphy
-        for unit_name, unit_data in self.stratigraphy.items():
-            self.model.create_and_add_foliation(unit_name, series_surface_data=unit_data)
+        self.update_foliation_features()
 
         # Update the model with faults
         for fault_name, fault_data in self.faults.items():

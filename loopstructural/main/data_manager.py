@@ -57,15 +57,19 @@ class ModellingDataManager:
 
     def set_basal_contacts(self, basal_contacts, unitname_field=None):
         """Set the basal contacts for the model."""
-        self._basal_contacts = basal_contacts
-        self._unitname_field = unitname_field
+        self._basal_contacts = {'layer':basal_contacts, 'unitname_field': unitname_field}
+        # self._unitname_field = unitname_field
         self.calculate_unique_basal_units()
+        # if stratigraphic column is not empty, update contacts
+        if len(self._stratigraphic_column.order)>0:
+            self.update_stratigraphy()
+
 
     def calculate_unique_basal_units(self):
-        if self._basal_contacts is not None and self._unitname_field is not None:
+        if self._basal_contacts is not None and self._basal_contacts['unitname_field'] is not None:
             self._unique_basal_units.clear()
-            for feature in self._basal_contacts.getFeatures():
-                unit_name = feature[self._unitname_field]
+            for feature in self._basal_contacts['layer'].getFeatures():
+                unit_name = feature[self._basal_contacts['unitname_field']]
                 if unit_name not in self._unique_basal_units:
                     self._unique_basal_units.append(unit_name)
         return len(self._unique_basal_units)
@@ -80,17 +84,22 @@ class ModellingDataManager:
 
     def add_to_stratigraphic_column(self, unit_data):
         """Add a unit or unconformity to the stratigraphic column."""
-
+        stratigraphic_element = None
         if isinstance(unit_data, dict):
             if unit_data.get('type') == 'unit':
-                return self._stratigraphic_column.add_unit(
+                stratigraphic_element = self._stratigraphic_column.add_unit(
                     name=unit_data.get('name'), colour=unit_data.get('colour')
                 )
             elif unit_data.get('type') == 'unconformity':
-                return self._stratigraphic_column.add_unconformity(name=unit_data.get('name'))
+                stratigraphic_element = self._stratigraphic_column.add_unconformity(name=unit_data.get('name'))
         else:
             raise ValueError("unit_data must be a dictionary with 'type' key.")
-
+        if stratigraphic_element is None:
+            self.logger(message="Failed to add unit or unconformity to the stratigraphic column.")
+        else:
+            self.logger(message=f"Added {unit_data.get('type')} '{unit_data.get('name')}' to the stratigraphic column.")
+            self.update_stratigraphy()
+            return stratigraphic_element
     def remove_from_stratigraphic_column(self, unit_uuid):
         """Remove a unit or unconformity from the stratigraphic column."""
         self._stratigraphic_column.remove_unit(uuid=unit_uuid)
@@ -139,10 +148,19 @@ class ModellingDataManager:
         """Get the stratigraphic column."""
         return self._stratigraphic_column
 
-    def update_stratigraphys(self):
+    def update_stratigraphy(self):
         """Update the foliation features in the model manager."""
+        print("Updating stratigraphy...")
+        self.update_stratigraphic_column()
         if self._model_manager is not None:
-            self._model_manager.update_foliation_features()
+            if self._basal_contacts is not None:
+                self._model_manager.update_contact_traces(qgsLayerToGeoDataFrame(self._basal_contacts['layer']), 
+                                                          unit_name_field=self._basal_contacts['unitname_field'])
+            if self._structural_orientations is not None:
+                self._model_manager.update_structural_data(qgsLayerToGeoDataFrame(self._structural_orientations['layer']), 
+                                                            strike_field=self._structural_orientations['strike_field'], 
+                                                            dip_field=self._structural_orientations['dip_field'], 
+                                                            unit_name_field=self._structural_orientations['unitname_field'], dip_direction=True)
         else:
             self.logger(message="Model manager is not set, cannot update foliation features.")
 
@@ -153,7 +171,12 @@ class ModellingDataManager:
                                                     fault_name_field = self._fault_traces['fault_name_field'], fault_dip_field = self._fault_traces['fault_dip_field'], fault_displacement_field = self._fault_traces['fault_displacement_field'])
         else:
             self.logger(message="Model manager is not set, cannot update faults.")
-
+    def update_stratigraphic_column(self):
+        """Update the stratigraphic column in the model manager."""
+        if self._model_manager is not None:
+            self._model_manager.groups = self._stratigraphic_column.get_groups()
+        else:
+            self.logger(message="Model manager is not set, cannot update stratigraphic column.")
     def clear_data(self):
         """Clear all data in the manager."""
         self._bounding_box = BoundingBox()
