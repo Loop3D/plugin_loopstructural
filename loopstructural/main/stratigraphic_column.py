@@ -1,5 +1,5 @@
 import enum
-
+from typing import Dict, List
 
 class UnconformityType(enum.Enum):
     """
@@ -213,7 +213,19 @@ class StratigraphicColumn:
         if group:
             groups.append(group)
         return groups
-
+    def get_unitname_groups(self):
+        groups = []
+        group = []
+        for e in self.order:
+            if isinstance(e, StratigraphicUnit):
+                group.append(e.name)
+            else:
+                if group:
+                    groups.append(group)
+                    group = []
+        if group:
+            groups.append(group)
+        return groups
     def __getitem__(self, uuid):
         """
         Retrieves an element by its uuid from the stratigraphic column.
@@ -232,7 +244,23 @@ class StratigraphicColumn:
         self.order = [
             self.__getitem__(uuid) for uuid in new_order if self.__getitem__(uuid) is not None
         ]
-
+    def update_element(self, unit_data: Dict):
+        """
+        Updates an existing element in the stratigraphic column with new data.
+        :param unit_data: A dictionary containing the updated data for the element.
+        """
+        if not isinstance(unit_data, dict):
+            raise TypeError("unit_data must be a dictionary")
+        element = self.__getitem__(unit_data['uuid'])
+        if isinstance(element, StratigraphicUnit):
+            element.name = unit_data.get('name', element.name)
+            element.colour = unit_data.get('colour', element.colour)
+            element.thickness = unit_data.get('thickness', element.thickness)
+        elif isinstance(element, StratigraphicUnconformity):
+            element.name = unit_data.get('name', element.name)
+            element.unconformity_type = UnconformityType(
+                unit_data.get('unconformity_type', element.unconformity_type.value)
+            )
     def clear(self):
         """
         Clears the stratigraphic column, removing all elements.
