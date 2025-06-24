@@ -69,6 +69,10 @@ class GeologicalModelTab(QWidget):
     def initialize_model(self):
         self.model_manager.update_model()
         for feature in self.model_manager.features():
+            items = self.featureList.findItems(feature.name, Qt.MatchExactly)
+            if items:
+                # If the feature already exists, skip adding it again
+                continue
             item = QTreeWidgetItem(self.featureList)
             item.setText(0, feature.name)
             item.setData(0, 1, feature)
@@ -80,7 +84,7 @@ class GeologicalModelTab(QWidget):
         if feature.type == FeatureType.FAULT:
             print("Fault feature selected")
             self.featureDetailsPanel = FaultFeatureDetailsPanel(fault=feature)
-        elif feature.type == FeatureType.FOLIATION:
+        elif feature.type == FeatureType.INTERPOLATED:
             self.featureDetailsPanel = FoliationFeatureDetailsPanel(feature=feature )
         else:
             self.featureDetailsPanel = QWidget()  # Default empty panel
