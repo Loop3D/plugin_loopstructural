@@ -83,6 +83,8 @@ class StratColumnWidget(QWidget):
 
         unit_widget = StratigraphicUnitWidget(uuid=unit.uuid)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
+        unit_widget.nameChanged.connect(lambda: self.update_element(unit_widget))  # Connect name change signal
+        unit_widget.thicknessChanged.connect(lambda: self.update_element(unit_widget))  # Connect thickness change signal
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)
@@ -129,3 +131,9 @@ class StratColumnWidget(QWidget):
                 if widget:
                     ordered_uuids.append(widget.uuid)
             self.data_manager.update_stratigraphic_column_order(ordered_uuids)
+
+    def update_element(self, unit_widget):
+        """Update the data manager with the changes made in the unit widget."""
+        if self.data_manager:
+            unit_data = unit_widget.getData()
+            self.data_manager._stratigraphic_column.update_element(unit_data)

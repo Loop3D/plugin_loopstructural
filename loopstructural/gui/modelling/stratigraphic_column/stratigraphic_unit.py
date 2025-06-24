@@ -8,7 +8,9 @@ from PyQt5.QtWidgets import QWidget
 
 class StratigraphicUnitWidget(QWidget):
     deleteRequested = pyqtSignal(QWidget)  # Signal to request deletion
-
+    thicknessChanged = pyqtSignal(float)  # Signal for thickness changes
+    colourChanged = pyqtSignal(str)  # Signal for colour changes
+    nameChanged = pyqtSignal(str)  # Signal for name changes
     def __init__(self, uuid, name: Optional[str] = None, colour: Optional[str] = None, parent=None):
         super().__init__(parent)
         uic.loadUi(os.path.join(os.path.dirname(__file__), "stratigraphic_unit.ui"), self)
@@ -18,7 +20,7 @@ class StratigraphicUnitWidget(QWidget):
         self.thickness = 0.0  # Optional thickness attribute
         # Add delete button
         self.buttonDelete.clicked.connect(self.request_delete)
-        self.lineEditName.textChanged.connect(self.onNameChanged)
+        self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
         self.buttonColor.clicked.connect(self.onColourSelectClicked)
 
@@ -40,19 +42,23 @@ class StratigraphicUnitWidget(QWidget):
         """
         self.thickness = thickness
         self.validateFields()
-
-    def onNameChanged(self, name: str):
+        self.thicknessChanged.emit(thickness)
+    def onNameChanged(self):
         """
         Update the name of the stratigraphic unit.
         :param name: The new name value.
         """
-        self.name = name
-        self.validateFields()
-
+        name = self.lineEditName.text().strip()
+        if name != self.name:
+            self.name = name
+            self.validateFields()
+            self.nameChanged.emit(name)
     def request_delete(self):
 
         self.deleteRequested.emit(self)
 
+    
+    
     def validateFields(self):
         """
         Validate the fields and update the widget's appearance.
@@ -87,3 +93,15 @@ class StratigraphicUnitWidget(QWidget):
             # self.lineEditColour.clear()
 
         self.validateFields()
+
+    def getData(self) -> dict:
+        """
+        Get the data from the stratigraphic unit widget.
+        :return: A dictionary containing 'name', 'colour', and 'thickness'.
+        """
+        return {
+            "uuid": self.uuid,
+            "name": self.name,
+            "colour": self.colour,
+            "thickness": self.thickness
+        }
