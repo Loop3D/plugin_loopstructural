@@ -22,7 +22,6 @@ class StratigraphicUnitWidget(QWidget):
         self.buttonDelete.clicked.connect(self.request_delete)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
-        self.buttonColor.clicked.connect(self.onColourSelectClicked)
 
     def onColourSelectClicked(self):
         """
@@ -57,8 +56,8 @@ class StratigraphicUnitWidget(QWidget):
 
         self.deleteRequested.emit(self)
 
-    
-    
+
+
     def validateFields(self):
         """
         Validate the fields and update the widget's appearance.

@@ -7,35 +7,11 @@
     <x>0</x>
     <y>0</y>
     <width>756</width>
-    <height>53</height>
+    <height>62</height>
    </rect>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="4">
-    <widget class="QLabel" name="labelThickness">
-     <property name="text">
-      <string>Thickness:</string>
-     </property>
-    </widget>
-   </item>
    <item row="0" column="2">
-    <widget class="QLabel" name="labelColor">
-     <property name="text">
-      <string>Color:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="6">
-    <widget class="QPushButton" name="buttonDelete">
-     <property name="toolTip">
-      <string>Delete this unit</string>
-     </property>
-     <property name="text">
-      <string>🗑️</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="5">
     <widget class="QDoubleSpinBox" name="spinBoxThickness">
      <property name="suffix">
       <string> m</string>
@@ -52,21 +28,24 @@
     </widget>
    </item>
    <item row="0" column="0">
-    <widget class="QLabel" name="labelName">
+    <widget class="QLineEdit" name="lineEditName"/>
+   </item>
+   <item row="0" column="1">
+    <widget class="QLabel" name="labelThickness">
      <property name="text">
-      <string>Name:</string>
+      <string>Thickness:</string>
      </property>
     </widget>
    </item>
    <item row="0" column="3">
-    <widget class="QPushButton" name="buttonColor">
+    <widget class="QPushButton" name="buttonDelete">
+     <property name="toolTip">
+      <string>Delete this unit</string>
+     </property>
      <property name="text">
-      <string>Select</string>
+      <string>🗑️</string>
      </property>
     </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QLineEdit" name="lineEditName"/>
    </item>
   </layout>
  </widget>
