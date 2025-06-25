@@ -137,9 +137,14 @@ class ModellingDataManager:
         """Get the fault traces."""
         return self._fault_traces
 
-    def set_structural_orientations(self, structural_orientations):
+    def set_structural_orientations(self, structural_orientations, strike_field=None, dip_field=None, unitname_field=None, orientation_type=None):
         """Set the structural orientations for the model."""
-        self._structural_orientations = structural_orientations
+        self._structural_orientations = {}
+        self._structural_orientations['layer'] = structural_orientations
+        self._structural_orientations['strike_field'] = strike_field
+        self._structural_orientations['dip_field'] = dip_field
+        self._structural_orientations['unitname_field'] = unitname_field
+        self._structural_orientations['orientation_type'] = orientation_type
 
     def get_structural_orientations(self):
         """Get the structural orientations."""
@@ -165,7 +170,7 @@ class ModellingDataManager:
                 self._model_manager.update_structural_data(qgsLayerToGeoDataFrame(self._structural_orientations['layer']),
                                                             strike_field=self._structural_orientations['strike_field'],
                                                             dip_field=self._structural_orientations['dip_field'],
-                                                            unit_name_field=self._structural_orientations['unitname_field'], dip_direction=True)
+                                                            unit_name_field=self._structural_orientations['unitname_field'], dip_direction=True if self._structural_orientations['orientation_type'] == "Dip Direction" else False)
         else:
             self.logger(message="Model manager is not set, cannot update foliation features.")
 
