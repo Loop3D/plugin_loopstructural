@@ -46,6 +46,8 @@ class ObjectListWidget(QWidget):
 
     def add_actor(self, actor_name):
         # Create a tree item for the object
+        if not hasattr(self.viewer.actors[actor_name], 'visibility'):
+            return
         objectItem = QTreeWidgetItem(self.treeWidget)
 
         # Add a checkbox for visibility toggle in front of the name
