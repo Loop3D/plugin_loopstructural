@@ -23,6 +23,8 @@ from loopstructural.__about__ import (
 )
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.modelling.modelling_widget import ModellingWidget as Modelling
+from loopstructural.main.data_manager import ModellingDataManager
+from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.gui.visualisation.visualisation_widget import VisualisationWidget
 from loopstructural.toolbelt import PlgLogger
 
@@ -53,6 +55,12 @@ class LoopstructuralPlugin:
             self.translator = QTranslator()
             self.translator.load(str(locale_path.resolve()))
             QCoreApplication.installTranslator(self.translator)
+        self.data_manager = ModellingDataManager(
+            mapCanvas=self.iface.mapCanvas(), logger=self.log
+        )
+        self.model_manager = GeologicalModelManager(
+        )
+        self.data_manager.set_model_manager(self.model_manager)
 
     def initGui(self):
         """Set up plugin UI elements."""
@@ -115,7 +123,8 @@ class LoopstructuralPlugin:
         ## --- dock widget
         self.modelling_dockwidget = QDockWidget(self.tr("Modelling"), self.iface.mainWindow())
         self.model_setup_widget = Modelling(
-            self.iface.mainWindow(), mapCanvas=self.iface.mapCanvas(), logger=self.log
+            self.iface.mainWindow(), mapCanvas=self.iface.mapCanvas(), logger=self.log,
+            data_manager=self.data_manager, model_manager=self.model_manager
         )
         self.modelling_dockwidget.setWidget(self.model_setup_widget)
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
@@ -138,10 +147,10 @@ class LoopstructuralPlugin:
 
         ## -- visualisation dock widget
         self.visualisation_dockwidget = QDockWidget(
-            self.tr("Visualisation"), self.iface.mainWindow()
+            self.tr("Visualisation"), self.iface.mainWindow(),
         )
         self.visualisation_widget = VisualisationWidget(
-            self.iface.mainWindow(), mapCanvas=self.iface.mapCanvas(), logger=self.log
+            self.iface.mainWindow(), mapCanvas=self.iface.mapCanvas(), logger=self.log,model_manager=self.model_manager
         )
         self.visualisation_dockwidget.setWidget(self.visualisation_widget)
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
