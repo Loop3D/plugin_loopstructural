@@ -8,10 +8,6 @@ from PyQt5.QtWidgets import (
     QTreeWidgetItem,
     QWidget,
     QPushButton,
-    QDialog,
-    QRadioButton,
-    QButtonGroup,
-    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,  # Add missing import
 )
@@ -29,15 +25,24 @@ class ObjectListWidget(QWidget):
         addButton.setContextMenuPolicy(Qt.CustomContextMenu)
         addButton.clicked.connect(self.show_add_object_menu)
         self.mainLayout.addWidget(addButton)
+
         self.setLayout(self.mainLayout)
         self.viewer = viewer
         self.viewer.objectAdded.connect(self.update_object_list)
 
     def update_object_list(self, new_object):
-        
+
         for object_name in self.viewer.actors:
-            if not self.treeWidget.findItems(object_name, Qt.MatchExactly):
-                self.add_actor(object_name  )
+            # Check if object already exists in tree
+            exists = False
+            for i in range(self.treeWidget.topLevelItemCount()):
+                item = self.treeWidget.topLevelItem(i)
+                widget = self.treeWidget.itemWidget(item, 0)
+                if widget and widget.findChild(QLabel).text() == object_name:
+                    exists = True
+                    break
+            if not exists:
+                self.add_actor(object_name)
 
     def add_actor(self, actor_name):
         # Create a tree item for the object

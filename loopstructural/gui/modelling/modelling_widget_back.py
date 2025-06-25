@@ -93,11 +93,11 @@ class ModellingWidget(QWidget):
             )
             return
         comboBox.setField(fieldName)
-    
-        
-        
+
+
+
     def loadFromProject(self):
-        # Load settings from project    
+        # Load settings from project
         self.setLayerComboBoxFromProject(self.basalContactsLayer, "basal_contacts_layer")
         self.setLayerFieldComboBoxFromProject(self.unitNameField, "unitname_field", self.basalContactsLayer.currentLayer())
         self.setLayerComboBoxFromProject(self.structuralDataLayer, "structural_data_layer")
@@ -128,7 +128,7 @@ class ModellingWidget(QWidget):
                 # self.logger(message="Faults not loaded", log_level=2, push=True)
 
 
-        
+
     def _set_layer_filters(self):
         # Set filters for the layer selection comboboxes
         # basal contacts can be line or points
@@ -165,14 +165,14 @@ class ModellingWidget(QWidget):
         layer = comboBox.currentLayer()
         if layer is not None:
             self.project.writeEntry(__title__, layerKey, layer.name())
-        
+
     def saveLayerFieldComboBoxState(self, comboBox: QComboBox, fieldKey: str):
         field = comboBox.currentField()
         if field is not None:
             self.project.writeEntry(__title__, fieldKey, field)
     def saveSettingToProject(self,key:str,value:str):
         self.project.writeEntry(__title__, key, value)
-    
+
     def _connectSignals(self):
         self.basalContactsLayer.layerChanged.connect(self.onBasalContactsChanged)
         self.structuralDataLayer.layerChanged.connect(self.onStructuralDataLayerChanged)
@@ -190,7 +190,7 @@ class ModellingWidget(QWidget):
         self.saveButton.clicked.connect(self.onSaveModel)
         self.path.textChanged.connect(self.onPathTextChanged)
         self.faultSelection.currentIndexChanged.connect(self.onSelectedFaultChanged)
-        
+
         self.basalContactsLayer.layerChanged.connect(lambda: self.saveLayerComboBoxState(self.basalContactsLayer,'basal_contacts_layer'))
         self.unitNameField.fieldChanged.connect(lambda: self.saveLayerFieldComboBoxState(self.unitNameField,'unitname_field'))
         self.structuralDataLayer.layerChanged.connect(lambda: self.saveLayerComboBoxState(self.structuralDataLayer,'structural_data_layer'))
@@ -206,8 +206,8 @@ class ModellingWidget(QWidget):
         self.faultDipValue.valueChanged.connect(
             lambda value: self.updateFaultProperty('fault_dip', value)
         )
-        
-        
+
+
         self.structuralDataUnitName.fieldChanged.connect(
             lambda: self.saveLayerFieldComboBoxState(self.structuralDataUnitName,'structuraldata_unitname_field')
         )
@@ -229,9 +229,9 @@ class ModellingWidget(QWidget):
         self.faultMinorAxisLength.valueChanged.connect(
             lambda value: self.updateFaultProperty('minor_axis', value)
         )
-       
+
         self.orientationType.currentIndexChanged.connect(lambda value: self.saveSettingToProject('orientation_type', self.orientationLabel.text()))
-            
+
         # self.faultCentreX.valueChanged.connect(lambda value: self.updateFaultProperty('centre', value))
         # self.faultCentreY.valueChanged.connect(lambda value: self.updateFaultProperty('centre', value))
         # self.faultCentreZ.valueChanged.connect(lambda value: self.updateFaultProperty('centre', value))
@@ -249,7 +249,7 @@ class ModellingWidget(QWidget):
         self.clearPyvistaButton.clicked.connect(self.clearPyvista)
         self.addSurfacesToPyvistaButton.clicked.connect(self.addModelSurfacesToPyvista)
         self.addDataToPyvistaButton.clicked.connect(self.addDataToPyvista)
-        QgsProject.instance().readProject.connect(self.loadFromProject)      
+        QgsProject.instance().readProject.connect(self.loadFromProject)
     def onModelListItemClicked(self, feature):
         self.activeFeature = self.model[feature.text()]
         self.numberOfElementsSpinBox.setValue(
@@ -396,7 +396,7 @@ class ModellingWidget(QWidget):
             return
         surfaces = self.model.get_stratigraphic_surfaces()
         for surface in surfaces:
-            self.plotter.add_mesh(surface.vtk(),show_scalar_bar=False,color=surface.colour) 
+            self.plotter.add_mesh(surface.vtk(),show_scalar_bar=False,color=surface.colour)
         fault_surfaces = self.model.get_fault_surfaces()
         for surface in fault_surfaces:
             self.plotter.add_mesh(surface.vtk(),show_scalar_bar=False,color='black')
@@ -508,7 +508,7 @@ class ModellingWidget(QWidget):
                     for k in fields:
                         if feature[fields[k]] is not None:
                             attributes[str(feature[field_index])][k] = feature[fields[k]]
-        
+
             colours = random_hex_colour(n=len(unique_values))
             self._units = dict(
                 zip(
@@ -629,7 +629,7 @@ class ModellingWidget(QWidget):
         self.initFaultSelector()
         self.initFaultNetwork()
         # self.saveLayersToProject()
-    
+
     def saveLayersToProject(self):
         if self.basalContactsLayer.currentLayer() is not None:
             self.project.writeEntry(
@@ -677,7 +677,7 @@ class ModellingWidget(QWidget):
             self.project.writeEntry(__title__, "units", json.dumps(self._units))
         if self._faults:
             self.project.writeEntry(__title__, "faults", json.dumps(self._faults))
-        
+
     def onSelectedFaultChanged(self, index):
         if index >= 0:
             fault = self.faultSelection.currentText()
@@ -698,7 +698,7 @@ class ModellingWidget(QWidget):
     def saveUnitsToProject(self):
         if self._units:
             self.project.writeEntry(__title__, "units", json.dumps(self._units))
-    
+
     def resetFaultField(self):
         self.faultDipValue.setValue(0)
         self.faultPitchValue.setValue(0)
@@ -763,7 +763,7 @@ class ModellingWidget(QWidget):
             child = self.stratigraphicColumnContainer.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
-        
+
         def create_lambda(i, direction):
             return lambda: self.onOrderChanged(i, i + direction)
 
@@ -778,7 +778,7 @@ class ModellingWidget(QWidget):
 
         for i, (unit, value) in enumerate(self._getSortedStratigraphicColumn()):
             # Add stretch factor to first column
-            
+
 
             label = QLineEdit(unit)
             label.editingFinished.connect(lambda unit=unit, label=label: self.stratigraphicColumnUnitNameChanged(unit, label.text()))
@@ -826,7 +826,7 @@ class ModellingWidget(QWidget):
                 lambda value, unit=unit: self.stratigraphicColumnRemoveClicked(unit)
             )
             self.stratigraphicColumnContainer.addWidget(remove_button, i, 6)
-        
+
         self.updateGroups()
     def stratigraphicColumnChanged(self, text, unit):
         self._units[unit]['contact'] = text
@@ -851,12 +851,12 @@ class ModellingWidget(QWidget):
         }
         self._initialiseStratigraphicColumn()
         self.saveUnitsToProject()
-        
+
     def stratigraphicColumnUnitNameChanged(self, unit, name):
-        
+
         old_name = unit
         if unit == name:
-            return  
+            return
         if unit not in self._units:
             return
         if name in self._units and name != unit:

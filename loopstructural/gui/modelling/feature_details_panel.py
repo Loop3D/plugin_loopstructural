@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QSlider, QLabel, QDoubleSpinBox, QCheckBox, QFormLayout, QLineEdit
+    QWidget, QVBoxLayout, QSlider, QLabel, QDoubleSpinBox, QCheckBox, QFormLayout
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QScrollArea

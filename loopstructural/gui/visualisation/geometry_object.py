@@ -1,4 +1,3 @@
-import pyvista as pv
 
 
 class GeometryObject:

@@ -1,5 +1,5 @@
 import enum
-from typing import Dict, List
+from typing import Dict
 
 class UnconformityType(enum.Enum):
     """

@@ -1,7 +1,5 @@
-import os
 
-from PyQt5.QtWidgets import QSizePolicy, QToolBox
-from qgis.PyQt import uic
+from PyQt5.QtWidgets import QSizePolicy
 
 from loopstructural.gui.modelling.base_tab import BaseTab
 

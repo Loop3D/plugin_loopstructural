@@ -1,8 +1,4 @@
-import os
-from tokenize import group
 
-from PyQt5.QtWidgets import QWidget
-from qgis.PyQt import uic
 
 from loopstructural.gui.modelling.base_tab import BaseTab
 from loopstructural.gui.modelling.stratigraphic_column.stratigraphic_column import StratColumnWidget

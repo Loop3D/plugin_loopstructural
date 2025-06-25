@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel
 from qgis.PyQt import uic
 
-from ....main.geometry.calculateLineAzimuth import calculateAverageAzimuth
 
 
 class FaultLayersWidget(QWidget):

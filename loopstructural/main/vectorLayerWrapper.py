@@ -53,7 +53,7 @@ def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:
                     points.extend(line)
                 # points = geom.asMultiPolyline()[0]
         else:
-            if geom.type() == QgsWkbTypes.PointGeometry:  
+            if geom.type() == QgsWkbTypes.PointGeometry:
                 points = [geom.asPoint()]
             elif geom.type() == QgsWkbTypes.LineGeometry:
                 points = geom.asPolyline()
