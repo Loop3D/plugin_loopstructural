@@ -80,8 +80,10 @@ class ModellingDataManager:
             return
         else:
             for unit_name in self._unique_basal_units:
-                self._stratigraphic_column.add_unit(name=unit_name, colour=None)
-
+                if not self._stratigraphic_column.get_unit_by_name(name=unit_name):
+                    # Add the unit to the stratigraphic column if it does not already exist
+                    self._stratigraphic_column.add_unit(name=unit_name, colour=None)
+        self.update_stratigraphy()
     def add_to_stratigraphic_column(self, unit_data):
         """Add a unit or unconformity to the stratigraphic column."""
         stratigraphic_element = None
@@ -103,12 +105,15 @@ class ModellingDataManager:
     def remove_from_stratigraphic_column(self, unit_uuid):
         """Remove a unit or unconformity from the stratigraphic column."""
         self._stratigraphic_column.remove_unit(uuid=unit_uuid)
+        self.update_stratigraphy()
 
     def update_stratigraphic_column_order(self, new_order):
         """Update the order of units in the stratigraphic column."""
         if not isinstance(new_order, list):
             raise ValueError("new_order must be a list of unit uuids.")
         self._stratigraphic_column.update_order(new_order)
+        self.update_stratigraphy()
+
 
     def get_basal_contacts(self):
         """Get the basal contacts."""
@@ -154,12 +159,12 @@ class ModellingDataManager:
         self.update_stratigraphic_column()
         if self._model_manager is not None:
             if self._basal_contacts is not None:
-                self._model_manager.update_contact_traces(qgsLayerToGeoDataFrame(self._basal_contacts['layer']), 
+                self._model_manager.update_contact_traces(qgsLayerToGeoDataFrame(self._basal_contacts['layer']),
                                                           unit_name_field=self._basal_contacts['unitname_field'])
             if self._structural_orientations is not None:
-                self._model_manager.update_structural_data(qgsLayerToGeoDataFrame(self._structural_orientations['layer']), 
-                                                            strike_field=self._structural_orientations['strike_field'], 
-                                                            dip_field=self._structural_orientations['dip_field'], 
+                self._model_manager.update_structural_data(qgsLayerToGeoDataFrame(self._structural_orientations['layer']),
+                                                            strike_field=self._structural_orientations['strike_field'],
+                                                            dip_field=self._structural_orientations['dip_field'],
                                                             unit_name_field=self._structural_orientations['unitname_field'], dip_direction=True)
         else:
             self.logger(message="Model manager is not set, cannot update foliation features.")
@@ -167,7 +172,7 @@ class ModellingDataManager:
     def update_faults(self):
         """Update the faults in the model manager."""
         if self._model_manager is not None:
-            self._model_manager.update_fault_points(qgsLayerToGeoDataFrame(self._fault_traces['layer']), 
+            self._model_manager.update_fault_points(qgsLayerToGeoDataFrame(self._fault_traces['layer']),
                                                     fault_name_field = self._fault_traces['fault_name_field'], fault_dip_field = self._fault_traces['fault_dip_field'], fault_displacement_field = self._fault_traces['fault_displacement_field'])
         else:
             self.logger(message="Model manager is not set, cannot update faults.")
