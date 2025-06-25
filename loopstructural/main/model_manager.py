@@ -24,7 +24,7 @@ class AllSampler:
                     coords = list(line.coords)
                     for x, y in coords:
                         points.append({'X': x, 'Y': y, 'Z': 0, 'feature_id': feature_id, **attributes})
-            
+
             elif geom.geom_type == 'Point':
                 points.append({'X': geom.x, 'Y': geom.y, 'Z': 0, 'feature_id': feature_id, **attributes})
             feature_id += 1
@@ -38,6 +38,7 @@ class GeologicalModelManager:
         self.groups = []
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
+        self.observers = []
     def update_bounding_box(self, bounding_box: BoundingBox):
         self.model.bounding_box = bounding_box
 
@@ -54,14 +55,14 @@ class GeologicalModelManager:
             self.faults[fault_name]['data'] = fault_points.loc[
                 fault_points['fault_name'] == fault_name, ['X', 'Y', 'Z']
             ]
-            
+
 
     def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None):
         unit_points = sampler(basal_contacts)
         if unit_name_field is not None:
             unit_points['unit_name'] = unit_points[unit_name_field]
         else:
-            return 
+            return
         for unit_name in unit_points['unit_name'].unique():
             self.stratigraphy[unit_name] = unit_points.loc[
                 unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
@@ -74,7 +75,7 @@ class GeologicalModelManager:
         if unit_name_field is not None:
             return
         structural_orientations = structural_orientations.copy()
-        structural_orientations['unit_name'] = structural_orientations[unit_name_field] 
+        structural_orientations['unit_name'] = structural_orientations[unit_name_field]
         structural_orientations['X'] = structural_orientations.geometry.x
         structural_orientations['Y'] = structural_orientations.geometry.y
         structural_orientations['Z'] = structural_orientations.geometry.z
@@ -105,24 +106,36 @@ class GeologicalModelManager:
         self.data
 
     def update_foliation_features(self):
+        stratigraphic_column = {}
+        unit_id = 0
         for i, units in enumerate(self.groups):
             val = 0
             data = []
             groupname = f"Group_{i + 1}"
+            stratigraphic_column[groupname] = {}
             for u in reversed(units):
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is None:
                     continue
                 else:
+                    stratigraphic_column[groupname][u.name] = {
+                        "max": val + u.thickness,
+                        "min": val,
+                        "id": unit_id,
+                        "colour": u.colour,
+                    }
                     unit_data = unit_data.copy()
                     unit_data['val'] = val
                     unit_data['feature_name'] = groupname
                     data.append(unit_data)
+                unit_id += 1
                 val += u.thickness
             if len(data) == 0:
                 continue
             data = pd.concat(data, ignore_index=True)
-            self.model.create_and_add_foliation(groupname, series_surface_data=data)
+            foliation = self.model.create_and_add_foliation(groupname, series_surface_data=data)
+            self.model.add_unconformity(foliation,0)
+        self.model.set_stratigraphic_column(stratigraphic_column)
 
     def update_fault_features(self):
         """Update the fault features in the geological model."""
@@ -166,5 +179,7 @@ class GeologicalModelManager:
                 data['val'] = 0
                 self.model.create_and_add_fault(fault_name, 10,fault_data=data)
 
+        for observer in self.observers:
+            observer()
     def features(self):
         return self.model.features
