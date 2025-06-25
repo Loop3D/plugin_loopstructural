@@ -1,3 +1,4 @@
+
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QListWidget,
@@ -48,10 +49,19 @@ class StratColumnWidget(QWidget):
             self.init_stratigraphic_column_from_basal_contacts
         )
         layout.addWidget(initFromBasalContactsButton)
-
+        clearButton = QPushButton("Clear Stratigraphic Column")
+        clearButton.clicked.connect(self.clearColumn)
+        layout.addWidget(clearButton)
         # Update display from data manager
         self.update_display()
 
+    def clearColumn(self):
+        """Clear the stratigraphic column."""
+        self.unitList.clear()
+        if self.data_manager:
+            self.data_manager._stratigraphic_column.clear()
+        else:
+            print("Error: Data manager is not initialized.")
     def update_display(self):
         """Update the widget display based on the data manager's stratigraphic column."""
         self.unitList.clear()
@@ -130,6 +140,8 @@ class StratColumnWidget(QWidget):
                 widget = self.unitList.itemWidget(item)
                 if widget:
                     ordered_uuids.append(widget.uuid)
+                else:
+                    print(f"Warning: Item at index {i} has no widget associated with it.")
             self.data_manager.update_stratigraphic_column_order(ordered_uuids)
 
     def update_element(self, unit_widget):
