@@ -2,7 +2,7 @@
 
 ## 0.1.3 - 2025-04-15
 
-### Fixed 
+### Fixed
 
 - updating CI so that plugin is automatically pushed to QGIS plugin repository on release
 
