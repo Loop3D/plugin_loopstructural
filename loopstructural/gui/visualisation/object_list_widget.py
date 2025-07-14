@@ -20,6 +20,7 @@ class ObjectListWidget(QWidget):
         self.mainLayout = QVBoxLayout(self)
         self.treeWidget = QTreeWidget(self)
         self.treeWidget.setHeaderHidden(True)  # Hide the header
+        self.treeWidget.setSelectionMode(QTreeWidget.MultiSelection)  # Enable multi-selection
         self.mainLayout.addWidget(self.treeWidget)
         addButton = QPushButton("Add Object", self)
         addButton.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -94,20 +95,23 @@ class ObjectListWidget(QWidget):
         if not selected_items:
             return
 
-        object_name = selected_items[0].text(0)
+        item_widget = self.treeWidget.itemWidget(selected_items[0], 0)
+        object_label = item_widget.findChild(QLabel).text()
         # Logic for exporting the object
-        print(f"Exporting object: {object_name}")
+        print(f"Exporting object: {object_label}")
 
     def remove_selected_object(self):
         selected_items = self.treeWidget.selectedItems()
         if not selected_items:
             return
+        for item in selected_items:
 
-        object_name = selected_items[0].text(0)
-        # Logic for removing the object
-        self.viewer.remove_object(object_name)
-        self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(selected_items[0]))
-        print(f"Removing object: {object_name}")
+            item_widget = self.treeWidget.itemWidget(item, 0)
+            object_label = item_widget.findChild(QLabel).text()
+            # Logic for removing the object
+            self.viewer.remove_object(object_label)
+            self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(item))
+            print(f"Removing object: {object_label}")
 
     def show_add_object_menu(self):
         menu = QMenu(self)
