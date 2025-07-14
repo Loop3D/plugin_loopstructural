@@ -23,6 +23,18 @@ from loopstructural.__about__ import (
     __title__,
     __uri_homepage__,
 )
+try:
+    import LoopStructural
+except ImportError:
+    raise ImportError(
+        "LoopStructural is not installed. Please install it using the requirements.txt file in the plugin directory."
+    )
+try:
+    import pyvistaqt
+except ImportError:
+    raise ImportError(
+        "pyvistaqt is not installed. Please install it using the requirements.txt file in the plugin directory."
+    )
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.modelling.modelling_widget import ModellingWidget as Modelling
 from loopstructural.toolbelt import PlgLogger

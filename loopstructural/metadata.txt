@@ -24,3 +24,4 @@ qgisMaximumVersion=3.99
 version=0.1.0
 changelog=
  
+plugin_dependencies=qpip
