@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>750</width>
-    <height>309</height>
+    <height>326</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -50,17 +50,17 @@
      <item row="1" column="1">
       <widget class="QDoubleSpinBox" name="originXSpinBox">
        <property name="minimum">
-        <double>0.000000000000000</double>
+        <double>-1000000000.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>1000000.000000000000000</double>
+        <double>1000000000.000000000000000</double>
        </property>
       </widget>
      </item>
      <item row="1" column="2">
       <widget class="QDoubleSpinBox" name="originYSpinBox">
        <property name="minimum">
-        <double>0.000000000000000</double>
+        <double>-1000000000.000000000000000</double>
        </property>
        <property name="maximum">
         <double>1000000000.000000000000000</double>
@@ -70,10 +70,10 @@
      <item row="1" column="3">
       <widget class="QDoubleSpinBox" name="originZSpinBox">
        <property name="minimum">
-        <double>0.000000000000000</double>
+        <double>-1000000000.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>1000000.000000000000000</double>
+        <double>1000000000.000000000000000</double>
        </property>
       </widget>
      </item>
@@ -87,30 +87,30 @@
      <item row="2" column="1">
       <widget class="QDoubleSpinBox" name="maxXSpinBox">
        <property name="minimum">
-        <double>0.000000000000000</double>
+        <double>-1000000000.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>1000000.000000000000000</double>
+        <double>1000000000.000000000000000</double>
        </property>
       </widget>
      </item>
      <item row="2" column="2">
       <widget class="QDoubleSpinBox" name="maxYSpinBox">
        <property name="minimum">
-        <double>0.000000000000000</double>
+        <double>-1000000000.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>1000000001.000000000000000</double>
+        <double>1000000000.000000000000000</double>
        </property>
       </widget>
      </item>
      <item row="2" column="3">
       <widget class="QDoubleSpinBox" name="maxZSpinBox">
        <property name="minimum">
-        <double>-10000.000000000000000</double>
+        <double>-1000000000.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>10000.000000000000000</double>
+        <double>1000000000.000000000000000</double>
        </property>
       </widget>
      </item>
