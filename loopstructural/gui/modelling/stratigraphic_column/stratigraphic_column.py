@@ -91,11 +91,15 @@ class StratColumnWidget(QWidget):
                 unit = self.data_manager._stratigraphic_column.get_unit_by_name(
                     unit_data['name']
                 )
-
+        for k in list(unit_data.keys()):
+            if unit_data[k] is None:
+                unit_data.pop(k)
         unit_widget = StratigraphicUnitWidget(uuid=unit.uuid)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         unit_widget.nameChanged.connect(lambda: self.update_element(unit_widget))  # Connect name change signal
+        
         unit_widget.thicknessChanged.connect(lambda: self.update_element(unit_widget))  # Connect thickness change signal
+
         unit_widget.set_thickness(unit_data.get('thickness', 0.0))  # Set initial thickness
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
