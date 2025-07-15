@@ -23,7 +23,15 @@ class FaultLayersWidget(QWidget):
         self.faultNameField.fieldChanged.connect(self.onFaultFieldChanged)
         self.faultDipField.fieldChanged.connect(self.onFaultFieldChanged)
         self.faultDisplacementField.fieldChanged.connect(self.onFaultFieldChanged)
-
+        self.data_manager.set_fault_trace_layer_callback(self.set_fault_trace_layer)
+    def set_fault_trace_layer(self, layer, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None):
+        self.faultTraceLayer.setLayer(layer)
+        if fault_name_field:
+            self.faultNameField.setField(fault_name_field)
+        if fault_dip_field:
+            self.faultDipField.setField(fault_dip_field)
+        if fault_displacement_field:
+            self.faultDisplacementField.setField(fault_displacement_field)
     def onFaultTraceLayerChanged(self, layer):
         self.faultNameField.setLayer(layer)
         self.faultDipField.setLayer(layer)

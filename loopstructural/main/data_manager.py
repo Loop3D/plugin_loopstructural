@@ -2,13 +2,21 @@ from LoopStructural.datatypes import BoundingBox
 
 from .stratigraphic_column import StratigraphicColumn
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
+from qgis.core import QgsProject, QgsVectorLayer
+import json
+__title__ = "LoopStructural"
 
 class ModellingDataManager:
-    def __init__(self, *, mapCanvas=None, logger=None):
+    def __init__(self, *, project=None, mapCanvas=None, logger=None):
+        if project is None:
+            raise ValueError("project cannot be None")
         if mapCanvas is None:
             raise ValueError("mapCanvas cannot be None")
         if logger is None:
             raise ValueError("logger cannot be None")
+        self.project = project
+        self.project.readProject.connect(self.onLoadProject)
+        self.project.writeProject.connect(self.onSaveProject)
         self._bounding_box = BoundingBox(origin=[0, 0, 0], maximum=[1000, 1000, 1000])
         self._basal_contacts = None
         self._fault_traces = None
@@ -19,6 +27,28 @@ class ModellingDataManager:
         self._stratigraphic_column = StratigraphicColumn()
         self._model_manager = None
         self.bounding_box_callback = None
+        self.basal_contacts_callback = None
+        self.fault_traces_callback = None
+        self.structural_orientations_callback = None
+
+    def onSaveProject(self):
+        """Save project data."""
+        self.logger(message="Saving project data...", log_level=3)
+        datamanager_dict = self.to_dict()
+        self.project.writeEntry(__title__, "data_manager", json.dumps(datamanager_dict))
+
+    def onLoadProject(self):
+        """Load project data."""
+        self.logger(message="Loading project data...", log_level=3)
+        datamanager_json, flag = self.project.readEntry(__title__, "data_manager", "")
+        if datamanager_json and flag:
+            try:
+                datamanager_dict = json.loads(datamanager_json)
+                self.update_from_dict(datamanager_dict)
+                
+            except json.JSONDecodeError as e:
+                self.logger(message=f"Error loading data manager: {e}", log_level=2)
+
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
         if model_manager is None:
@@ -52,9 +82,24 @@ class ModellingDataManager:
         self._model_manager.update_bounding_box(self._bounding_box)
         if self.bounding_box_callback:
             self.bounding_box_callback(self._bounding_box)
+        # if self.basal_contacts_callback:
+        #     self.basal_contacts_callback(self._basal_contacts)
+        # if self.fault_traces_callback:
+        #     self.fault_traces_callback(self._fault_traces)
+        # if self.structural_orientations_callback:
+        #     self.structural_orientations_callback(self._structural_orientations)
+        
     def set_bounding_box_update_callback(self, callback):
         self.bounding_box_callback = callback
-
+    def set_fault_trace_layer_callback(self, callback):
+        """Set the callback for when the fault trace layer is updated."""
+        self.fault_traces_callback = callback
+    def set_structural_orientations_callback(self, callback):
+        """Set the callback for when the structural orientations are updated."""
+        self.structural_orientations_callback = callback
+    def set_basal_contacts_callback(self, callback):
+        """Set the callback for when the basal contacts are updated."""
+        self.basal_contacts_callback = callback
     def get_bounding_box(self):
         """Get the current bounding box."""
         return self._bounding_box
@@ -67,6 +112,8 @@ class ModellingDataManager:
         # if stratigraphic column is not empty, update contacts
         if len(self._stratigraphic_column.order)>0:
             self.update_stratigraphy()
+        if self.basal_contacts_callback:
+            self.basal_contacts_callback(**self._basal_contacts)
 
 
     def calculate_unique_basal_units(self):
@@ -136,6 +183,8 @@ class ModellingDataManager:
                               'fault_dip_field': fault_dip_field,
                               'fault_displacement_field': fault_displacement_field}
         self.update_faults()
+        if self.fault_traces_callback:
+            self.fault_traces_callback(**self._fault_traces)
 
     def get_fault_traces(self):
         """Get the fault traces."""
@@ -149,7 +198,8 @@ class ModellingDataManager:
         self._structural_orientations['dip_field'] = dip_field
         self._structural_orientations['unitname_field'] = unitname_field
         self._structural_orientations['orientation_type'] = orientation_type
-
+        if self.structural_orientations_callback:
+            self.structural_orientations_callback(**self._structural_orientations)
     def get_structural_orientations(self):
         """Get the structural orientations."""
         return self._structural_orientations
@@ -206,11 +256,11 @@ class ModellingDataManager:
         structural_orientations = dict(self._structural_orientations) if self._structural_orientations else None
 
         # Replace layer objects with layer names
-        if basal_contacts and 'layer' in basal_contacts:
+        if basal_contacts and 'layer' in basal_contacts and basal_contacts['layer'] is not None:
             basal_contacts['layer'] = basal_contacts['layer'].name()
-        if fault_traces and 'layer' in fault_traces:
+        if fault_traces and 'layer' in fault_traces and fault_traces['layer'] is not None:
             fault_traces['layer'] = fault_traces['layer'].name()
-        if structural_orientations and 'layer' in structural_orientations:
+        if structural_orientations and 'layer' in structural_orientations and structural_orientations['layer'] is not None:
             structural_orientations['layer'] = structural_orientations['layer'].name()
 
         return {
@@ -250,11 +300,46 @@ class ModellingDataManager:
                                     zmin=data['bounding_box']['origin'][2],
                                     zmax=data['bounding_box']['maximum'][2])
             
-        if 'basal_contacts' in data:
-            self._basal_contacts = data['basal_contacts']
-        if 'fault_traces' in data:
-            self._fault_traces = data['fault_traces']
-        if 'structural_orientations' in data:
-            self._structural_orientations = data['structural_orientations']
+        if 'basal_contacts' in data and data['basal_contacts'] is not None and 'layer' in data['basal_contacts']:
+            layer = self.find_layer_by_name(data['basal_contacts']['layer'])
+            if layer:
+                self.set_basal_contacts(layer, unitname_field=data['basal_contacts'].get('unitname_field',None))
+        if 'fault_traces' in data and data['fault_traces'] is not None and 'layer' in data['fault_traces']:
+            layer = self.find_layer_by_name(data['fault_traces']['layer'])
+            if layer:
+                self.set_fault_trace_layer(layer, fault_name_field=data['fault_traces'].get('fault_name_field',None),
+                                           fault_dip_field=data['fault_traces'].get('fault_dip_field',None),
+                                           fault_displacement_field=data['fault_traces'].get('fault_displacement_field',None))
+        if 'structural_orientations' in data and data['structural_orientations'] is not None and 'layer' in data['structural_orientations']:
+            layer = self.find_layer_by_name(data['structural_orientations']['layer'])
+            if layer:
+                self.set_structural_orientations(layer,
+                                             strike_field=data['structural_orientations'].get('strike_field',None),
+                                             dip_field=data['structural_orientations'].get('dip_field',None),
+                                             unitname_field=data['structural_orientations'].get('unitname_field',None),
+                                             orientation_type=data['structural_orientations'].get('orientation_type',None))
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+    def find_layer_by_name(self, layer_name):
+        """Find a layer by name in the project."""
+        if layer_name is None:
+            self.logger(message="Layer name is None, cannot find layer.", log_level=2)
+            return None
+        if issubclass(type(layer_name), str):
+            layers = self.project.mapLayersByName(layer_name)
+        else:
+            layers = [layer_name]
+        if layers:
+            if len(layers) > 1:
+                self.logger(message=f"Multiple layers found with name '{layer_name}', returning the first one.", log_level=2)
+            i = 0
+            while i< len(layers) and not issubclass(type(layers[i]), QgsVectorLayer):
+               
+                i += 1
+            
+            if issubclass(type(layers[i]), QgsVectorLayer):
+                return layers[i]
+            else:
+                self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
+                return None
+            
