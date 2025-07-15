@@ -12,6 +12,8 @@ class AllSampler:
     def __call__(self, line: gpd.GeoDataFrame) -> pd.DataFrame:
         points = []
         feature_id = 0
+        if line is None:
+            return pd.DataFrame(points)
         for geom in line.geometry:
             attributes = line.iloc[feature_id].to_dict()
             attributes.pop('geometry', None)  # Remove geometry from attributes
