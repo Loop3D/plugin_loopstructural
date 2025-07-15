@@ -167,17 +167,17 @@ class GeologicalModelManager:
         """Update the geological model with the current stratigraphy and faults."""
         # if not self.valid:
         #     raise ValueError("Model is not valid. Please check the data.")
-
-        # Update the model with stratigraphy
-        self.update_foliation_features()
-
         # Update the model with faults
         for fault_name, fault_data in self.faults.items():
             if 'data' in fault_data and not fault_data['data'].empty:
                 data = fault_data['data'].copy()
                 data['feature_name'] = fault_name
                 data['val'] = 0
-                self.model.create_and_add_fault(fault_name, 10,fault_data=data)
+                self.model.create_and_add_fault(fault_name, 10,fault_data=data)     
+        # Update the model with stratigraphy
+        self.update_foliation_features()
+
+        
 
         for observer in self.observers:
             observer()
