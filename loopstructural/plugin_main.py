@@ -8,7 +8,7 @@ from functools import partial
 from pathlib import Path
 
 # PyQGIS
-from qgis.core import QgsApplication, QgsSettings
+from qgis.core import QgsApplication, QgsSettings, QgsProject
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QCoreApplication, QLocale, Qt, QTranslator, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QIcon
@@ -28,10 +28,11 @@ from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.gui.visualisation.visualisation_widget import VisualisationWidget
 from loopstructural.toolbelt import PlgLogger
 
+import json
 # ############################################################################
 # ########## Classes ###############
 # ##################################
-
+__title__ = "LoopStructural"
 
 class LoopstructuralPlugin:
     def __init__(self, iface: QgisInterface):
@@ -61,7 +62,26 @@ class LoopstructuralPlugin:
         self.model_manager = GeologicalModelManager(
         )
         self.data_manager.set_model_manager(self.model_manager)
+        self.project = QgsProject.instance()
+        self.project.readProject.connect(self.onLoadProject)
+        self.project.writeProject.connect(self.onSaveProject)
+    def onSaveProject(self):
+        """Save project data."""
+        self.log(message="Saving project data...", log_level=3)
+        datamanager_dict = self.data_manager.to_dict()
+        self.project.writeEntry(__title__, "data_manager", json.dumps(datamanager_dict))
 
+    def onLoadProject(self):
+        """Load project data."""
+        self.log(message="Loading project data...", log_level=3)
+        datamanager_json, flag = self.project.readEntry(__title__, "data_manager", "")
+        if datamanager_json and flag:
+            try:
+                datamanager_dict = json.loads(datamanager_json)
+                self.data_manager.update_from_dict(datamanager_dict)
+                
+            except json.JSONDecodeError as e:
+                self.log(message=f"Error loading data manager: {e}", log_level=2)
     def initGui(self):
         """Set up plugin UI elements."""
         self.toolbar = self.iface.addToolBar(u'LoopStructural')
@@ -154,11 +174,12 @@ class LoopstructuralPlugin:
         )
         self.visualisation_dockwidget.setWidget(self.visualisation_widget)
         self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
-        right_docks = [
+        right_docks = [self.modelling_dockwidget]+[
             d
             for d in self.iface.mainWindow().findChildren(QDockWidget)
             if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
         ]
+        
         # If there are other dock widgets, tab this one with the first one found
         if right_docks:
             for dock in right_docks:

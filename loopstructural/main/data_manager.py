@@ -18,7 +18,7 @@ class ModellingDataManager:
         self.logger = logger
         self._stratigraphic_column = StratigraphicColumn()
         self._model_manager = None
-
+        self.bounding_box_callback = None
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
         if model_manager is None:
@@ -50,6 +50,10 @@ class ModellingDataManager:
         self._bounding_box.maximum = maximum
         # self._bounding_box.update([west, south, bottom], [east, north, top])
         self._model_manager.update_bounding_box(self._bounding_box)
+        if self.bounding_box_callback:
+            self.bounding_box_callback(self._bounding_box)
+    def set_bounding_box_update_callback(self, callback):
+        self.bounding_box_callback = callback
 
     def get_bounding_box(self):
         """Get the current bounding box."""
@@ -193,3 +197,64 @@ class ModellingDataManager:
         self._basal_contacts = None
         self._fault_traces = None
         self._structural_orientations = None
+
+    def to_dict(self):
+        """Convert the data manager to a dictionary."""
+        # Create copies of the dictionaries to avoid modifying the originals
+        basal_contacts = dict(self._basal_contacts) if self._basal_contacts else None
+        fault_traces = dict(self._fault_traces) if self._fault_traces else None 
+        structural_orientations = dict(self._structural_orientations) if self._structural_orientations else None
+
+        # Replace layer objects with layer names
+        if basal_contacts and 'layer' in basal_contacts:
+            basal_contacts['layer'] = basal_contacts['layer'].name()
+        if fault_traces and 'layer' in fault_traces:
+            fault_traces['layer'] = fault_traces['layer'].name()
+        if structural_orientations and 'layer' in structural_orientations:
+            structural_orientations['layer'] = structural_orientations['layer'].name()
+
+        return {
+            'bounding_box': self._bounding_box.to_dict(),
+            'basal_contacts': basal_contacts,
+            'fault_traces': fault_traces,
+            'structural_orientations': structural_orientations,
+            'stratigraphic_column': self._stratigraphic_column.to_dict() if self._stratigraphic_column else None
+        }
+
+    def from_dict(self, data):
+        """Load data from a dictionary."""
+        if 'bounding_box' in data:
+            self.set_bounding_box(xmin=data['bounding_box']['origin'][0],
+                                  xmax=data['bounding_box']['maximum'][0],
+                                    ymin=data['bounding_box']['origin'][1],
+                                    ymax=data['bounding_box']['maximum'][1],
+                                    zmin=data['bounding_box']['origin'][2],
+                                    zmax=data['bounding_box']['maximum'][2])
+            
+
+        if 'basal_contacts' in data:
+            self._basal_contacts = data['basal_contacts']
+        if 'fault_traces' in data:
+            self._fault_traces = data['fault_traces']
+        if 'structural_orientations' in data:
+            self._structural_orientations = data['structural_orientations']
+        if 'stratigraphic_column' in data:
+            self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+    def update_from_dict(self, data):
+        """Update the data manager from a dictionary."""
+        if 'bounding_box' in data:
+            self.set_bounding_box(xmin=data['bounding_box']['origin'][0],
+                                  xmax=data['bounding_box']['maximum'][0],
+                                    ymin=data['bounding_box']['origin'][1],
+                                    ymax=data['bounding_box']['maximum'][1],
+                                    zmin=data['bounding_box']['origin'][2],
+                                    zmax=data['bounding_box']['maximum'][2])
+            
+        if 'basal_contacts' in data:
+            self._basal_contacts = data['basal_contacts']
+        if 'fault_traces' in data:
+            self._fault_traces = data['fault_traces']
+        if 'structural_orientations' in data:
+            self._structural_orientations = data['structural_orientations']
+        if 'stratigraphic_column' in data:
+            self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
