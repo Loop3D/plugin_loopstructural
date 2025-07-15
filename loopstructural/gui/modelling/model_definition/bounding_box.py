@@ -18,6 +18,18 @@ class BoundingBoxWidget(QWidget):
         self.maxZSpinBox.valueChanged.connect(lambda z: self.onChangeExtent({'zmax': z}))
         self.useCurrentViewExtentButton.clicked.connect(self.useCurrentViewExtent)
         self.selectFromCurrentLayerButton.clicked.connect(self.selectFromCurrentLayer)
+        self.data_manager.set_bounding_box_update_callback(self.set_bounding_box)
+    def set_bounding_box(self, bounding_box):
+        """
+        Set the bounding box values in the UI.
+        :param bounding_box: BoundingBox object with xmin, xmax, ymin, ymax, zmin, zmax attributes.
+        """
+        self.originXSpinBox.setValue(bounding_box.origin[0])
+        self.maxXSpinBox.setValue(bounding_box.maximum[0])
+        self.originYSpinBox.setValue(bounding_box.origin[1])
+        self.maxYSpinBox.setValue(bounding_box.maximum[1])
+        self.originZSpinBox.setValue(bounding_box.origin[2])
+        self.maxZSpinBox.setValue(bounding_box.maximum[2])
 
     def useCurrentViewExtent(self):
         """
