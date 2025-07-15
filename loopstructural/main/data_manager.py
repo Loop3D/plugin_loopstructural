@@ -30,7 +30,7 @@ class ModellingDataManager:
         self.basal_contacts_callback = None
         self.fault_traces_callback = None
         self.structural_orientations_callback = None
-
+        self.stratigraphic_column_callback = None
     def onSaveProject(self):
         """Save project data."""
         self.logger(message="Saving project data...", log_level=3)
@@ -78,16 +78,10 @@ class ModellingDataManager:
         self._bounding_box.maximum = maximum
         self._bounding_box.origin = origin
         self._bounding_box.maximum = maximum
-        # self._bounding_box.update([west, south, bottom], [east, north, top])
         self._model_manager.update_bounding_box(self._bounding_box)
         if self.bounding_box_callback:
             self.bounding_box_callback(self._bounding_box)
-        # if self.basal_contacts_callback:
-        #     self.basal_contacts_callback(self._basal_contacts)
-        # if self.fault_traces_callback:
-        #     self.fault_traces_callback(self._fault_traces)
-        # if self.structural_orientations_callback:
-        #     self.structural_orientations_callback(self._structural_orientations)
+        
         
     def set_bounding_box_update_callback(self, callback):
         self.bounding_box_callback = callback
@@ -100,6 +94,9 @@ class ModellingDataManager:
     def set_basal_contacts_callback(self, callback):
         """Set the callback for when the basal contacts are updated."""
         self.basal_contacts_callback = callback
+    def set_stratigraphic_column_callback(self, callback):
+        """Set the callback for when the stratigraphic column is updated."""
+        self.stratigraphic_column_callback = callback
     def get_bounding_box(self):
         """Get the current bounding box."""
         return self._bounding_box
@@ -290,6 +287,7 @@ class ModellingDataManager:
             self._structural_orientations = data['structural_orientations']
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+            self.stratigraphic_column_callback()
     def update_from_dict(self, data):
         """Update the data manager from a dictionary."""
         if 'bounding_box' in data:
@@ -320,10 +318,11 @@ class ModellingDataManager:
                                              orientation_type=data['structural_orientations'].get('orientation_type',None))
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+            self.stratigraphic_column_callback()
+
     def find_layer_by_name(self, layer_name):
         """Find a layer by name in the project."""
         if layer_name is None:
-            self.logger(message="Layer name is None, cannot find layer.", log_level=2)
             return None
         if issubclass(type(layer_name), str):
             layers = self.project.mapLayersByName(layer_name)

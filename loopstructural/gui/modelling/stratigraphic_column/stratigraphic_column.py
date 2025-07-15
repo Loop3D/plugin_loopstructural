@@ -54,7 +54,8 @@ class StratColumnWidget(QWidget):
         layout.addWidget(clearButton)
         # Update display from data manager
         self.update_display()
-
+        self.data_manager.set_stratigraphic_column_callback(self.update_display)
+    
     def clearColumn(self):
         """Clear the stratigraphic column."""
         self.unitList.clear()
@@ -95,6 +96,7 @@ class StratColumnWidget(QWidget):
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         unit_widget.nameChanged.connect(lambda: self.update_element(unit_widget))  # Connect name change signal
         unit_widget.thicknessChanged.connect(lambda: self.update_element(unit_widget))  # Connect thickness change signal
+        unit_widget.set_thickness(unit_data.get('thickness', 0.0))  # Set initial thickness
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)

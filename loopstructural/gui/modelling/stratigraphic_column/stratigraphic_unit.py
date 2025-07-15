@@ -23,6 +23,15 @@ class StratigraphicUnitWidget(QWidget):
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
 
+    def set_thickness(self, thickness: float):
+        """
+        Set the thickness of the stratigraphic unit.
+        :param thickness: The thickness value to set.
+        """
+        self.thickness = thickness
+        self.spinBoxThickness.setValue(thickness)
+        self.validateFields()
+    
     def onColourSelectClicked(self):
         """
         Open a color dialog to select a color for the stratigraphic unit.
