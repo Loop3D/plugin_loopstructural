@@ -66,7 +66,7 @@ class ModellingDataManager:
 
 
     def calculate_unique_basal_units(self):
-        if self._basal_contacts is not None and self._basal_contacts['unitname_field'] is not None:
+        if self._basal_contacts is not None and self._basal_contacts['unitname_field'] is not None and self._basal_contacts['layer'] is not None:
             self._unique_basal_units.clear()
             for feature in self._basal_contacts['layer'].getFeatures():
                 unit_name = feature[self._basal_contacts['unitname_field']]
