@@ -4,6 +4,7 @@ from .stratigraphic_column import StratigraphicColumn
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 from qgis.core import QgsProject, QgsVectorLayer
 import json
+import numpy as np
 __title__ = "LoopStructural"
 
 class ModellingDataManager:
@@ -31,6 +32,8 @@ class ModellingDataManager:
         self.fault_traces_callback = None
         self.structural_orientations_callback = None
         self.stratigraphic_column_callback = None
+        self.fault_adjacency = None
+        self.fault_stratigraphy_adjacency = None
     def onSaveProject(self):
         """Save project data."""
         self.logger(message="Saving project data...", log_level=3)
@@ -166,7 +169,15 @@ class ModellingDataManager:
     def get_basal_contacts(self):
         """Get the basal contacts."""
         return self._basal_contacts
-
+    def get_unique_faults(self):
+        """Get the unique faults from the fault traces."""
+        if self._fault_traces is None or self._fault_traces['layer'] is None:
+            return []
+        unique_faults = set()
+        for feature in self._fault_traces['layer'].getFeatures():
+            fault_name = feature[self._fault_traces['fault_name_field']]
+            unique_faults.add(fault_name)
+        return list(unique_faults)
     def set_fault_trace_layer(self, fault_trace_layer,  fault_name_field=None, fault_dip_field=None, fault_displacement_field=None):
         """Set the fault traces for the model."""
         if fault_trace_layer is None:
@@ -227,11 +238,14 @@ class ModellingDataManager:
 
     def update_faults(self):
         """Update the faults in the model manager."""
+        unique_faults = self.get_unique_faults()
+        self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:
             self._model_manager.update_fault_points(qgsLayerToGeoDataFrame(self._fault_traces['layer']),
                                                     fault_name_field = self._fault_traces['fault_name_field'], fault_dip_field = self._fault_traces['fault_dip_field'], fault_displacement_field = self._fault_traces['fault_displacement_field'])
         else:
             self.logger(message="Model manager is not set, cannot update faults.")
+    
     def update_stratigraphic_column(self):
         """Update the stratigraphic column in the model manager."""
         if self._model_manager is not None:

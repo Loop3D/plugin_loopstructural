@@ -1,8 +1,10 @@
+from xmlrpc.client import Fault
 from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from loopstructural.gui.modelling.geological_history_tab import GeologialHistoryTab
 from loopstructural.gui.modelling.geological_model_tab import GeologicalModelTab
 from loopstructural.gui.modelling.model_definition import ModelDefinitionTab
+from loopstructural.gui.modelling.fault_adjacency_tab import FaultAdjacencyTab
 
 
 class ModellingWidget(QWidget):
@@ -20,11 +22,14 @@ class ModellingWidget(QWidget):
         self.geological_history_tab_widget = GeologialHistoryTab(
             self, data_manager=self.data_manager
         )
-        self.geological_model_tab_widget = GeologicalModelTab(self, model_manager = self.model_manager)
+        self.fault_adjacency_tab_widget = FaultAdjacencyTab(self, data_manager=self.data_manager)
+        self.geological_model_tab_widget = GeologicalModelTab(self, model_manager=self.model_manager)
+
         mainLayout = QVBoxLayout(self)
         self.setLayout(mainLayout)
         tabWidget = QTabWidget(self)
         mainLayout.addWidget(tabWidget)
         tabWidget.addTab(self.model_definition_tab_widget, "Load Data")
         tabWidget.addTab(self.geological_history_tab_widget, "Stratigraphic Column")
+        tabWidget.addTab(self.fault_adjacency_tab_widget, "Fault Adjacency")
         tabWidget.addTab(self.geological_model_tab_widget, "Geological Model")
