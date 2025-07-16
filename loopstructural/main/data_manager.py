@@ -2,7 +2,7 @@ from LoopStructural.datatypes import BoundingBox
 
 from .stratigraphic_column import StratigraphicColumn
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import QgsProject, QgsVectorLayer, QgsPointXY
 import json
 import numpy as np
 __title__ = "LoopStructural"
@@ -34,6 +34,10 @@ class ModellingDataManager:
         self.stratigraphic_column_callback = None
         self.fault_adjacency = None
         self.fault_stratigraphy_adjacency = None
+        self.elevation = np.nan
+        self.dem_layer = None
+        self.use_dem = False
+        self.dem_callback = None
     def onSaveProject(self):
         """Save project data."""
         self.logger(message="Saving project data...", log_level=3)
@@ -103,6 +107,25 @@ class ModellingDataManager:
     def get_bounding_box(self):
         """Get the current bounding box."""
         return self._bounding_box
+
+    def set_elevation(self, elevation):
+        """Set the elevation for the model."""
+        self.elevation = elevation
+        self.dem_function = lambda x, y: self.elevation
+        self._model_manager.set_dem_function(self.dem_function)
+
+    def set_dem_layer(self, dem_layer):
+        self.dem_layer = dem_layer
+        if dem_layer is None:
+            self.dem_function = lambda x, y: 0.0
+            self.logger(message="DEM layer is None, using 0.0 for elevation. Choose a valid layer or specify a constant value", log_level=2)
+        else:
+            self.dem_function = lambda x, y: self.dem_layer.dataProvider().sample(QgsPointXY(x, y), 1)[0] if self.dem_layer else np.nan
+            self._model_manager.set_dem_function(self.dem_function)
+
+    def set_use_dem(self, use_dem):
+        self.use_dem = use_dem
+        self._model_manager.set_dem_function(self.dem_function)
 
     def set_basal_contacts(self, basal_contacts, unitname_field=None):
         """Set the basal contacts for the model."""

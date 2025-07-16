@@ -6,7 +6,7 @@ from loopstructural.gui.modelling.base_tab import BaseTab
 from .bounding_box import BoundingBoxWidget
 from .fault_layers import FaultLayersWidget
 from .stratigraphic_layers import StratigraphicLayersWidget
-
+from .dem import DEMWidget
 
 class ModelDefinitionTab(BaseTab):
     def __init__(self, parent=None, data_manager=None):
@@ -19,6 +19,7 @@ class ModelDefinitionTab(BaseTab):
 
         # Add widgets to the QToolBox
         bounding_box = BoundingBoxWidget(self, data_manager)
+        dem = DEMWidget(self, data_manager)
         fault_layers = FaultLayersWidget(self, data_manager)
         stratigraphy_layers = StratigraphicLayersWidget(self, data_manager)
 
@@ -27,5 +28,6 @@ class ModelDefinitionTab(BaseTab):
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.add_widget(bounding_box, 'Bounding Box')  # , "Bounding Box")
+        self.add_widget(dem, 'DEM')
         self.add_widget(fault_layers, 'Fault Layers')  # , "Fault Layers")
         self.add_widget(stratigraphy_layers, 'Stratigraphic Layers')  # , "Stratigraphic Layers")

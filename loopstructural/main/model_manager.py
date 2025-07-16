@@ -1,5 +1,6 @@
 from collections import defaultdict
-
+from collections.abc import Callable
+from typing import Callable
 import geopandas as gpd
 import pandas as pd
 from LoopStructural import GeologicalModel
@@ -9,7 +10,7 @@ from loopstructural.main.stratigraphic_column import StratigraphicColumn
 
 
 class AllSampler:
-    def __call__(self, line: gpd.GeoDataFrame) -> pd.DataFrame:
+    def __call__(self, line: gpd.GeoDataFrame, dem:Callable) -> pd.DataFrame:
         points = []
         feature_id = 0
         if line is None:
@@ -20,15 +21,15 @@ class AllSampler:
             if geom.geom_type == 'LineString':
                 coords = list(geom.coords)
                 for x, y in coords:
-                    points.append({'X': x, 'Y': y, 'Z': 0, 'feature_id': feature_id, **attributes   })
+                    points.append({'X': x, 'Y': y, 'Z': dem(x, y), 'feature_id': feature_id, **attributes})
             elif geom.geom_type == 'MultiLineString':
-                for line in geom.geoms:
-                    coords = list(line.coords)
+                for l in geom.geoms:
+                    coords = list(l.coords)
                     for x, y in coords:
-                        points.append({'X': x, 'Y': y, 'Z': 0, 'feature_id': feature_id, **attributes})
+                        points.append({'X': x, 'Y': y, 'Z': dem(x, y), 'feature_id': feature_id, **attributes})
 
             elif geom.geom_type == 'Point':
-                points.append({'X': geom.x, 'Y': geom.y, 'Z': 0, 'feature_id': feature_id, **attributes})
+                points.append({'X': geom.x, 'Y': geom.y, 'Z': dem(geom.x, geom.y), 'feature_id': feature_id, **attributes})
             feature_id += 1
         return pd.DataFrame(points)
 
@@ -41,14 +42,17 @@ class GeologicalModelManager:
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
         self.observers = []
+        self.dem_function = lambda x,y: 0
     def update_bounding_box(self, bounding_box: BoundingBox):
         self.model.bounding_box = bounding_box
-
+    def set_dem_function(self, dem_function: Callable):
+        """Set the function to get the elevation at a point."""
+        self.dem_function = dem_function    
     def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, sampler=AllSampler()):
         """Add fault trace data to the geological model."""
         # sample fault trace
         self.faults.clear()  # Clear existing faults
-        fault_points = sampler(fault_trace)
+        fault_points = sampler(fault_trace, self.dem_function)
         if fault_name_field is not None:
             fault_points['fault_name'] = fault_points[fault_name_field]
         else:
@@ -60,7 +64,7 @@ class GeologicalModelManager:
 
 
     def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None):
-        unit_points = sampler(basal_contacts)
+        unit_points = sampler(basal_contacts,self.dem_function)
         if unit_name_field is not None:
             unit_points['unit_name'] = unit_points[unit_name_field]
         else:
@@ -80,7 +84,9 @@ class GeologicalModelManager:
         structural_orientations['unit_name'] = structural_orientations[unit_name_field]
         structural_orientations['X'] = structural_orientations.geometry.x
         structural_orientations['Y'] = structural_orientations.geometry.y
-        structural_orientations['Z'] = structural_orientations.geometry.z
+        structural_orientations['Z'] = structural_orientations.apply(
+            lambda row: self.dem_function(row.geometry.x, row.geometry.y), axis=1
+        )
         structural_orientations['dip'] = structural_orientations[dip_field]
         structural_orientations['strike'] = structural_orientations[strike_field]
         structural_orientations = structural_orientations[['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']]
