@@ -149,12 +149,12 @@ class GeologicalModelManager:
         """
         stratigraphic_column = {}
         unit_id = 0
-        for i, group in enumerate(self.stratigraphic_column.get_groups()):
+        for i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
             val = 0
             data = []
             groupname = group.name
             stratigraphic_column[groupname] = {}
-            for u in reversed(group.units):
+            for u in group.units:
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is None:
                     continue
