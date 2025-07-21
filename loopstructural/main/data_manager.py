@@ -6,7 +6,14 @@ from qgis.core import QgsProject, QgsVectorLayer, QgsPointXY
 import json
 import numpy as np
 __title__ = "LoopStructural"
-
+default_bounding_box = {
+    'xmin': 0,
+    'xmax': 1000,
+    'ymin': 0,
+    'ymax': 1000,
+    'zmin': -7000,
+    'zmax': 1000
+}
 class ModellingDataManager:
     def __init__(self, *, project=None, mapCanvas=None, logger=None):
         if project is None:
@@ -18,7 +25,8 @@ class ModellingDataManager:
         self.project = project
         self.project.readProject.connect(self.onLoadProject)
         self.project.writeProject.connect(self.onSaveProject)
-        self._bounding_box = BoundingBox(origin=[0, 0, 0], maximum=[1000, 1000, 1000])
+        self._bounding_box = BoundingBox(origin=[default_bounding_box['xmin'], default_bounding_box['ymin'], default_bounding_box['zmin']], maximum=[default_bounding_box['xmax'], default_bounding_box['ymax'], default_bounding_box['zmax']])
+
         self._basal_contacts = None
         self._fault_traces = None
         self._structural_orientations = None
@@ -94,6 +102,7 @@ class ModellingDataManager:
         
     def set_bounding_box_update_callback(self, callback):
         self.bounding_box_callback = callback
+        self.bounding_box_callback(self._bounding_box)
     def set_fault_trace_layer_callback(self, callback):
         """Set the callback for when the fault trace layer is updated."""
         self.fault_traces_callback = callback
@@ -248,7 +257,6 @@ class ModellingDataManager:
     def update_stratigraphy(self):
         """Update the foliation features in the model manager."""
         print("Updating stratigraphy...")
-        self.update_stratigraphic_column()
         if self._model_manager is not None:
             if self._basal_contacts is not None:
                 self._model_manager.update_contact_traces(qgsLayerToGeoDataFrame(self._basal_contacts['layer']),
@@ -336,7 +344,8 @@ class ModellingDataManager:
                                     ymax=data['bounding_box']['maximum'][1],
                                     zmin=data['bounding_box']['origin'][2],
                                     zmax=data['bounding_box']['maximum'][2])
-            
+        else:
+            self.set_bounding_box(**default_bounding_box)
         if 'basal_contacts' in data and data['basal_contacts'] is not None and 'layer' in data['basal_contacts']:
             layer = self.find_layer_by_name(data['basal_contacts']['layer'])
             if layer:
@@ -357,8 +366,11 @@ class ModellingDataManager:
                                              orientation_type=data['structural_orientations'].get('orientation_type',None))
         if 'stratigraphic_column' in data:
             self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
-            if self.stratigraphic_column_callback:
-                self.stratigraphic_column_callback()
+        else:
+            self._stratigraphic_column = StratigraphicColumn()
+        
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
 
     def find_layer_by_name(self, layer_name):
         """Find a layer by name in the project."""
