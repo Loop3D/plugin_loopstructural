@@ -79,13 +79,13 @@ class GeologicalModelManager:
         # sample fault trace
         self.faults.clear()  # Clear existing faults
         fault_points = sampler(fault_trace, self.dem_function)
-        if fault_name_field is not None:
+        if fault_name_field is not None and fault_name_field in fault_points.columns:
             fault_points['fault_name'] = fault_points[fault_name_field]
         else:
             fault_points['fault_name'] = fault_points['feature_id'].astype(str)
-        if fault_dip_field is not None:
+        if fault_dip_field is not None and fault_dip_field in fault_points.columns:
             fault_points['dip'] = fault_points[fault_dip_field]
-        if fault_displacement_field is not None:
+        if fault_displacement_field is not None and fault_displacement_field in fault_points.columns:
             fault_points['displacement'] = fault_points[fault_displacement_field]
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
