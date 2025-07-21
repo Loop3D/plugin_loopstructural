@@ -66,7 +66,10 @@ class GeologicalModelTab(QWidget):
 
     def initialize_model(self):
         self.model_manager.update_model()
+        self.featureList.clear()  # Clear the feature list before populating it
         for feature in self.model_manager.features():
+            if feature.name.startswith("__"):
+                continue
             items = self.featureList.findItems(feature.name, Qt.MatchExactly)
             if items:
                 # If the feature already exists, skip adding it again
