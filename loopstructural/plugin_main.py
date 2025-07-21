@@ -67,7 +67,7 @@ class LoopstructuralPlugin:
         handler = PlgLoggerHandler(plg_logger_class=PlgLogger, push=True)
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
 
-        LoopStructural.setLogging(level="debug", handler=handler)
+        LoopStructural.setLogging(level="warning", handler=handler)
     def initGui(self):
         """Set up plugin UI elements."""
         self.injectLogHandler()
