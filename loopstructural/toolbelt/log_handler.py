@@ -178,7 +178,7 @@ class PlgLoggerHandler(logging.Handler):
                 log_level=qgis_level,
                 push=self.push,
                 duration=self.duration,
-                application=record.name
+                application='LoopStructural',
             )
         except Exception:
             self.handleError(record)
