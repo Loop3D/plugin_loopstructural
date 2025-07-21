@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
-from loopstructural.main.stratigraphic_column import StratigraphicColumnElementType
+from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .stratigraphic_unit import StratigraphicUnitWidget
 
@@ -71,6 +71,7 @@ class StratColumnWidget(QWidget):
                 if unit.element_type == StratigraphicColumnElementType.UNIT:
                     self.add_unit(unit_data=unit.to_dict(), create_new=False)
                 elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
+                    
                     self.add_unconformity(unconformity_data=unit.to_dict(),create_new=False)
 
     def init_stratigraphic_column_from_basal_contacts(self):
@@ -86,15 +87,15 @@ class StratColumnWidget(QWidget):
         if create_new:
             unit = self.data_manager.add_to_stratigraphic_column(unit_data)
         else:
-            if unit_data['name'] is not None or unit_data['name'] != '':
+            if unit_data['uuid'] is not None or unit_data['uuid'] != '':
 
-                unit = self.data_manager._stratigraphic_column.get_unit_by_name(
-                    unit_data['name']
+                unit = self.data_manager._stratigraphic_column.get_element_by_uuid(
+                    unit_data['uuid']
                 )
         for k in list(unit_data.keys()):
             if unit_data[k] is None:
                 unit_data.pop(k)
-        unit_widget = StratigraphicUnitWidget(uuid=unit.uuid)
+        unit_widget = StratigraphicUnitWidget(**unit_data)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         unit_widget.nameChanged.connect(lambda: self.update_element(unit_widget))  # Connect name change signal
         
@@ -114,9 +115,10 @@ class StratColumnWidget(QWidget):
         if create_new:
             unconformity = self.data_manager.add_to_stratigraphic_column(unconformity_data)
         else:
-            unconformity = self.data_manager._stratigraphic_column.get_unconformity_by_type(
-                unconformity_data['unconformity_type']
+            unconformity = self.data_manager._stratigraphic_column.get_element_by_uuid(
+                unconformity_data['uuid']
             )
+
         unconformity_widget = UnconformityWidget(uuid=unconformity.uuid)
         unconformity_widget.deleteRequested.connect(self.delete_unit)
         item = QListWidgetItem()

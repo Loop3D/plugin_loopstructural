@@ -11,13 +11,13 @@ class StratigraphicUnitWidget(QWidget):
     thicknessChanged = pyqtSignal(float)  # Signal for thickness changes
     colourChanged = pyqtSignal(str)  # Signal for colour changes
     nameChanged = pyqtSignal(str)  # Signal for name changes
-    def __init__(self, uuid, name: Optional[str] = None, colour: Optional[str] = None, parent=None):
+    def __init__(self, uuid, name: Optional[str] = None, colour: Optional[str] = None, thickness: float = 0.0, parent=None):
         super().__init__(parent)
         uic.loadUi(os.path.join(os.path.dirname(__file__), "stratigraphic_unit.ui"), self)
         self.uuid = uuid
         self.name = name if name is not None else ""
         self.colour = colour if colour is not None else ""
-        self.thickness = 0.0  # Optional thickness attribute
+        self.thickness = thickness  # Optional thickness attribute
         # Add delete button
         self.buttonDelete.clicked.connect(self.request_delete)
         self.lineEditName.editingFinished.connect(self.onNameChanged)

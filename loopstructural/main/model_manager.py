@@ -1,16 +1,20 @@
 from collections import defaultdict
 from collections.abc import Callable
+from tracemalloc import start
 from typing import Callable
 import geopandas as gpd
 import pandas as pd
 from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
-
 from loopstructural.main.stratigraphic_column import StratigraphicColumn
 
 
 class AllSampler:
+    """This is a simple sampler that just returns all the points, or all of the vertices
+    of a line. It will also copy the elevation from the DEM or the elevation set in the data manager.
+    """
     def __call__(self, line: gpd.GeoDataFrame, dem:Callable) -> pd.DataFrame:
+        """Sample the line and return a DataFrame with X, Y, Z coordinates and attributes."""
         points = []
         feature_id = 0
         if line is None:
@@ -35,21 +39,43 @@ class AllSampler:
 
 
 class GeologicalModelManager:
+    """This class manages the geological model and assembles it from the data provided by the data manager.
+    It is responsible for updating the model with faults, stratigraphy, and other geological features.
+    """
     def __init__(self):
+        """Initialize the geological model manager."""
         self.model = GeologicalModel([0, 0, 0], [1, 1, 1])
         self.stratigraphy = {}
         self.groups = []
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
+        self.stratigraphic_column = None
         self.observers = []
         self.dem_function = lambda x,y: 0
+    def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
+        """Set the stratigraphic column for the geological model manager."""
+        self.stratigraphic_column = stratigraphic_column
+        
     def update_bounding_box(self, bounding_box: BoundingBox):
+        """Update the bounding box of the geological model.
+
+        :param bounding_box: The new bounding box.
+        :type bounding_box: BoundingBox
+        """
         self.model.bounding_box = bounding_box
     def set_dem_function(self, dem_function: Callable):
-        """Set the function to get the elevation at a point."""
+        """Set the function to get the elevation at a point.
+        :param dem_function: A function that takes x and y coordinates and returns the elevation.
+        """
         self.dem_function = dem_function    
     def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, sampler=AllSampler()):
-        """Add fault trace data to the geological model."""
+        """Add fault trace data to the geological model.
+        :param fault_trace: A GeoDataFrame containing the fault trace data.
+        :param fault_name_field: The field name for the fault name.
+        :param fault_dip_field: The field name for the fault dip.
+        :param fault_displacement_field: The field name for the fault displacement.
+        :param sampler: A callable that samples the fault trace and returns a DataFrame with X, Y, Z coordinates.
+        """
         # sample fault trace
         self.faults.clear()  # Clear existing faults
         fault_points = sampler(fault_trace, self.dem_function)
@@ -57,6 +83,10 @@ class GeologicalModelManager:
             fault_points['fault_name'] = fault_points[fault_name_field]
         else:
             fault_points['fault_name'] = fault_points['feature_id'].astype(str)
+        if fault_dip_field is not None:
+            fault_points['dip'] = fault_points[fault_dip_field]
+        if fault_displacement_field is not None:
+            fault_points['displacement'] = fault_points[fault_displacement_field]
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
                 fault_points['fault_name'] == fault_name, ['X', 'Y', 'Z']
@@ -64,7 +94,11 @@ class GeologicalModelManager:
 
 
     def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None):
+
         unit_points = sampler(basal_contacts,self.dem_function)
+        if len(unit_points) == 0 or unit_points.empty:
+            print("No basal contacts found or empty GeoDataFrame.")
+            return
         if unit_name_field is not None:
             unit_points['unit_name'] = unit_points[unit_name_field]
         else:
@@ -101,49 +135,43 @@ class GeologicalModelManager:
             self.stratigraphy[unit_name]['orientations'] = orientations
 
     def update_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
-        # new_groups = stratigraphic_column.get_groups()
-        # old_groups = self.groups.copy()
-        # would be nice to check if the groups have changed
-        # and if the contents of the group have changed
-        # but for now just update groups when the stratigraphic column is updated
-        #        # Update the model with the new stratigraphic column
-        self.groups = stratigraphic_column.get_groups()
+        """Update the stratigraphic column with a new stratigraphic column"""
+        self.stratigraphic_column = stratigraphic_column
         self.update_foliation_features()
 
-    def update_stratigraphic_unit(self, unit_data):
-        self.data
+    # def update_stratigraphic_unit(self, unit_data):
+    #     self.data
 
     def update_foliation_features(self):
+        """Builds the stratigraphic feature from the stratigraphic column data
+        and the basal contacts and structural orientations data.
+        This method will automatically add unconformities based on the stratigraphic column.
+        """
         stratigraphic_column = {}
         unit_id = 0
-        for i, units in enumerate(self.groups):
+        for i, group in enumerate(self.stratigraphic_column.get_groups()):
             val = 0
             data = []
-            groupname = f"Group_{i + 1}"
+            groupname = group.name
             stratigraphic_column[groupname] = {}
-            for u in reversed(units):
+            for u in reversed(group.units):
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is None:
                     continue
                 else:
-                    stratigraphic_column[groupname][u.name] = {
-                        "max": val + u.thickness,
-                        "min": val,
-                        "id": unit_id,
-                        "colour": u.colour,
-                    }
+                
                     unit_data = unit_data.copy()
                     unit_data['val'] = val
                     unit_data['feature_name'] = groupname
                     data.append(unit_data)
-                unit_id += 1
                 val += u.thickness
             if len(data) == 0:
+                print(f"No data found for group {groupname}, skipping.")
                 continue
             data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(groupname, series_surface_data=data)
             self.model.add_unconformity(foliation,0)
-        self.model.set_stratigraphic_column(stratigraphic_column)
+        self.model.stratigraphic_column = self.stratigraphic_column
 
     def update_fault_features(self):
         """Update the fault features in the geological model."""
@@ -173,9 +201,9 @@ class GeologicalModelManager:
 
     def update_model(self):
         """Update the geological model with the current stratigraphy and faults."""
-        # if not self.valid:
-        #     raise ValueError("Model is not valid. Please check the data.")
-        # Update the model with faults
+        
+        self.model.features = []
+        self.model.feature_name_index={}
         for fault_name, fault_data in self.faults.items():
             if 'data' in fault_data and not fault_data['data'].empty:
                 data = fault_data['data'].copy()

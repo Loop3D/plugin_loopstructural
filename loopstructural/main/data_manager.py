@@ -1,6 +1,6 @@
 from LoopStructural.datatypes import BoundingBox
 
-from .stratigraphic_column import StratigraphicColumn
+from LoopStructural import StratigraphicColumn
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 from qgis.core import QgsProject, QgsVectorLayer, QgsPointXY
 import json
@@ -36,8 +36,10 @@ class ModellingDataManager:
         self.fault_stratigraphy_adjacency = None
         self.elevation = np.nan
         self.dem_layer = None
-        self.use_dem = False
+        self.use_dem = True
         self.dem_callback = None
+
+    
     def onSaveProject(self):
         """Save project data."""
         self.logger(message="Saving project data...", log_level=3)
@@ -61,9 +63,9 @@ class ModellingDataManager:
         if model_manager is None:
             raise ValueError("model_manager cannot be None")
         self._model_manager = model_manager
+        self._model_manager.set_stratigraphic_column(self._stratigraphic_column)
         self._model_manager.update_bounding_box(self._bounding_box)
-        self._model_manager.update_stratigraphic_column(self._stratigraphic_column)
-
+        
     def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
         """Set the bounding box for the model."""
         origin = self._bounding_box.origin
@@ -235,9 +237,9 @@ class ModellingDataManager:
         """Get the structural orientations."""
         return self._structural_orientations
 
-    def update_stratigraphic_column(self, stratigraphic_column):
-        """Set the stratigraphic column for the model."""
-        self._stratigraphic_column = stratigraphic_column
+    # def update_stratigraphic_column(self, stratigraphic_column):
+    #     """Set the stratigraphic column for the model."""
+    #     self._stratigraphic_column = stratigraphic_column
 
     def get_stratigraphic_column(self):
         """Get the stratigraphic column."""
@@ -354,8 +356,9 @@ class ModellingDataManager:
                                              unitname_field=data['structural_orientations'].get('unitname_field',None),
                                              orientation_type=data['structural_orientations'].get('orientation_type',None))
         if 'stratigraphic_column' in data:
-            self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
-            self.stratigraphic_column_callback()
+            self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
+            if self.stratigraphic_column_callback:
+                self.stratigraphic_column_callback()
 
     def find_layer_by_name(self, layer_name):
         """Find a layer by name in the project."""
