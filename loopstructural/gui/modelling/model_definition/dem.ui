@@ -24,7 +24,11 @@
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QgsMapLayerComboBox" name="demLayerQgsMapLayerComboBox"/>
+      <widget class="QgsMapLayerComboBox" name="demLayerQgsMapLayerComboBox">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+      </widget>
      </item>
      <item row="1" column="0">
       <widget class="QLabel" name="useDEMLabel">
@@ -36,7 +40,7 @@
      <item row="1" column="1">
       <widget class="QCheckBox" name="useDEMCheckBox">
        <property name="checked">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
       </widget>
      </item>
@@ -50,7 +54,7 @@
      <item row="2" column="1">
       <widget class="QgsDoubleSpinBox" name="elevationQgsDoubleSpinBox">
        <property name="enabled">
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
        <property name="minimum">
         <double>-100000000.000000000000000</double>

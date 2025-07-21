@@ -14,13 +14,13 @@ class LoopWidget(QWidget):
         tabWidget = QTabWidget(self)
         tabWidget.setTabPosition(QTabWidget.South)
         mainLayout.addWidget(tabWidget)
-        modelling_widget = ModellingWidget(
+        self.modelling_widget = ModellingWidget(
             self, mapCanvas=self.mapCanvas, logger=self.logger, data_manager=self.data_manager, model_manager=self.model_manager
         )
 
-        visualisation_widget = VisualisationWidget(
+        self.visualisation_widget = VisualisationWidget(
             self, mapCanvas=self.mapCanvas, logger=self.logger, model_manager=self.model_manager
         )
-        tabWidget.addTab(modelling_widget, "Modelling")
-        tabWidget.addTab(visualisation_widget, "Visualisation")
+        tabWidget.addTab(self.modelling_widget, "Modelling")
+        tabWidget.addTab(self.visualisation_widget, "Visualisation")
         

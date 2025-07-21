@@ -15,6 +15,8 @@ class DEMWidget(QWidget):
             QgsMapLayerProxyModel.RasterLayer)
         self.useDEMCheckBox.stateChanged.connect(self.onUseDEMClicked)
         self.elevationQgsDoubleSpinBox.valueChanged.connect(self.onElevationChanged)
+        self.onElevationChanged()
+        
     def onUseDEMClicked(self):
         if self.useDEMCheckBox.isChecked():
             self.demLayerQgsMapLayerComboBox.setEnabled(True)
