@@ -28,39 +28,29 @@ class BaseFeatureDetailsPanel(QWidget):
         self.setLayout(mainLayout)
 
         ## define interpolator parameters
-        # Regularisation slider
-        self.regularisation_slider = QSlider(Qt.Horizontal)
-        self.regularisation_slider.setRange(0, 100)
-        self.regularisation_slider.setValue(1)
-        self.regularisation_label = QLabel("Regularisation: 1")
-        self.regularisation_slider.valueChanged.connect(
-            lambda value: self.regularisation_label.setText(f"Regularisation: {value}")
-        )
+        # Regularisation spin box
+        self.regularisation_spin_box = QDoubleSpinBox()
+        self.regularisation_spin_box.setRange(0, 100)
+        self.regularisation_spin_box.setValue(feature.builder.build_arguments.get('regularisation', 1.0))
+       
         # self.regularisation_slider.valueChanged.connect(
         #     lambda value: feature.builder.foliation_parameters.__setitem__('regularisation', value)
         # )
-        self.regularisation_slider.valueChanged.connect(
+        self.regularisation_spin_box.valueChanged.connect(
             lambda value: feature.builder.update_build_arguments({'regularisation': value})
         )
-        self.cpw_slider = QSlider(Qt.Horizontal)
-        self.cpw_slider.setRange(0, 100)
-        self.cpw_slider.setValue(1)
-        self.cpw_label = QLabel("Value point weight: 1")
-        self.cpw_slider.valueChanged.connect(
-            lambda value: self.cpw_label.setText(f"Value point weight: {value}")
+        self.cpw_spin_box = QDoubleSpinBox()
+        self.cpw_spin_box.setRange(0, 100)
+        self.cpw_spin_box.setValue(feature.builder.build_arguments.get('cpw', 1.0))
+        self.cpw_spin_box.valueChanged.connect(
+            lambda value: feature.builder.update_build_arguments({'cpw': value})
         )
-        self.cpw_slider.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments({'cpw':value})
-        )
-        self.npw_slider = QSlider(Qt.Horizontal)
-        self.npw_slider.setRange(0, 100)
-        self.npw_slider.setValue(1)
-        self.npw_label = QLabel("Normal vector weight: 1")
-        self.npw_slider.valueChanged.connect(
-            lambda value: self.npw_label.setText(f"Normal vector weight: {value}")
-        )
-        self.npw_slider.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments({'npw':value})
+        
+        self.npw_spin_box = QDoubleSpinBox()
+        self.npw_spin_box.setRange(0, 100)
+        self.npw_spin_box.setValue(feature.builder.build_arguments.get('npw', 1.0))
+        self.npw_spin_box.valueChanged.connect(
+            lambda value: feature.builder.update_build_arguments({'npw': value})
         )
         self.interpolator_type_label = QLabel("Interpolator Type:")
         self.interpolator_type_combo = QComboBox()
@@ -68,18 +58,18 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox = QDoubleSpinBox()
         self.n_elements_spinbox.setRange(100, 1000000)
-        self.n_elements_spinbox.setValue(5000)
+        self.n_elements_spinbox.setValue(feature.interpolator.n_elements)
         self.n_elements_spinbox.setPrefix("Number of Elements: ")
-        
-        self.n_elements_spinbox.valueChanged.connect(lambda value: feature.builder.update_build_arguments({'nelements  ': value}))
+
+        self.n_elements_spinbox.valueChanged.connect(lambda value: feature.builder.update_build_arguments({'nelements': value}))
 
         # Form layout for better organization
         form_layout = QFormLayout()
         form_layout.addRow(self.interpolator_type_label, self.interpolator_type_combo)
         form_layout.addRow("Number of Elements:", self.n_elements_spinbox)
-        form_layout.addRow(self.regularisation_label, self.regularisation_slider)
-        form_layout.addRow(self.cpw_label, self.cpw_slider)
-        form_layout.addRow(self.npw_label, self.npw_slider)
+        form_layout.addRow('Regularisation', self.regularisation_spin_box)
+        form_layout.addRow('Contact points weight', self.cpw_spin_box)
+        form_layout.addRow('Orientation point weight', self.npw_spin_box)
 
         
 
