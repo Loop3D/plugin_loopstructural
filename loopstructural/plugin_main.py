@@ -60,9 +60,17 @@ class LoopstructuralPlugin:
         )
         self.data_manager.set_model_manager(self.model_manager)
         
-    
+    def injectLogHandler(self):
+        import LoopStructural
+        import logging
+        from loopstructural.toolbelt.log_handler import PlgLoggerHandler
+        handler = PlgLoggerHandler(plg_logger_class=PlgLogger, push=True)
+        handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
+
+        LoopStructural.setLogging(level="debug", handler=handler)
     def initGui(self):
         """Set up plugin UI elements."""
+        self.injectLogHandler()
         self.toolbar = self.iface.addToolBar(u'LoopStructural')
         self.toolbar.setObjectName(u'LoopStructural')
         # settings page within the QGIS preferences menu
