@@ -86,12 +86,14 @@ class StratColumnWidget(QWidget):
             unit_data = {'type': 'unit', 'name': ''}
         if create_new:
             unit = self.data_manager.add_to_stratigraphic_column(unit_data)
+            unit_data['uuid'] = unit.uuid
         else:
             if unit_data['uuid'] is not None or unit_data['uuid'] != '':
 
                 unit = self.data_manager._stratigraphic_column.get_element_by_uuid(
                     unit_data['uuid']
                 )
+        unit_data.pop('type', None)  # Remove type if present
         for k in list(unit_data.keys()):
             if unit_data[k] is None:
                 unit_data.pop(k)
