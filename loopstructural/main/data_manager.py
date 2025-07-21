@@ -138,9 +138,9 @@ class ModellingDataManager:
         self.use_dem = use_dem
         self._model_manager.set_dem_function(self.dem_function)
 
-    def set_basal_contacts(self, basal_contacts, unitname_field=None):
+    def set_basal_contacts(self, basal_contacts, unitname_field=None, basal_contacts_use_z=False):
         """Set the basal contacts for the model."""
-        self._basal_contacts = {'layer':basal_contacts, 'unitname_field': unitname_field}
+        self._basal_contacts = {'layer':basal_contacts, 'unitname_field': unitname_field, 'use_z_coordinate': basal_contacts_use_z}
         # self._unitname_field = unitname_field
         self.calculate_unique_basal_units()
         # if stratigraphic column is not empty, update contacts
@@ -212,7 +212,7 @@ class ModellingDataManager:
             fault_name = feature[self._fault_traces['fault_name_field']]
             unique_faults.add(fault_name)
         return list(unique_faults)
-    def set_fault_trace_layer(self, fault_trace_layer,  fault_name_field=None, fault_dip_field=None, fault_displacement_field=None):
+    def set_fault_trace_layer(self, fault_trace_layer, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, use_z_coordinate=False):
         """Set the fault traces for the model."""
         if fault_trace_layer is None:
             print("Fault trace layer is None, cannot set fault traces.")
@@ -223,7 +223,8 @@ class ModellingDataManager:
 
         self._fault_traces = {'layer': fault_trace_layer, 'fault_name_field': fault_name_field,
                               'fault_dip_field': fault_dip_field,
-                              'fault_displacement_field': fault_displacement_field}
+                              'fault_displacement_field': fault_displacement_field,
+                              'use_z_coordinate': use_z_coordinate}
         self.update_faults()
         if self.fault_traces_callback:
             self.fault_traces_callback(**self._fault_traces)
@@ -232,7 +233,7 @@ class ModellingDataManager:
         """Get the fault traces."""
         return self._fault_traces
 
-    def set_structural_orientations(self, structural_orientations, strike_field=None, dip_field=None, unitname_field=None, orientation_type=None):
+    def set_structural_orientations(self, structural_orientations, strike_field=None, dip_field=None, unitname_field=None, orientation_type=None, use_z_coordinate=False):
         """Set the structural orientations for the model."""
         self._structural_orientations = {}
         self._structural_orientations['layer'] = structural_orientations
@@ -240,6 +241,7 @@ class ModellingDataManager:
         self._structural_orientations['dip_field'] = dip_field
         self._structural_orientations['unitname_field'] = unitname_field
         self._structural_orientations['orientation_type'] = orientation_type
+        self._structural_orientations['use_z_coordinate'] = use_z_coordinate
         if self.structural_orientations_callback:
             self.structural_orientations_callback(**self._structural_orientations)
     def get_structural_orientations(self):
@@ -275,7 +277,7 @@ class ModellingDataManager:
         self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:
             self._model_manager.update_fault_points(qgsLayerToGeoDataFrame(self._fault_traces['layer']),
-                                                    fault_name_field = self._fault_traces['fault_name_field'], fault_dip_field = self._fault_traces['fault_dip_field'], fault_displacement_field = self._fault_traces['fault_displacement_field'])
+                                                    fault_name_field = self._fault_traces['fault_name_field'], fault_dip_field = self._fault_traces['fault_dip_field'], fault_displacement_field = self._fault_traces['fault_displacement_field'], use_z_coordinate=self._fault_traces['use_z_coordinate'])
         else:
             self.logger(message="Model manager is not set, cannot update faults.")
     

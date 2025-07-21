@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Callable
+from re import A
 from tracemalloc import start
 from typing import Callable
 import geopandas as gpd
@@ -13,7 +14,7 @@ class AllSampler:
     """This is a simple sampler that just returns all the points, or all of the vertices
     of a line. It will also copy the elevation from the DEM or the elevation set in the data manager.
     """
-    def __call__(self, line: gpd.GeoDataFrame, dem:Callable) -> pd.DataFrame:
+    def __call__(self, line: gpd.GeoDataFrame, dem: Callable, use_z: bool) -> pd.DataFrame:
         """Sample the line and return a DataFrame with X, Y, Z coordinates and attributes."""
         points = []
         feature_id = 0
@@ -24,18 +25,36 @@ class AllSampler:
             attributes.pop('geometry', None)  # Remove geometry from attributes
             if geom.geom_type == 'LineString':
                 coords = list(geom.coords)
-                for x, y in coords:
-                    points.append({'X': x, 'Y': y, 'Z': dem(x, y), 'feature_id': feature_id, **attributes})
+                for coord in coords:
+                    x, y = coord[0], coord[1]
+                    # Use Z from geometry if available, otherwise use DEM
+                    if use_z and len(coord) > 2:
+                        z = coord[2]
+                    else:   
+                        z = dem(x, y)
+                    points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
             elif geom.geom_type == 'MultiLineString':
                 for l in geom.geoms:
                     coords = list(l.coords)
-                    for x, y in coords:
-                        points.append({'X': x, 'Y': y, 'Z': dem(x, y), 'feature_id': feature_id, **attributes})
-
+                    for coord in coords:
+                        x, y = coord[0], coord[1]
+                        # Use Z from geometry if available, otherwise use DEM 
+                        if use_z and len(coord) > 2:
+                            z = coord[2]
+                        else:
+                            z = dem(x, y)
+                        points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
             elif geom.geom_type == 'Point':
-                points.append({'X': geom.x, 'Y': geom.y, 'Z': dem(geom.x, geom.y), 'feature_id': feature_id, **attributes})
+                x, y = geom.x, geom.y
+                # Use Z from geometry if available, otherwise use DEM
+                if use_z and hasattr(geom, 'z'):
+                    z = geom.z
+                else:
+                    z = dem(x, y)
+                points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
             feature_id += 1
-        return pd.DataFrame(points)
+        df = pd.DataFrame(points)
+        return df
 
 
 class GeologicalModelManager:
@@ -68,7 +87,7 @@ class GeologicalModelManager:
         :param dem_function: A function that takes x and y coordinates and returns the elevation.
         """
         self.dem_function = dem_function    
-    def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, sampler=AllSampler()):
+    def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, sampler=AllSampler(), use_z_coordinate=False):
         """Add fault trace data to the geological model.
         :param fault_trace: A GeoDataFrame containing the fault trace data.
         :param fault_name_field: The field name for the fault name.
@@ -78,7 +97,7 @@ class GeologicalModelManager:
         """
         # sample fault trace
         self.faults.clear()  # Clear existing faults
-        fault_points = sampler(fault_trace, self.dem_function)
+        fault_points = sampler(fault_trace, self.dem_function, use_z_coordinate)
         if fault_name_field is not None and fault_name_field in fault_points.columns:
             fault_points['fault_name'] = fault_points[fault_name_field]
         else:
@@ -93,9 +112,9 @@ class GeologicalModelManager:
             ]
 
 
-    def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None):
+    def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None, use_z_coordinate=False):
 
-        unit_points = sampler(basal_contacts,self.dem_function)
+        unit_points = sampler(basal_contacts,self.dem_function, use_z_coordinate)
         if len(unit_points) == 0 or unit_points.empty:
             print("No basal contacts found or empty GeoDataFrame.")
             return
@@ -104,30 +123,28 @@ class GeologicalModelManager:
         else:
             return
         for unit_name in unit_points['unit_name'].unique():
-            self.stratigraphy[unit_name] = unit_points.loc[
+            self.stratigraphy[unit_name]['contact'] = unit_points.loc[
                 unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
             ]
 
-    def update_structural_data(self, structural_orientations: gpd.GeoDataFrame, *, strike_field=None, dip_field=None, unit_name_field=None,dip_direction=False):
+    def update_structural_data(self, structural_orientations: gpd.GeoDataFrame, *, strike_field=None, dip_field=None, unit_name_field=None,dip_direction=False, sampler=AllSampler(), use_z_coordinate=False):
         """Add structural orientation data to the geological model."""
         if strike_field is None or dip_field is None:
             return
         if unit_name_field is not None:
             return
-        structural_orientations = structural_orientations.copy()
+
+        structural_orientations = sampler(structural_orientations, self.dem_function, use_z_coordinate)
+        
         structural_orientations['unit_name'] = structural_orientations[unit_name_field]
-        structural_orientations['X'] = structural_orientations.geometry.x
-        structural_orientations['Y'] = structural_orientations.geometry.y
-        structural_orientations['Z'] = structural_orientations.apply(
-            lambda row: self.dem_function(row.geometry.x, row.geometry.y), axis=1
-        )
+        
         structural_orientations['dip'] = structural_orientations[dip_field]
         structural_orientations['strike'] = structural_orientations[strike_field]
         structural_orientations = structural_orientations[['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']]
         if dip_direction:
             structural_orientations['dip'] = structural_orientations[dip_field]
             structural_orientations['strike'] = structural_orientations[strike_field]+90
-
+        
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
@@ -159,11 +176,19 @@ class GeologicalModelManager:
                 if unit_data is None:
                     continue
                 else:
-                
-                    unit_data = unit_data.copy()
-                    unit_data['val'] = val
-                    unit_data['feature_name'] = groupname
-                    data.append(unit_data)
+                    if 'contact' in unit_data:
+                        contact = unit_data['contact']
+                        if not contact.empty:
+                            contact['val'] = val
+                            contact['feature_name'] = groupname
+                            data.append(contact)
+                    if 'orientations' in unit_data:
+                        orientations = unit_data['orientations']
+                        if not orientations.empty:
+                            orientations['val'] = val
+                            orientations['feature_name'] = groupname
+                            data.append(orientations)
+                   
                 val += u.thickness
             if len(data) == 0:
                 print(f"No data found for group {groupname}, skipping.")

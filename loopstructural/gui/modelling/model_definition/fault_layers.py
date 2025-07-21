@@ -1,7 +1,7 @@
 import os
 
 from PyQt5.QtWidgets import QWidget
-from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel
+from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 
 
@@ -24,6 +24,19 @@ class FaultLayersWidget(QWidget):
         self.faultDipField.fieldChanged.connect(self.onFaultFieldChanged)
         self.faultDisplacementField.fieldChanged.connect(self.onFaultFieldChanged)
         self.data_manager.set_fault_trace_layer_callback(self.set_fault_trace_layer)
+        self.useZCoordinateCheckBox.stateChanged.connect(self.onUseZCoordinateClicked)
+        self.useZCoordinateCheckBox.stateChanged.connect(self.onFaultFieldChanged)
+        self.useZCoordinate = False
+    def enableZCheckbox(self, enable):
+        """Enable or disable the Z coordinate checkbox."""
+        self.useZCoordinateCheckBox.setEnabled(enable)
+        if enable:
+            self.useZCoordinateCheckBox.setChecked(self.useZCoordinate)
+        else:
+            self.useZCoordinateCheckBox.setChecked(False)
+    def onUseZCoordinateClicked(self):
+        """Handle changes to the Z coordinate checkbox."""
+        self.useZCoordinate = self.useZCoordinateCheckBox.isChecked()
     def set_fault_trace_layer(self, layer, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None):
         self.faultTraceLayer.setLayer(layer)
         if fault_name_field:
@@ -36,11 +49,17 @@ class FaultLayersWidget(QWidget):
         self.faultNameField.setLayer(layer)
         self.faultDipField.setLayer(layer)
         self.faultDisplacementField.setLayer(layer)
-
+        if layer is not None and layer.isValid():
+            if layer.wkbType() != QgsWkbTypes.Unknown:
+                
+                has_z = QgsWkbTypes.hasZ(layer.wkbType())
+                print(f"Layer {layer.name()} has Z coordinate: {has_z}")
+                self.enableZCheckbox(has_z)
     def onFaultFieldChanged(self):
         self.data_manager.set_fault_trace_layer(
             self.faultTraceLayer.currentLayer(),
             fault_name_field = self.faultNameField.currentField(),
             fault_dip_field = self.faultDipField.currentField(),
             fault_displacement_field = self.faultDisplacementField.currentField(),
+            use_z_coordinate=self.useZCoordinate
         )

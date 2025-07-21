@@ -1,7 +1,7 @@
 import os
 
 from PyQt5.QtWidgets import QWidget
-from qgis.core import QgsMapLayerProxyModel
+from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 from PyQt5.QtCore import Qt
 
@@ -30,12 +30,49 @@ class StratigraphicLayersWidget(QWidget):
         self.orientationType.currentIndexChanged.connect(self.onOrientationTypeChanged)
         self.data_manager.set_basal_contacts_callback(self.set_basal_contacts)
         self.data_manager.set_structural_orientations_callback(self.set_orientations_layer)
+        self.basal_contacts_use_z = False
+        self.structural_points_use_z = False
+        self.useBasalContactsZCoordinatesCheckBox.stateChanged.connect(lambda : self.enableBasalContactsZCheckBox(self.useBasalContactsZCoordinatesCheckBox.isChecked()))
+        self.useBasalContactsZCoordinatesCheckBox.stateChanged.connect(self.onStructuralDataFieldChanged)
+        self.useStructuralPointsZCoordinatesCheckBox.stateChanged.connect(lambda : self.enableStructuralPointsZCheckBox(self.useStructuralPointsZCoordinatesCheckBox.isChecked()))
+        self.useStructuralPointsZCoordinatesCheckBox.stateChanged.connect(self.onStructuralDataFieldChanged)
+
+    def enableBasalContactsZCheckBox(self, enable):
+        self.useBasalContactsZCoordinatesCheckBox.setEnabled(enable)
+        if enable:
+            self.useBasalContactsZCoordinatesCheckBox.setChecked(self.basal_contacts_use_z)
+        else:
+            self.useBasalContactsZCoordinatesCheckBox.setChecked(False)
+    def enableStructuralPointsZCheckBox(self, enable):
+        self.useStructuralPointsZCoordinatesCheckBox.setEnabled(enable)
+        if enable:
+            self.useStructuralPointsZCoordinatesCheckBox.setChecked(self.structural_points_use_z)
+        else:
+            self.useStructuralPointsZCoordinatesCheckBox.setChecked(False)
     def set_basal_contacts(self, layer, unitname_field=None):
         self.basalContactsLayer.setLayer(layer)
+        if layer is not None and layer.isValid():
+            if layer.wkbType() != QgsWkbTypes.Unknown:
+                has_z = QgsWkbTypes.hasZ(layer.wkbType())
+                self.data_manager.logger(message=f"Layer {layer.name()} has Z coordinate: {has_z}",log_level=2)
+                self.enableBasalContactsZCheckBox(has_z)
+            else:
+                self.data_manager.logger(message="Unknown geometry type.",log_level=2)
+        else:
+            self.enableBasalContactsZCheckBox(False)
         if unitname_field:
             self.unitNameField.setField(unitname_field)
     def set_orientations_layer(self, layer, strike_field=None, dip_field=None, unitname_field=None, orientation_type=None):
         self.structuralDataLayer.setLayer(layer)
+        if layer is not None and layer.isValid():
+            if layer.wkbType() != QgsWkbTypes.Unknown:
+                has_z = QgsWkbTypes.hasZ(layer.wkbType())
+                self.data_manager.logger(message=f"Layer {layer.name()} has Z coordinate: {has_z}",level=2)
+                self.enableStructuralPointsZCheckBox(has_z)
+            else:
+                self.data_manager.logger(message="Unknown geometry type.",level=2)
+        else:
+            self.enableStructuralPointsZCheckBox(False)
         if strike_field:
             self.orientationField.setField(strike_field)
         if dip_field:
@@ -64,6 +101,7 @@ class StratigraphicLayersWidget(QWidget):
             self.orientationField.currentField(),
             self.dipField.currentField(),
             self.structuralDataUnitName.currentField(),
+            use_z_coordinate=self.structural_points_use_z,
         )
     def onStructuralDataFieldChanged(self, field):
         self.data_manager.set_structural_orientations(
@@ -71,10 +109,11 @@ class StratigraphicLayersWidget(QWidget):
             self.orientationField.currentField(),
             self.dipField.currentField(),
             self.structuralDataUnitName.currentField(),
-            self.orientationType.currentText()
+            self.orientationType.currentText(),
+            use_z_coordinate=self.structural_points_use_z
         )
         # self.updateDataManager()
     def onUnitFieldChanged(self, field):
-        self.data_manager.set_basal_contacts(self.basalContactsLayer.currentLayer(), field)
+        self.data_manager.set_basal_contacts(self.basalContactsLayer.currentLayer(), field, use_z_coordinate=self.basal_contacts_use_z)
 
         # self.updateDataManager()
