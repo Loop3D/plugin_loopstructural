@@ -59,7 +59,7 @@ class LoopstructuralPlugin:
         self.model_manager = GeologicalModelManager(
         )
         self.data_manager.set_model_manager(self.model_manager)
-        
+
     def injectLogHandler(self):
         import LoopStructural
         import logging
