@@ -4,10 +4,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QScrollArea
 from LoopStructural.utils import normal_vector_to_strike_and_dip
+from LoopStructural.modelling.features import StructuralFrame   
 class BaseFeatureDetailsPanel(QWidget):
     def __init__(self, parent=None,*, feature=None):
         super().__init__(parent)
-
         # Create a scroll area for horizontal scrolling
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -32,10 +32,6 @@ class BaseFeatureDetailsPanel(QWidget):
         self.regularisation_spin_box = QDoubleSpinBox()
         self.regularisation_spin_box.setRange(0, 100)
         self.regularisation_spin_box.setValue(feature.builder.build_arguments.get('regularisation', 1.0))
-       
-        # self.regularisation_slider.valueChanged.connect(
-        #     lambda value: feature.builder.foliation_parameters.__setitem__('regularisation', value)
-        # )
         self.regularisation_spin_box.valueChanged.connect(
             lambda value: feature.builder.update_build_arguments({'regularisation': value})
         )
@@ -58,10 +54,10 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox = QDoubleSpinBox()
         self.n_elements_spinbox.setRange(100, 1000000)
-        self.n_elements_spinbox.setValue(feature.interpolator.n_elements)
+        self.n_elements_spinbox.setValue(self.getNelements(feature))
         self.n_elements_spinbox.setPrefix("Number of Elements: ")
 
-        self.n_elements_spinbox.valueChanged.connect(lambda value: feature.builder.update_build_arguments({'nelements': value}))
+        self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
 
         # Form layout for better organization
         form_layout = QFormLayout()
@@ -71,10 +67,36 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout.addRow('Contact points weight', self.cpw_spin_box)
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
 
+        QgsCollapsibleGroupBox = QWidget()
+        QgsCollapsibleGroupBox.setLayout(form_layout)
+        self.layout.addWidget(QgsCollapsibleGroupBox)
         
 
-        self.layout.addLayout(form_layout)
+        # self.layout.addLayout(form_layout)
+    def updateNelements(self, value):
+        """Update the number of elements in the feature's interpolator."""
+        if self.feature:
+            if issubclass(type(self.feature),StructuralFrame):
+                for i in range(3):
+                    if self.feature[i].interpolator is not None:
+                        self.feature[i].interpolator.n_elements = value
+                        self.feature[i].builder.update_build_arguments({'n_elements': value})
+                        self.feature[i].builder.build()
+            elif self.feature.interpolator is not None:
 
+                self.feature.interpolator.n_elements = value
+                self.feature.builder.update_build_arguments({'n_elements': value})
+                self.feature.builder.build()
+        else:
+            print("Error: Feature is not initialized.")
+    def getNelements(self, feature):
+        """Get the number of elements from the feature's interpolator."""
+        if feature:
+            if issubclass(type(feature),StructuralFrame):
+                return feature[0].interpolator.n_elements
+            elif feature.interpolator is not None:
+                return feature.interpolator.n_elements
+        return 1000
 class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
     def __init__(self, parent=None,*, fault=None):
         super().__init__(parent,feature=fault)
@@ -96,8 +118,7 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         self.displacement_spinbox = QDoubleSpinBox()
         self.displacement_spinbox.setRange(0, 1000000)  # Example range
         self.displacement_spinbox.setValue(self.fault.displacement)
-        self.displacement_label = QLabel(f"Fault Displacement:")
-        self.displacement_slider.valueChanged.connect(
+        self.displacement_spinbox.valueChanged.connect(
             lambda value: self.fault_parameters.__setitem__('displacement', value)
         )
 
@@ -132,6 +153,12 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         self.dip_spinbox.valueChanged.connect(
             lambda value: self.fault_parameters.__setitem__('dip', value)
         )
+        self.pitch_spinbox = QDoubleSpinBox()
+        self.pitch_spinbox.setRange(0, 180)
+        self.pitch_spinbox.setValue(self.fault_parameters['pitch'])
+        self.pitch_spinbox.valueChanged.connect(
+            lambda value: self.fault_parameters.__setitem__('pitch', value)
+        )
         # self.dip_spinbox.valueChanged.connect(
             
         # Enabled field
@@ -140,11 +167,11 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
         # Form layout for better organization
         form_layout = QFormLayout()
-        form_layout.addRow(self.displacement_label, self.displacement_spinbox)
-        form_layout.addRow("Major Axis Length:", self.major_axis_spinbox)
-        form_layout.addRow("Minor Axis Length:", self.minor_axis_spinbox)
-        form_layout.addRow("Intermediate Axis Length:", self.intermediate_axis_spinbox)
-        form_layout.addRow("Fault Dip:", self.dip_spinbox)
+        form_layout.addRow("Fault displacement", self.displacement_spinbox)
+        form_layout.addRow("Major Axis Length", self.major_axis_spinbox)
+        form_layout.addRow("Minor Axis Length", self.minor_axis_spinbox)
+        form_layout.addRow("Intermediate Axis Length", self.intermediate_axis_spinbox)
+        form_layout.addRow("Fault Dip", self.dip_spinbox)
         # form_layout.addRow("Enabled:", self.enabled_checkbox)
 
         self.layout.addLayout(form_layout)
