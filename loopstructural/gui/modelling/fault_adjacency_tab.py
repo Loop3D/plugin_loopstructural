@@ -33,29 +33,57 @@ class FaultAdjacencyTab(QWidget):
     def create_fault_adjacency_table(self):
         """Create a table with QPushButtons for fault adjacency."""
         faults = ['Fault A', 'Fault B', 'Fault C']  # Example fault names, replace with actual data
-
+        # Add instructions label
+        instructions = (
+            "Rows: faults being affected\n"
+            "Columns: affecting faults\n"
+            "Toggle cell colour to indicate fault interaction:\n"
+            "Green: row fault is cut by column fault\n"
+            "Red: row fault stops at column fault\n"
+            "White: no interaction"
+        )
+        instructions_label = QLabel(instructions)
+        instructions_label.setWordWrap(True)
+        self.layout().addWidget(instructions_label)
         self.table = QTableWidget(len(faults), len(faults), self)
         self.table.setHorizontalHeaderLabels(faults)
         self.table.setVerticalHeaderLabels(faults)
 
         for row in range(len(faults)):
             for col in range(len(faults)):
-                button = QPushButton()
-                button.setStyleSheet("background-color: white;")
-                button.clicked.connect(lambda _, b=button: self.change_button_color(b))
-                self.table.setCellWidget(row, col, button)
+                if row == col:
+                    # If it's the same fault, set a label instead of a button
+                    item = QTableWidgetItem(faults[row])
+                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                    self.table.setItem(row, col, item)
+                else:
+                    button = QPushButton()
+                    button.setStyleSheet("background-color: white;")
+                    button.clicked.connect(lambda _, b=button: self.change_button_color(b))
+                    self.table.setCellWidget(row, col, button)
 
     def create_stratigraphic_units_table(self):
         """Create a table with QPushButtons for stratigraphic units."""
+        # Add instructions label
+        instructions = (
+            "Rows: stratigraphic units\n"
+            "Columns: faults\n"
+            "Toggle cell colour to indicate interaction:\n"
+            "Red: unit is faulted by fault\n" 
+            "White: no interaction"
+        )
+        instructions_label = QLabel(instructions)
+        instructions_label.setWordWrap(True)
+        self.layout().addWidget(instructions_label)
         units = ['unit1', 'unit2', 'unit3']
         faults = ['Fault A', 'Fault B', 'Fault C']  # Example fault names, replace with actual data
 
-        self.stratigraphic_table = QTableWidget(len(units), len(faults), self)
-        self.stratigraphic_table.setHorizontalHeaderLabels(units)
-        self.stratigraphic_table.setVerticalHeaderLabels(faults)
+        self.stratigraphic_table = QTableWidget(len(faults), len(units), self)
+        self.stratigraphic_table.setHorizontalHeaderLabels(faults)
+        self.stratigraphic_table.setVerticalHeaderLabels(units)
 
-        for row in range(len(units)):
-            for col in range(len(faults)):
+        for row in range(len(faults)):
+            for col in range(len(units)):
                 button = QPushButton()
                 button.setStyleSheet("background-color: white;")
                 button.clicked.connect(lambda _, b=button: self.change_button_colour_binary(b))
