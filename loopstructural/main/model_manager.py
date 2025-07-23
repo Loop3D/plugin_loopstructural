@@ -1,7 +1,6 @@
 from collections import defaultdict
 from collections.abc import Callable
-from re import A
-from tracemalloc import start
+
 from typing import Callable
 import geopandas as gpd
 import pandas as pd
@@ -221,7 +220,14 @@ class GeologicalModelManager:
                 # need to have a way of specifying the displacement from the trace
                 # or maybe the model should calculate it
                 self.model.create_and_add_fault(fault_name, displacement=10, fault_data=data)
+        for f in self.fault_topology.faults:
+            for f2 in self.fault_topology.faults:
+                if f != f2:
+                    relationship = self.fault_topology.get_fault_relationship(f, f2)
+                    if relationship == FaultRelationshipType.ABUTTING:
+                        self.model[f].add_abutting_fault(self.model[f2])
 
+                    
     @property
     def valid(self):
         valid = True
