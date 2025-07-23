@@ -1,18 +1,21 @@
 from collections import defaultdict
 from collections.abc import Callable
-
 from typing import Callable
+
 import geopandas as gpd
 import pandas as pd
+
 from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
 from loopstructural.main.stratigraphic_column import StratigraphicColumn
+from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 
 
 class AllSampler:
     """This is a simple sampler that just returns all the points, or all of the vertices
     of a line. It will also copy the elevation from the DEM or the elevation set in the data manager.
     """
+
     def __call__(self, line: gpd.GeoDataFrame, dem: Callable, use_z: bool) -> pd.DataFrame:
         """Sample the line and return a DataFrame with X, Y, Z coordinates and attributes."""
         points = []
@@ -29,7 +32,7 @@ class AllSampler:
                     # Use Z from geometry if available, otherwise use DEM
                     if use_z and len(coord) > 2:
                         z = coord[2]
-                    else:   
+                    else:
                         z = dem(x, y)
                     points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
             elif geom.geom_type == 'MultiLineString':
@@ -37,12 +40,14 @@ class AllSampler:
                     coords = list(l.coords)
                     for coord in coords:
                         x, y = coord[0], coord[1]
-                        # Use Z from geometry if available, otherwise use DEM 
+                        # Use Z from geometry if available, otherwise use DEM
                         if use_z and len(coord) > 2:
                             z = coord[2]
                         else:
                             z = dem(x, y)
-                        points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
+                        points.append(
+                            {'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes}
+                        )
             elif geom.geom_type == 'Point':
                 x, y = geom.x, geom.y
                 # Use Z from geometry if available, otherwise use DEM
@@ -60,6 +65,7 @@ class GeologicalModelManager:
     """This class manages the geological model and assembles it from the data provided by the data manager.
     It is responsible for updating the model with faults, stratigraphy, and other geological features.
     """
+
     def __init__(self):
         """Initialize the geological model manager."""
         self.model = GeologicalModel([0, 0, 0], [1, 1, 1])
@@ -70,13 +76,16 @@ class GeologicalModelManager:
         self.stratigraphic_column = None
         self.fault_topology = None
         self.observers = []
-        self.dem_function = lambda x,y: 0
+        self.dem_function = lambda x, y: 0
+
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Set the stratigraphic column for the geological model manager."""
         self.stratigraphic_column = stratigraphic_column
+
     def set_fault_topology(self, fault_topology):
         """Set the fault topology for the geological model manager."""
         self.fault_topology = fault_topology
+
     def update_bounding_box(self, bounding_box: BoundingBox):
         """Update the bounding box of the geological model.
 
@@ -84,12 +93,23 @@ class GeologicalModelManager:
         :type bounding_box: BoundingBox
         """
         self.model.bounding_box = bounding_box
+
     def set_dem_function(self, dem_function: Callable):
         """Set the function to get the elevation at a point.
         :param dem_function: A function that takes x and y coordinates and returns the elevation.
         """
-        self.dem_function = dem_function    
-    def update_fault_points(self, fault_trace: gpd.GeoDataFrame, *, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, sampler=AllSampler(), use_z_coordinate=False):
+        self.dem_function = dem_function
+
+    def update_fault_points(
+        self,
+        fault_trace: gpd.GeoDataFrame,
+        *,
+        fault_name_field=None,
+        fault_dip_field=None,
+        fault_displacement_field=None,
+        sampler=AllSampler(),
+        use_z_coordinate=False,
+    ):
         """Add fault trace data to the geological model.
         :param fault_trace: A GeoDataFrame containing the fault trace data.
         :param fault_name_field: The field name for the fault name.
@@ -106,7 +126,10 @@ class GeologicalModelManager:
             fault_points['fault_name'] = fault_points['feature_id'].astype(str)
         if fault_dip_field is not None and fault_dip_field in fault_points.columns:
             fault_points['dip'] = fault_points[fault_dip_field]
-        if fault_displacement_field is not None and fault_displacement_field in fault_points.columns:
+        if (
+            fault_displacement_field is not None
+            and fault_displacement_field in fault_points.columns
+        ):
             fault_points['displacement'] = fault_points[fault_displacement_field]
         existing_faults = set(self.fault_topology.faults)
         for fault_name in fault_points['fault_name'].unique():
@@ -117,16 +140,20 @@ class GeologicalModelManager:
                 self.fault_topology.add_fault(fault_name)
             else:
                 existing_faults.remove(fault_name)
-        
+
         for fault_name in existing_faults:
             self.fault_topology.remove_fault(fault_name)
 
-            
+    def update_contact_traces(
+        self,
+        basal_contacts: gpd.GeoDataFrame,
+        *,
+        sampler=AllSampler(),
+        unit_name_field=None,
+        use_z_coordinate=False,
+    ):
 
-
-    def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None, use_z_coordinate=False):
-
-        unit_points = sampler(basal_contacts,self.dem_function, use_z_coordinate)
+        unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
         if len(unit_points) == 0 or unit_points.empty:
             print("No basal contacts found or empty GeoDataFrame.")
             return
@@ -139,23 +166,37 @@ class GeologicalModelManager:
                 unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
             ]
 
-    def update_structural_data(self, structural_orientations: gpd.GeoDataFrame, *, strike_field=None, dip_field=None, unit_name_field=None,dip_direction=False, sampler=AllSampler(), use_z_coordinate=False):
+    def update_structural_data(
+        self,
+        structural_orientations: gpd.GeoDataFrame,
+        *,
+        strike_field=None,
+        dip_field=None,
+        unit_name_field=None,
+        dip_direction=False,
+        sampler=AllSampler(),
+        use_z_coordinate=False,
+    ):
         """Add structural orientation data to the geological model."""
         if strike_field is None or dip_field is None:
             return
         if unit_name_field is not None:
             return
 
-        structural_orientations = sampler(structural_orientations, self.dem_function, use_z_coordinate)
-        
+        structural_orientations = sampler(
+            structural_orientations, self.dem_function, use_z_coordinate
+        )
+
         structural_orientations['unit_name'] = structural_orientations[unit_name_field]
-        
+
         structural_orientations['dip'] = structural_orientations[dip_field]
         structural_orientations['strike'] = structural_orientations[strike_field]
-        structural_orientations = structural_orientations[['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']]
+        structural_orientations = structural_orientations[
+            ['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']
+        ]
         if dip_direction:
             structural_orientations['dip'] = structural_orientations[dip_field]
-            structural_orientations['strike'] = structural_orientations[strike_field]+90
+            structural_orientations['strike'] = structural_orientations[strike_field] + 90
 
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
@@ -200,14 +241,14 @@ class GeologicalModelManager:
                             orientations['val'] = val
                             orientations['feature_name'] = groupname
                             data.append(orientations)
-                   
+
                 val += u.thickness
             if len(data) == 0:
                 print(f"No data found for group {groupname}, skipping.")
                 continue
             data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(groupname, series_surface_data=data)
-            self.model.add_unconformity(foliation,0)
+            self.model.add_unconformity(foliation, 0)
         self.model.stratigraphic_column = self.stratigraphic_column
 
     def update_fault_features(self):
@@ -220,14 +261,25 @@ class GeologicalModelManager:
                 # need to have a way of specifying the displacement from the trace
                 # or maybe the model should calculate it
                 self.model.create_and_add_fault(fault_name, displacement=10, fault_data=data)
+        print("Faults in model:")
         for f in self.fault_topology.faults:
+            print(f"Fault {f} relationships:")
             for f2 in self.fault_topology.faults:
+
                 if f != f2:
                     relationship = self.fault_topology.get_fault_relationship(f, f2)
-                    if relationship == FaultRelationshipType.ABUTTING:
+                    print(f"Fault {f} and {f2} relationship: {relationship}")
+                    print(
+                        relationship is FaultRelationshipType.ABUTTING,
+                        relationship,
+                        FaultRelationshipType.ABUTTING,
+                    )
+                    print(id(relationship), id(FaultRelationshipType.ABUTTING))
+
+                    if relationship is FaultRelationshipType.ABUTTING:
+                        print(f"Adding abutting fault relationship between {f} and {f2}")
                         self.model[f].add_abutting_fault(self.model[f2])
 
-                    
     @property
     def valid(self):
         valid = True
@@ -245,21 +297,16 @@ class GeologicalModelManager:
 
     def update_model(self):
         """Update the geological model with the current stratigraphy and faults."""
-        
-        self.model.features = []
-        self.model.feature_name_index={}
-        for fault_name, fault_data in self.faults.items():
-            if 'data' in fault_data and not fault_data['data'].empty:
-                data = fault_data['data'].copy()
-                data['feature_name'] = fault_name
-                data['val'] = 0
-                self.model.create_and_add_fault(fault_name, 10,fault_data=data)     
-        # Update the model with stratigraphy
-        self.update_foliation_features()
 
-        
+        self.model.features = []
+        self.model.feature_name_index = {}
+
+        # Update the model with stratigraphy
+        self.update_fault_features()
+        self.update_foliation_features()
 
         for observer in self.observers:
             observer()
+
     def features(self):
         return self.model.features

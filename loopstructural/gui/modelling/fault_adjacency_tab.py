@@ -1,12 +1,17 @@
-from ast import arg
-from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget, QLabel, QTableWidget, QTableWidgetItem, QPushButton, QGroupBox
 from PyQt5.QtCore import Qt
-from enum import Enum
+from PyQt5.QtWidgets import (
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-class FaultRelationshipType(Enum):
-    NO_EDGE = "no_edge"
-    ABUTTING = "abutting"
-    FAULTED = "faulted"
+from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
+
 
 class FaultAdjacencyTab(QWidget):
     def __init__(self, parent=None, data_manager=None):
@@ -17,9 +22,9 @@ class FaultAdjacencyTab(QWidget):
         # Initialize the UI components for fault adjacency
         self.init_ui()
         # self.data_manager.set
+
     def init_ui(self):
         """Initialize the user interface components for fault adjacency."""
-       
 
         # Create collapsible group boxes for the tables
         self.fault_table_group = QGroupBox("Fault Adjacency Table", self)
@@ -45,7 +50,7 @@ class FaultAdjacencyTab(QWidget):
             "Rows: stratigraphic units\n"
             "Columns: faults\n"
             "Toggle cell colour to indicate interaction:\n"
-            "Red: unit is faulted by fault\n" 
+            "Red: unit is faulted by fault\n"
             "White: no interaction"
         )
         self.strat_fault_instructions_label = QLabel(self.strat_fault_instructions)
@@ -57,10 +62,13 @@ class FaultAdjacencyTab(QWidget):
         self.data_manager._stratigraphic_column.attach(self.update)
         self.data_manager._fault_topology.attach(self.update)
 
-    def _update(self, event,*args,**kwargs):
-        if args[0] == "fault_relationship_updated" or args[0] == "stratigraphy_fault_relationship_updated":
+    def _update(self, event, *args, **kwargs):
+        if (
+            args[0] == "fault_relationship_updated"
+            or args[0] == "stratigraphy_fault_relationship_updated"
+        ):
             return
-    
+
         self.update_fault_adjacency_table()
         self.update_stratigraphic_units_table()
 
@@ -72,7 +80,7 @@ class FaultAdjacencyTab(QWidget):
             relationship = FaultRelationshipType.FAULTED
         elif "green" in current_color:
             new_color = "white"
-            relationship = FaultRelationshipType.NO_EDGE
+            relationship = FaultRelationshipType.NONE
         else:
             new_color = "red"
             relationship = FaultRelationshipType.ABUTTING
@@ -84,7 +92,9 @@ class FaultAdjacencyTab(QWidget):
 
     def update_fault_adjacency_table(self):
         """Update the fault adjacency table with QPushButtons."""
-        faults = self.data_manager._fault_topology.faults  # Assuming faults is a list of fault names
+        faults = (
+            self.data_manager._fault_topology.faults
+        )  # Assuming faults is a list of fault names
         if not faults:
             self.fault_table_group.hide()
             return
@@ -110,18 +120,32 @@ class FaultAdjacencyTab(QWidget):
                     self.table.setItem(row, col, item)
                 else:
                     button = QPushButton()
-                    if self.data_manager._fault_topology.get_fault_relationship(faults[row], faults[col]) == FaultRelationshipType.FAULTED:
+                    if (
+                        self.data_manager._fault_topology.get_fault_relationship(
+                            faults[row], faults[col]
+                        )
+                        == FaultRelationshipType.FAULTED
+                    ):
                         button.setStyleSheet("background-color: green;")
-                    elif self.data_manager._fault_topology.get_fault_relationship(faults[row], faults[col]) == FaultRelationshipType.ABUTTING:
+                    elif (
+                        self.data_manager._fault_topology.get_fault_relationship(
+                            faults[row], faults[col]
+                        )
+                        == FaultRelationshipType.ABUTTING
+                    ):
                         button.setStyleSheet("background-color: red;")
                     else:
                         button.setStyleSheet("background-color: white;")
-                    button.clicked.connect(lambda _, b=button, r=row, c=col: self.change_button_color(b, r, c))
+                    button.clicked.connect(
+                        lambda _, b=button, r=row, c=col: self.change_button_color(b, r, c)
+                    )
                     self.table.setCellWidget(row, col, button)
 
     def update_stratigraphic_units_table(self):
         """Update the stratigraphic units table with QPushButtons."""
-        faults = self.data_manager._fault_topology.faults  # Assuming faults is a list of fault names
+        faults = (
+            self.data_manager._fault_topology.faults
+        )  # Assuming faults is a list of fault names
         group_units_pairs = self.data_manager._stratigraphic_column.get_group_unit_pairs()
 
         if not faults or not group_units_pairs:
@@ -145,13 +169,18 @@ class FaultAdjacencyTab(QWidget):
         for row in range(len(units)):
             for col in range(len(faults)):
                 button = QPushButton()
-                if self.data_manager._fault_topology.get_fault_stratigraphic_relationship(units[row], faults[col]):
+                if self.data_manager._fault_topology.get_fault_stratigraphic_relationship(
+                    units[row], faults[col]
+                ):
                     button.setStyleSheet("background-color: red;")
                 else:
                     # Default to white if no relationship or not faulted
                     button.setStyleSheet("background-color: white;")
-                button.clicked.connect(lambda _, b=button, r=row, c=col: self.change_button_colour_binary(b, r, c))
+                button.clicked.connect(
+                    lambda _, b=button, r=row, c=col: self.change_button_colour_binary(b, r, c)
+                )
                 self.stratigraphic_table.setCellWidget(row, col, button)
+
     def change_button_colour_binary(self, button, row, col):
         """Cycle the button color between red, green, and black."""
 
@@ -162,6 +191,8 @@ class FaultAdjacencyTab(QWidget):
         else:
             button.setStyleSheet("background-color: red;")
             flag = True
-        fault = self.data_manager._fault_topology.faults[col]  
+        fault = self.data_manager._fault_topology.faults[col]
         unit = self.data_manager._stratigraphic_column.get_group_unit_pairs()[row]
-        self.data_manager._fault_topology.update_fault_stratigraphy_relationship(unit[1], fault, flag)
+        self.data_manager._fault_topology.update_fault_stratigraphy_relationship(
+            unit[1], fault, flag
+        )
