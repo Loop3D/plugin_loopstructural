@@ -49,7 +49,7 @@ class StratigraphicLayersWidget(QWidget):
             self.useStructuralPointsZCoordinatesCheckBox.setChecked(self.structural_points_use_z)
         else:
             self.useStructuralPointsZCoordinatesCheckBox.setChecked(False)
-    def set_basal_contacts(self, layer, unitname_field=None):
+    def set_basal_contacts(self, layer, unitname_field=None, use_z_coordinate=False):
         self.basalContactsLayer.setLayer(layer)
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
@@ -62,7 +62,9 @@ class StratigraphicLayersWidget(QWidget):
             self.enableBasalContactsZCheckBox(False)
         if unitname_field:
             self.unitNameField.setField(unitname_field)
-    def set_orientations_layer(self, layer, strike_field=None, dip_field=None, unitname_field=None, orientation_type=None):
+        self.basal_contacts_use_z = use_z_coordinate
+        self.useBasalContactsZCoordinatesCheckBox.setChecked(use_z_coordinate)
+    def set_orientations_layer(self, layer, strike_field=None, dip_field=None, unitname_field=None, orientation_type=None, use_z_coordinate=False):
         self.structuralDataLayer.setLayer(layer)
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
@@ -83,6 +85,9 @@ class StratigraphicLayersWidget(QWidget):
             index = self.orientationType.findText(orientation_type, Qt.MatchFixedString)
             if index >= 0:
                 self.orientationType.setCurrentIndex(index)
+        if use_z_coordinate:
+            self.structural_points_use_z = use_z_coordinate
+            self.useStructuralPointsZCoordinatesCheckBox.setChecked(use_z_coordinate)
     def onBasalContactsChanged(self, layer):
         self.unitNameField.setLayer(layer)
         self.data_manager.set_basal_contacts(layer, self.unitNameField.currentField())
