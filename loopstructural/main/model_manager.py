@@ -120,21 +120,24 @@ class GeologicalModelManager:
         # sample fault trace
         self.faults.clear()  # Clear existing faults
         fault_points = sampler(fault_trace, self.dem_function, use_z_coordinate)
+        cols = ['X', 'Y', 'Z']
         if fault_name_field is not None and fault_name_field in fault_points.columns:
             fault_points['fault_name'] = fault_points[fault_name_field]
         else:
             fault_points['fault_name'] = fault_points['feature_id'].astype(str)
         if fault_dip_field is not None and fault_dip_field in fault_points.columns:
             fault_points['dip'] = fault_points[fault_dip_field]
+            cols.append('dip')
         if (
             fault_displacement_field is not None
             and fault_displacement_field in fault_points.columns
         ):
             fault_points['displacement'] = fault_points[fault_displacement_field]
+            cols.append('displacement')
         existing_faults = set(self.fault_topology.faults)
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
-                fault_points['fault_name'] == fault_name, ['X', 'Y', 'Z']
+                fault_points['fault_name'] == fault_name, cols
             ]
             if fault_name not in existing_faults:
                 self.fault_topology.add_fault(fault_name)
@@ -260,7 +263,28 @@ class GeologicalModelManager:
                 data['val'] = 0
                 # need to have a way of specifying the displacement from the trace
                 # or maybe the model should calculate it
-                self.model.create_and_add_fault(fault_name, displacement=10, fault_data=data)
+                if 'displacement' in fault_data['data']:
+                    displacement = fault_data['data']['displacement'].mean()
+                else:
+                    displacement = 10
+                if 'dip' in fault_data['data']:
+                    dip = fault_data['data']['dip'].mean()
+                else:
+                    dip = 90
+                print(f"Fault {fault_name} dip: {dip}")
+
+                if 'pitch' in fault_data['data']:
+                    pitch = fault_data['data']['pitch'].mean()
+                else:
+                    pitch = 0
+
+                self.model.create_and_add_fault(
+                    fault_name,
+                    displacement=displacement,
+                    fault_dip=dip,
+                    fault_pitch=pitch,
+                    fault_data=data,
+                )
         print("Faults in model:")
         for f in self.fault_topology.faults:
             print(f"Fault {f} relationships:")
