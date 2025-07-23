@@ -1,6 +1,6 @@
 from LoopStructural.datatypes import BoundingBox
 
-from LoopStructural import StratigraphicColumn
+from LoopStructural import StratigraphicColumn, FaultTopology
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 from qgis.core import QgsProject, QgsVectorLayer, QgsPointXY
 import json
@@ -34,6 +34,7 @@ class ModellingDataManager:
         self.map_canvas = mapCanvas
         self.logger = logger
         self._stratigraphic_column = StratigraphicColumn()
+        self._fault_topology = FaultTopology(self._stratigraphic_column)
         self._model_manager = None
         self.bounding_box_callback = None
         self.basal_contacts_callback = None
@@ -72,6 +73,7 @@ class ModellingDataManager:
             raise ValueError("model_manager cannot be None")
         self._model_manager = model_manager
         self._model_manager.set_stratigraphic_column(self._stratigraphic_column)
+        self._model_manager.set_fault_topology(self._fault_topology)
         self._model_manager.update_bounding_box(self._bounding_box)
         
     def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
@@ -138,9 +140,9 @@ class ModellingDataManager:
         self.use_dem = use_dem
         self._model_manager.set_dem_function(self.dem_function)
 
-    def set_basal_contacts(self, basal_contacts, unitname_field=None, basal_contacts_use_z=False):
+    def set_basal_contacts(self, basal_contacts, unitname_field=None, use_z_coordinate=False):
         """Set the basal contacts for the model."""
-        self._basal_contacts = {'layer':basal_contacts, 'unitname_field': unitname_field, 'use_z_coordinate': basal_contacts_use_z}
+        self._basal_contacts = {'layer':basal_contacts, 'unitname_field': unitname_field, 'use_z_coordinate': use_z_coordinate}
         # self._unitname_field = unitname_field
         self.calculate_unique_basal_units()
         # if stratigraphic column is not empty, update contacts
@@ -248,9 +250,6 @@ class ModellingDataManager:
         """Get the structural orientations."""
         return self._structural_orientations
 
-    # def update_stratigraphic_column(self, stratigraphic_column):
-    #     """Set the stratigraphic column for the model."""
-    #     self._stratigraphic_column = stratigraphic_column
 
     def get_stratigraphic_column(self):
         """Get the stratigraphic column."""
@@ -274,6 +273,10 @@ class ModellingDataManager:
     def update_faults(self):
         """Update the faults in the model manager."""
         unique_faults = self.get_unique_faults()
+        for f in unique_faults:
+            print(f"Adding fault {f} to fault topology")
+            if f not in self._fault_topology.faults:
+                self._fault_topology.add_fault(f)
         self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:
             self._model_manager.update_fault_points(qgsLayerToGeoDataFrame(self._fault_traces['layer']),

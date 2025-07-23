@@ -69,12 +69,15 @@ class GeologicalModelManager:
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
         self.stratigraphic_column = None
+        self.fault_topology = None
         self.observers = []
         self.dem_function = lambda x,y: 0
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Set the stratigraphic column for the geological model manager."""
         self.stratigraphic_column = stratigraphic_column
-        
+    def set_fault_topology(self, fault_topology):
+        """Set the fault topology for the geological model manager."""
+        self.fault_topology = fault_topology
     def update_bounding_box(self, bounding_box: BoundingBox):
         """Update the bounding box of the geological model.
 
@@ -106,10 +109,20 @@ class GeologicalModelManager:
             fault_points['dip'] = fault_points[fault_dip_field]
         if fault_displacement_field is not None and fault_displacement_field in fault_points.columns:
             fault_points['displacement'] = fault_points[fault_displacement_field]
+        existing_faults = set(self.fault_topology.faults)
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
                 fault_points['fault_name'] == fault_name, ['X', 'Y', 'Z']
             ]
+            if fault_name not in existing_faults:
+                self.fault_topology.add_fault(fault_name)
+            else:
+                existing_faults.remove(fault_name)
+        
+        for fault_name in existing_faults:
+            self.fault_topology.remove_fault(fault_name)
+
+            
 
 
     def update_contact_traces(self, basal_contacts: gpd.GeoDataFrame, *, sampler=AllSampler(), unit_name_field=None, use_z_coordinate=False):
@@ -144,7 +157,7 @@ class GeologicalModelManager:
         if dip_direction:
             structural_orientations['dip'] = structural_orientations[dip_field]
             structural_orientations['strike'] = structural_orientations[strike_field]+90
-        
+
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
