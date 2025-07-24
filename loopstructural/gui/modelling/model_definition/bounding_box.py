@@ -3,6 +3,8 @@ import os
 from PyQt5.QtWidgets import QWidget
 from qgis.PyQt import uic
 
+from loopstructural.main.data_manager import default_bounding_box
+
 
 class BoundingBoxWidget(QWidget):
     def __init__(self, parent=None, data_manager=None):
@@ -19,6 +21,7 @@ class BoundingBoxWidget(QWidget):
         self.useCurrentViewExtentButton.clicked.connect(self.useCurrentViewExtent)
         self.selectFromCurrentLayerButton.clicked.connect(self.selectFromCurrentLayer)
         self.data_manager.set_bounding_box_update_callback(self.set_bounding_box)
+
     def set_bounding_box(self, bounding_box):
         """
         Set the bounding box values in the UI.
@@ -55,10 +58,10 @@ class BoundingBoxWidget(QWidget):
             extent = layer.extent()
             self.originXSpinBox.setValue(extent.xMinimum())
             self.originYSpinBox.setValue(extent.yMinimum())
-            self.originZSpinBox.setValue(0)
+            self.originZSpinBox.setValue(default_bounding_box['zmin'])
             self.maxXSpinBox.setValue(extent.xMaximum())
             self.maxYSpinBox.setValue(extent.yMaximum())
-            self.maxZSpinBox.setValue(1000)
+            self.maxZSpinBox.setValue(default_bounding_box['zmax'])
 
     def onChangeExtent(self, value):
         self.data_manager.set_bounding_box(**value)
