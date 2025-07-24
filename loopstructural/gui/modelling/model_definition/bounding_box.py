@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 from PyQt5.QtWidgets import QWidget
 from qgis.PyQt import uic
 
@@ -55,13 +56,20 @@ class BoundingBoxWidget(QWidget):
         """
         layer = self.data_manager.map_canvas.currentLayer()
         if layer:
-            extent = layer.extent()
+            extent = layer.extent3D()
             self.originXSpinBox.setValue(extent.xMinimum())
             self.originYSpinBox.setValue(extent.yMinimum())
-            self.originZSpinBox.setValue(default_bounding_box['zmin'])
+            if np.isnan(extent.zMinimum()):
+                self.originZSpinBox.setValue(default_bounding_box['zmin'])
+            else:
+                self.originZSpinBox.setValue(extent.zMinimum())
+
             self.maxXSpinBox.setValue(extent.xMaximum())
             self.maxYSpinBox.setValue(extent.yMaximum())
-            self.maxZSpinBox.setValue(default_bounding_box['zmax'])
+            if np.isnan(extent.zMaximum()):
+                self.maxZSpinBox.setValue(default_bounding_box['zmax'])
+            else:
+                self.maxZSpinBox.setValue(extent.zMaximum())
 
     def onChangeExtent(self, value):
         self.data_manager.set_bounding_box(**value)
