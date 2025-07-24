@@ -9,6 +9,7 @@ class LoopPyVistaQTPlotter(QtInteractor):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
+        self.objects = {}
 
     def increment_name(self, name):
         parts = name.split('_')
@@ -42,6 +43,7 @@ class LoopPyVistaQTPlotter(QtInteractor):
         if '__control_visibility' in kwargs['name']:
             raise ValueError('Cannot use __control_visibility in name')
         actor = super().add_mesh(*args, **kwargs)
+        self.objects[kwargs['name']] = args[0]
         self.objectAdded.emit(self)
         return actor
 
