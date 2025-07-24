@@ -122,7 +122,7 @@ class GeologicalModelManager:
         fault_points = sampler(fault_trace, self.dem_function, use_z_coordinate)
         cols = ['X', 'Y', 'Z']
         if fault_name_field is not None and fault_name_field in fault_points.columns:
-            fault_points['fault_name'] = fault_points[fault_name_field]
+            fault_points['fault_name'] = fault_points[fault_name_field].astype(str)
         else:
             fault_points['fault_name'] = fault_points['feature_id'].astype(str)
         if fault_dip_field is not None and fault_dip_field in fault_points.columns:
@@ -155,13 +155,13 @@ class GeologicalModelManager:
         unit_name_field=None,
         use_z_coordinate=False,
     ):
-
+        self.stratigraphy.clear()  # Clear existing stratigraphy
         unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
         if len(unit_points) == 0 or unit_points.empty:
             print("No basal contacts found or empty GeoDataFrame.")
             return
         if unit_name_field is not None:
-            unit_points['unit_name'] = unit_points[unit_name_field]
+            unit_points['unit_name'] = unit_points[unit_name_field].astype(str)
         else:
             return
         for unit_name in unit_points['unit_name'].unique():
@@ -181,16 +181,21 @@ class GeologicalModelManager:
         use_z_coordinate=False,
     ):
         """Add structural orientation data to the geological model."""
-        if strike_field is None or dip_field is None:
-            return
-        if unit_name_field is not None:
-            return
 
+        if (
+            strike_field is None
+            or strike_field not in structural_orientations.columns
+            or dip_field is None
+            or dip_field not in structural_orientations.columns
+        ):
+            return
+        if unit_name_field is None or unit_name_field not in structural_orientations.columns:
+            return
         structural_orientations = sampler(
             structural_orientations, self.dem_function, use_z_coordinate
         )
 
-        structural_orientations['unit_name'] = structural_orientations[unit_name_field]
+        structural_orientations['unit_name'] = structural_orientations[unit_name_field].astype(str)
 
         structural_orientations['dip'] = structural_orientations[dip_field]
         structural_orientations['strike'] = structural_orientations[strike_field]
@@ -200,7 +205,6 @@ class GeologicalModelManager:
         if dip_direction:
             structural_orientations['dip'] = structural_orientations[dip_field]
             structural_orientations['strike'] = structural_orientations[strike_field] + 90
-
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
