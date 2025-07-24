@@ -2,3 +2,4 @@ pyvistaqt
 pyvista
 LoopStructural
 geoh5py
+meshio
