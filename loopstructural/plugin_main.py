@@ -1,20 +1,19 @@
 #! python3
 
-"""
-    Main plugin module.
-"""
+"""Main plugin module."""
 
 # standard
+import importlib.util
+import os
 from functools import partial
 from pathlib import Path
-import os
 
 # PyQGIS
-from qgis.core import QgsApplication, QgsSettings
+from qgis.core import QgsApplication, QgsProject, QgsSettings
 from qgis.gui import QgisInterface
-from qgis.PyQt.QtCore import QCoreApplication, QLocale, QTranslator, QUrl, Qt
+from qgis.PyQt.QtCore import QCoreApplication, QLocale, Qt, QTranslator, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QIcon
-from qgis.PyQt.QtWidgets import QAction, QMenu, QDockWidget
+from qgis.PyQt.QtWidgets import QAction, QDockWidget
 
 # project
 from loopstructural.__about__ import (
@@ -23,20 +22,19 @@ from loopstructural.__about__ import (
     __title__,
     __uri_homepage__,
 )
-try:
-    import LoopStructural
-except ImportError:
-    raise ImportError(
-        "LoopStructural is not installed. Please install it using the requirements.txt file in the plugin directory."
-    )
-try:
-    import pyvistaqt
-except ImportError:
+
+if importlib.util.find_spec("pyvistaqt") is None:
     raise ImportError(
         "pyvistaqt is not installed. Please install it using the requirements.txt file in the plugin directory."
     )
+if importlib.util.find_spec("LoopStructural") is None:
+    raise ImportError(
+        "LoopStructural is not installed. Please install it using the requirements.txt file in the plugin directory."
+    )
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
-from loopstructural.gui.modelling.modelling_widget import ModellingWidget as Modelling
+from loopstructural.gui.loop_widget import LoopWidget
+from loopstructural.main.data_manager import ModellingDataManager
+from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.toolbelt import PlgLogger
 
 # ############################################################################
@@ -66,16 +64,32 @@ class LoopstructuralPlugin:
             self.translator = QTranslator()
             self.translator.load(str(locale_path.resolve()))
             QCoreApplication.installTranslator(self.translator)
+        self.data_manager = ModellingDataManager(
+            mapCanvas=self.iface.mapCanvas(), logger=self.log, project=QgsProject.instance()
+        )
+        self.model_manager = GeologicalModelManager()
+        self.data_manager.set_model_manager(self.model_manager)
+
+    def injectLogHandler(self):
+        import logging
+
+        import LoopStructural
+        from loopstructural.toolbelt.log_handler import PlgLoggerHandler
+
+        handler = PlgLoggerHandler(plg_logger_class=PlgLogger, push=True)
+        handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
+
+        LoopStructural.setLogging(level="warning", handler=handler)
 
     def initGui(self):
         """Set up plugin UI elements."""
+        self.injectLogHandler()
         self.toolbar = self.iface.addToolBar(u'LoopStructural')
         self.toolbar.setObjectName(u'LoopStructural')
         # settings page within the QGIS preferences menu
         self.options_factory = PlgOptionsFactory()
         self.iface.registerOptionsWidgetFactory(self.options_factory)
 
-        
         # -- Actions
         self.action_help = QAction(
             QgsApplication.getThemeIcon("mActionHelpContents.svg"),
@@ -95,7 +109,7 @@ class LoopstructuralPlugin:
             lambda: self.iface.showOptionsDialog(currentPage="mOptionsPage{}".format(__title__))
         )
         self.action_modelling = QAction(
-            QIcon(os.path.dirname(__file__)+"/icon.png"),
+            QIcon(os.path.dirname(__file__) + "/icon.png"),
             self.tr("LoopStructural Modelling"),
             self.iface.mainWindow(),
         )
@@ -122,35 +136,36 @@ class LoopstructuralPlugin:
         self.iface.pluginHelpMenu().addAction(self.action_help_plugin_menu_documentation)
 
         ## --- dock widget
-        self.modelling_dockwidget = QDockWidget(self.tr("Modelling"), self.iface.mainWindow())
-        self.model_setup_widget = Modelling(
-            self.iface.mainWindow(), mapCanvas=self.iface.mapCanvas(), logger=self.log
+        self.loop_dockwidget = QDockWidget(self.tr("Loop"), self.iface.mainWindow())
+        self.loop_widget = LoopWidget(
+            self.iface.mainWindow(),
+            mapCanvas=self.iface.mapCanvas(),
+            logger=self.log,
+            data_manager=self.data_manager,
+            model_manager=self.model_manager,
         )
-        self.modelling_dockwidget.setWidget(self.model_setup_widget)
-        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
+
+        self.loop_dockwidget.setWidget(self.loop_widget)
+        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.loop_dockwidget)
         right_docks = [
-                d
-                for d in self.iface.mainWindow().findChildren(QDockWidget)
-                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
-            ]
-         # If there are other dock widgets, tab this one with the first one found
+            d
+            for d in self.iface.mainWindow().findChildren(QDockWidget)
+            if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+        ]
+        # If there are other dock widgets, tab this one with the first one found
         if right_docks:
             for dock in right_docks:
-                if dock != self.modelling_dockwidget:
-                    self.iface.mainWindow().tabifyDockWidget(dock, self.modelling_dockwidget)
+                if dock != self.loop_dockwidget:
+                    self.iface.mainWindow().tabifyDockWidget(dock, self.loop_dockwidget)
                     # Optionally, bring your plugin tab to the front
-                    self.modelling_dockwidget.raise_()
+                    self.loop_dockwidget.raise_()
                     break
-        self.modelling_dockwidget.show()
+        self.loop_dockwidget.show()
 
-        self.modelling_dockwidget.close()
-        self.action_modelling.triggered.connect(
-            self.modelling_dockwidget.toggleViewAction().trigger
-        )
+        self.loop_dockwidget.close()
 
-
-
-
+        # -- Connect actions
+        self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
 
     def tr(self, message: str) -> str:
         """Get the translation for a string using Qt translation API.

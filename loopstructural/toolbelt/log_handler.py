@@ -11,9 +11,10 @@ from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtWidgets import QPushButton, QWidget
 from qgis.utils import iface
 
+import loopstructural.toolbelt.preferences as plg_prefs_hdlr
+
 # project package
 from loopstructural.__about__ import __title__
-import loopstructural.toolbelt.preferences as plg_prefs_hdlr
 
 # ############################################################################
 # ########## Classes ###############
@@ -145,3 +146,54 @@ class PlgLogger(logging.Handler):
                     level=log_level,
                     duration=duration,
                 )
+
+
+class PlgLoggerHandler(logging.Handler):
+    """
+    Standard logging.Handler that forwards logs to PlgLogger.log().
+    """
+
+    def __init__(self, plg_logger_class, level=logging.NOTSET, push=False, duration=None):
+        """
+        Parameters
+        ----------
+        plg_logger_class : class
+            Class providing a static `log()` method (like your PlgLogger).
+        level : int
+            The logging level to handle.
+        push : bool
+            Whether to push messages to the QGIS message bar.
+        duration : int
+            Optional fixed duration for messages.
+        """
+        super().__init__(level)
+        self.plg_logger_class = plg_logger_class
+        self.push = push
+        self.duration = duration
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            qgis_level = self._map_log_level(record.levelno)
+            self.plg_logger_class.log(
+                message=msg,
+                log_level=qgis_level,
+                push=self.push,
+                duration=self.duration,
+                application='LoopStructural',
+            )
+        except Exception:
+            self.handleError(record)
+
+    @staticmethod
+    def _map_log_level(py_level):
+        if py_level >= logging.CRITICAL:
+            return 2
+        elif py_level >= logging.ERROR:
+            return 2
+        elif py_level >= logging.WARNING:
+            return 1
+        elif py_level >= logging.INFO:
+            return 0
+        else:
+            return 4  # "none" / debug / custom

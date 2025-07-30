@@ -1,15 +1,14 @@
 import numpy as np
 from qgis.core import (
     QgsField,
-    QgsWkbTypes,
     QgsRaster,
+    QgsWkbTypes,
 )
 from qgis.PyQt.QtCore import QVariant
 
 
 def callableToLayer(callable, layer, dtm, name: str):
-    """
-    Convert a feature to a raster and store it in QGIS as a temporary layer.
+    """Convert a feature to a raster and store it in QGIS as a temporary layer.
 
     :param feature: The object that has an `evaluate_value` method for computing values.
     :param dtm: Digital terrain model (if needed for processing).

@@ -1,8 +1,6 @@
 #! python3
 
-"""
-    Plugin settings.
-"""
+"""Plugin settings."""
 
 # standard
 from dataclasses import asdict, dataclass, fields
@@ -26,6 +24,11 @@ class PlgSettingsStructure:
     # global
     debug_mode: bool = False
     version: str = __version__
+    interpolator_type: str = 'FDI'
+    interpolator_nelements: int = 10000
+    interpolator_regularisation: float = 1.0
+    interpolator_cpw: float = 1.0
+    interpolator_npw: float = 1.0
 
 
 class PlgOptionsManager:

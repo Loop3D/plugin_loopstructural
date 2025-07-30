@@ -1,5 +1,24 @@
 import pandas as pd
-from qgis.core import QgsWkbTypes, QgsRaster
+import geopandas as gpd
+from qgis.core import QgsRaster, QgsWkbTypes
+
+
+def qgsLayerToGeoDataFrame(layer) -> gpd.GeoDataFrame:
+    if layer is None:
+        return None
+    features = layer.getFeatures()
+    fields = layer.fields()
+    data = {'geometry': []}
+    for f in fields:
+        data[f.name()] = []
+    for feature in features:
+        geom = feature.geometry()
+        if geom.isEmpty():
+            continue
+        data['geometry'].append(geom)
+        for f in fields:
+            data[f.name()].append(feature[f.name()])
+    return gpd.GeoDataFrame(data, crs=layer.crs().authid())
 
 
 def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:
@@ -34,7 +53,7 @@ def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:
                     points.extend(line)
                 # points = geom.asMultiPolyline()[0]
         else:
-            if geom.type() == QgsWkbTypes.PointGeometry:  
+            if geom.type() == QgsWkbTypes.PointGeometry:
                 points = [geom.asPoint()]
             elif geom.type() == QgsWkbTypes.LineGeometry:
                 points = geom.asPolyline()

@@ -1,8 +1,7 @@
 #! python3
 
-"""
-    Metadata about the package to easily retrieve informations about it.
-    See: https://packaging.python.org/guides/single-sourcing-package-version/
+"""Metadata about the package to easily retrieve informations about it.
+See: https://packaging.python.org/guides/single-sourcing-package-version/
 """
 
 # ############################################################################
@@ -12,7 +11,7 @@
 # standard library
 from configparser import ConfigParser
 from datetime import date
-from pathlib import Path 
+from pathlib import Path
 
 # ############################################################################
 # ########## Globals ###############
@@ -44,6 +43,7 @@ def plugin_metadata_as_dict() -> dict:
 
     Returns:
         dict: dict of dicts.
+
     """
     config = ConfigParser()
     if PLG_METADATA_FILE.is_file():

@@ -1,9 +1,11 @@
+from typing import List
+
+import numpy as np
+import pandas as pd
 from LoopStructural import GeologicalModel
 from LoopStructural.modelling.input import ProcessInputData
+
 from .vectorLayerWrapper import qgsLayerToDataFrame
-import pandas as pd
-import numpy as np
-from typing import List
 
 
 class QgsProcessInputData(ProcessInputData):
@@ -85,7 +87,7 @@ class QgsProcessInputData(ProcessInputData):
                     columnmap['structure_unitname']: 'name',
                     columnmap['dip']: 'dip',
                     columnmap['orientation']: 'strike',
-                } 
+                }
             )[['X', 'Y', 'Z', 'dip', 'strike', 'name']]
             contact_orientations['dip'] = contact_orientations['dip'].astype(float)
             contact_orientations['strike'] = contact_orientations['strike'].astype(float)
@@ -122,7 +124,7 @@ class QgsProcessInputData(ProcessInputData):
                 )
         fault_properties = None
         if len(faults) > 0:
-            
+
             fault_properties = pd.DataFrame(faults)
             fault_properties['fault_name'] = fault_properties['fault_name'].astype(str)
             fault_properties = fault_properties.set_index('fault_name')

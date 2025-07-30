@@ -20,4 +20,4 @@ def classFactory(iface):
     """
     from .plugin_main import LoopstructuralPlugin
 
-    return LoopstructuralPlugin(iface) 
+    return LoopstructuralPlugin(iface)

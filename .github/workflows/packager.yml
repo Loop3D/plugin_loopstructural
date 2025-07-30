@@ -35,7 +35,7 @@ jobs:
           python -m pip install -U -r requirements/packaging.txt
           python -m pip install --no-deps -U -r requirements/embedded.txt -t ${{ env.PROJECT_FOLDER }}/embedded_external_libs
           ls loopstructural
-          
+
       - name: Update translations
         run: pylupdate5 -noobsolete -verbose ${{ env.PROJECT_FOLDER }}/resources/i18n/plugin_translation.pro
 
@@ -50,4 +50,3 @@ jobs:
           name: ${{ env.PROJECT_FOLDER }}-latest
           path: ${{ env.PROJECT_FOLDER }}.*.zip
           if-no-files-found: error
-
