@@ -120,7 +120,7 @@ class FeatureListWidget(QWidget):
         if not self.model_manager:
             print("Model manager is not set.")
             return
-        bb = self.model_manager.model.bounding_box.vtk()
+        bb = self.model_manager.model.bounding_box.vtk().outline()
         self.viewer.add_mesh(bb, name='model_bounding_box')
         # Logic for adding model bounding box
         print("Adding model bounding box...")
@@ -140,5 +140,5 @@ class FeatureListWidget(QWidget):
             return
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
         for surface in stratigraphic_surfaces:
-            self.viewer.add_mesh(surface.vtk(), name=f'stratigraphic_surface_{surface.name}')
+            self.viewer.add_mesh(surface.vtk(), name=surface.name)
         print("Adding stratigraphic surfaces...")
