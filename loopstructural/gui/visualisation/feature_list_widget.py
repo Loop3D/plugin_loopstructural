@@ -42,7 +42,8 @@ class FeatureListWidget(QWidget):
 
         self.treeWidget.clear()
         for feature in self.model_manager.features():
-            self.add_feature(feature)
+            if not feature.name.startswith('__'):
+                self.add_feature(feature)
 
     def _get_vector_scale(self, scale: Optional[Union[float, int]] = None) -> float:
         autoscale = 1.0
