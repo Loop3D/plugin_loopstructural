@@ -1,5 +1,3 @@
-
-
 class GeometryObject:
     def __init__(self, name, object, options=None):
         self.name = name

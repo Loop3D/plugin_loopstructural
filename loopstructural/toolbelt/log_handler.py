@@ -146,6 +146,8 @@ class PlgLogger(logging.Handler):
                     level=log_level,
                     duration=duration,
                 )
+
+
 class PlgLoggerHandler(logging.Handler):
     """
     Standard logging.Handler that forwards logs to PlgLogger.log().

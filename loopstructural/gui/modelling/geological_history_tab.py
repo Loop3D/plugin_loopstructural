@@ -1,5 +1,3 @@
-
-
 from loopstructural.gui.modelling.base_tab import BaseTab
 from loopstructural.gui.modelling.stratigraphic_column.stratigraphic_column import StratColumnWidget
 

@@ -1,6 +1,7 @@
 import enum
 from typing import Dict
 
+
 class UnconformityType(enum.Enum):
     """
     An enumeration for different types of unconformities in a stratigraphic column.
@@ -213,6 +214,7 @@ class StratigraphicColumn:
         if group:
             groups.append(group)
         return groups
+
     def get_unitname_groups(self):
         groups = []
         group = []
@@ -226,6 +228,7 @@ class StratigraphicColumn:
         if group:
             groups.append(group)
         return groups
+
     def __getitem__(self, uuid):
         """
         Retrieves an element by its uuid from the stratigraphic column.
@@ -244,6 +247,7 @@ class StratigraphicColumn:
         self.order = [
             self.__getitem__(uuid) for uuid in new_order if self.__getitem__(uuid) is not None
         ]
+
     def update_element(self, unit_data: Dict):
         """
         Updates an existing element in the stratigraphic column with new data.
@@ -261,6 +265,7 @@ class StratigraphicColumn:
             element.unconformity_type = UnconformityType(
                 unit_data.get('unconformity_type', element.unconformity_type.value)
             )
+
     def clear(self):
         """
         Clears the stratigraphic column, removing all elements.

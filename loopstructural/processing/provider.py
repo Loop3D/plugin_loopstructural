@@ -17,8 +17,7 @@ from loopstructural.__about__ import __icon_path__, __title__, __version__
 
 
 class LoopstructuralProvider(QgsProcessingProvider):
-    """Processing provider class.
-    """
+    """Processing provider class."""
 
     def loadAlgorithms(self):
         """Loads all algorithms belonging to this provider."""

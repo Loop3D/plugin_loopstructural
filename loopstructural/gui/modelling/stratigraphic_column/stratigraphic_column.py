@@ -1,4 +1,3 @@
-
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QListWidget,
@@ -63,6 +62,7 @@ class StratColumnWidget(QWidget):
             self.data_manager._stratigraphic_column.clear()
         else:
             print("Error: Data manager is not initialized.")
+
     def update_display(self):
         """Update the widget display based on the data manager's stratigraphic column."""
         self.unitList.clear()
@@ -72,7 +72,7 @@ class StratColumnWidget(QWidget):
                     self.add_unit(unit_data=unit.to_dict(), create_new=False)
                 elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
 
-                    self.add_unconformity(unconformity_data=unit.to_dict(),create_new=False)
+                    self.add_unconformity(unconformity_data=unit.to_dict(), create_new=False)
 
     def init_stratigraphic_column_from_basal_contacts(self):
         if self.data_manager:
@@ -99,9 +99,13 @@ class StratColumnWidget(QWidget):
                 unit_data.pop(k)
         unit_widget = StratigraphicUnitWidget(**unit_data)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
-        unit_widget.nameChanged.connect(lambda: self.update_element(unit_widget))  # Connect name change signal
+        unit_widget.nameChanged.connect(
+            lambda: self.update_element(unit_widget)
+        )  # Connect name change signal
 
-        unit_widget.thicknessChanged.connect(lambda: self.update_element(unit_widget))  # Connect thickness change signal
+        unit_widget.thicknessChanged.connect(
+            lambda: self.update_element(unit_widget)
+        )  # Connect thickness change signal
 
         unit_widget.set_thickness(unit_data.get('thickness', 0.0))  # Set initial thickness
         item = QListWidgetItem()
