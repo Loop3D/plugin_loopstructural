@@ -5,7 +5,6 @@ from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 
 
-
 class FaultLayersWidget(QWidget):
     def __init__(self, parent=None, data_manager=None):
         self.data_manager = data_manager
@@ -27,6 +26,7 @@ class FaultLayersWidget(QWidget):
         self.useZCoordinateCheckBox.stateChanged.connect(self.onUseZCoordinateClicked)
         self.useZCoordinateCheckBox.stateChanged.connect(self.onFaultFieldChanged)
         self.useZCoordinate = False
+
     def enableZCheckbox(self, enable):
         """Enable or disable the Z coordinate checkbox."""
         self.useZCoordinateCheckBox.setEnabled(enable)
@@ -34,10 +34,19 @@ class FaultLayersWidget(QWidget):
             self.useZCoordinateCheckBox.setChecked(self.useZCoordinate)
         else:
             self.useZCoordinateCheckBox.setChecked(False)
+
     def onUseZCoordinateClicked(self):
         """Handle changes to the Z coordinate checkbox."""
         self.useZCoordinate = self.useZCoordinateCheckBox.isChecked()
-    def set_fault_trace_layer(self, layer, fault_name_field=None, fault_dip_field=None, fault_displacement_field=None, use_z_coordinate=False):
+
+    def set_fault_trace_layer(
+        self,
+        layer,
+        fault_name_field=None,
+        fault_dip_field=None,
+        fault_displacement_field=None,
+        use_z_coordinate=False,
+    ):
         self.faultTraceLayer.setLayer(layer)
         if fault_name_field:
             self.faultNameField.setField(fault_name_field)
@@ -48,28 +57,37 @@ class FaultLayersWidget(QWidget):
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
-                self.data_manager.logger(message=f"Layer {layer.name()} has Z coordinate: {has_z}", log_level=2)
+                # self.data_manager.logger(message=f"Layer {layer.name()} has Z coordinate: {has_z}", log_level=2)
                 self.enableZCheckbox(has_z)
                 self.useZCoordinateCheckBox.setChecked(use_z_coordinate)
                 self.useZCoordinate = use_z_coordinate
             else:
                 self.data_manager.logger(message="Unknown geometry type.", log_level=2)
-    
+
     def onFaultTraceLayerChanged(self, layer):
         self.faultNameField.setLayer(layer)
         self.faultDipField.setLayer(layer)
         self.faultDisplacementField.setLayer(layer)
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
-                
+
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
                 print(f"Layer {layer.name()} has Z coordinate: {has_z}")
                 self.enableZCheckbox(has_z)
+        if layer is None or not layer.isValid():
+            self.data_manager.set_fault_trace_layer(
+                None,
+                fault_name_field=None,
+                fault_dip_field=None,
+                fault_displacement_field=None,
+                use_z_coordinate=self.useZCoordinate,
+            )
+
     def onFaultFieldChanged(self):
         self.data_manager.set_fault_trace_layer(
             self.faultTraceLayer.currentLayer(),
-            fault_name_field = self.faultNameField.currentField(),
-            fault_dip_field = self.faultDipField.currentField(),
-            fault_displacement_field = self.faultDisplacementField.currentField(),
-            use_z_coordinate=self.useZCoordinate
+            fault_name_field=self.faultNameField.currentField(),
+            fault_dip_field=self.faultDipField.currentField(),
+            fault_displacement_field=self.faultDisplacementField.currentField(),
+            use_z_coordinate=self.useZCoordinate,
         )

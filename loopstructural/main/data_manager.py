@@ -251,7 +251,7 @@ class ModellingDataManager:
         unique_faults = set()
         for feature in self._fault_traces['layer'].getFeatures():
             fault_name = feature[self._fault_traces['fault_name_field']]
-            unique_faults.add(fault_name)
+            unique_faults.add(str(fault_name))
         return list(unique_faults)
 
     def set_fault_trace_layer(
@@ -264,12 +264,6 @@ class ModellingDataManager:
         use_z_coordinate=False,
     ):
         """Set the fault traces for the model."""
-        if fault_trace_layer is None:
-            print("Fault trace layer is None, cannot set fault traces.")
-            return
-        if fault_trace_layer.featureCount() == 0:
-            self.logger(message="Fault trace layer is empty, cannot set fault traces.")
-            return
 
         self._fault_traces = {
             'layer': fault_trace_layer,
@@ -347,6 +341,10 @@ class ModellingDataManager:
             print(f"Adding fault {f} to fault topology")
             if f not in self._fault_topology.faults:
                 self._fault_topology.add_fault(f)
+        faults_to_remove = list(set(self._fault_topology.faults) - set(unique_faults))
+        for fault in faults_to_remove:
+            print(f"Removing fault {fault} from fault topology")
+            self._fault_topology.remove_fault(fault)
         self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:
             self._model_manager.update_fault_points(
