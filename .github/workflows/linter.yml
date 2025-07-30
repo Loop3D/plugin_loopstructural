@@ -16,6 +16,8 @@ on:
 env:
   PROJECT_FOLDER: "loopstructural"
   PYTHON_VERSION: 3.9
+permissions:
+  contents: write
 
 
 jobs:
