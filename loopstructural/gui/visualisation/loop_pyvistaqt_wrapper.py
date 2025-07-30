@@ -10,6 +10,7 @@ class LoopPyVistaQTPlotter(QtInteractor):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.objects = {}
+        self.add_axes()
 
     def increment_name(self, name):
         parts = name.split('_')
