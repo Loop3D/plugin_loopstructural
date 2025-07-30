@@ -21,7 +21,7 @@ class AllSampler:
         points = []
         feature_id = 0
         if line is None:
-            return pd.DataFrame(points)
+            return pd.DataFrame(points, columns=['X', 'Y', 'Z', 'feature_id'])
         for geom in line.geometry:
             attributes = line.iloc[feature_id].to_dict()
             attributes.pop('geometry', None)  # Remove geometry from attributes
@@ -292,23 +292,13 @@ class GeologicalModelManager:
                     fault_pitch=pitch,
                     fault_data=data,
                 )
-        print("Faults in model:")
         for f in self.fault_topology.faults:
-            print(f"Fault {f} relationships:")
             for f2 in self.fault_topology.faults:
 
                 if f != f2:
                     relationship = self.fault_topology.get_fault_relationship(f, f2)
-                    print(f"Fault {f} and {f2} relationship: {relationship}")
-                    print(
-                        relationship is FaultRelationshipType.ABUTTING,
-                        relationship,
-                        FaultRelationshipType.ABUTTING,
-                    )
-                    print(id(relationship), id(FaultRelationshipType.ABUTTING))
 
                     if relationship is FaultRelationshipType.ABUTTING:
-                        print(f"Adding abutting fault relationship between {f} and {f2}")
                         self.model[f].add_abutting_fault(self.model[f2])
 
     @property
