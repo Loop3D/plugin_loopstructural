@@ -5,8 +5,6 @@
 # standard
 from dataclasses import asdict, dataclass, fields
 
-from numpy import interp
-
 # PyQGIS
 from qgis.core import QgsSettings
 

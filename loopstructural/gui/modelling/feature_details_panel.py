@@ -1,12 +1,10 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QLabel,
     QScrollArea,
-    QSlider,
     QVBoxLayout,
     QWidget,
 )

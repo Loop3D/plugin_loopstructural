@@ -1,5 +1,3 @@
-from xmlrpc.client import Fault
-
 from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from loopstructural.gui.modelling.fault_adjacency_tab import FaultAdjacencyTab
@@ -32,7 +30,9 @@ class ModellingWidget(QWidget):
             self, data_manager=self.data_manager
         )
         self.fault_adjacency_tab_widget = FaultAdjacencyTab(self, data_manager=self.data_manager)
-        self.geological_model_tab_widget = GeologicalModelTab(self, model_manager=self.model_manager)
+        self.geological_model_tab_widget = GeologicalModelTab(
+            self, model_manager=self.model_manager
+        )
 
         mainLayout = QVBoxLayout(self)
         self.setLayout(mainLayout)

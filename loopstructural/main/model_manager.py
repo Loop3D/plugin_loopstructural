@@ -1,6 +1,4 @@
 from collections import defaultdict
-from collections.abc import Callable
-from operator import ne
 from typing import Callable
 
 import geopandas as gpd
@@ -228,8 +226,7 @@ class GeologicalModelManager:
         This method will automatically add unconformities based on the stratigraphic column.
         """
         stratigraphic_column = {}
-        unit_id = 0
-        for i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
+        for _i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
             val = 0
             data = []
             groupname = group.name
@@ -321,7 +318,7 @@ class GeologicalModelManager:
         if len(self.stratigraphy) == 0:
             valid = False
         if len(self.faults) > 0:
-            for fault_name, fault_data in self.faults.items():
+            for _fault_name, fault_data in self.faults.items():
                 if 'data' in fault_data and not fault_data['data'].empty:
                     valid = True
                 else:

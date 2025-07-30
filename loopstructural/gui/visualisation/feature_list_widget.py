@@ -1,6 +1,5 @@
 from typing import Optional, Union
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from LoopStructural.datatypes import VectorPoints

@@ -185,7 +185,7 @@ class ObjectListWidget(QWidget):
             if self.viewer and hasattr(self.viewer, 'remove_object'):
                 self.viewer.remove_object(object_label)
             else:
-                print(f"Error: Viewer is not initialized or does not support object removal.")
+                print("Error: Viewer is not initialized or does not support object removal.")
             self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(item))
 
     def show_add_object_menu(self):
