@@ -18,6 +18,7 @@ from LoopStructural.utils import normal_vector_to_strike_and_dip
 class BaseFeatureDetailsPanel(QWidget):
     def __init__(self, parent=None, *, feature=None):
         super().__init__(parent)
+        self.feature = feature
         # Create a scroll area for horizontal scrolling
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -91,12 +92,12 @@ class BaseFeatureDetailsPanel(QWidget):
             if issubclass(type(self.feature), StructuralFrame):
                 for i in range(3):
                     if self.feature[i].interpolator is not None:
-                        self.feature[i].interpolator.n_elements = value
+                        self.feature[i].interpolator.nelements = value
                         self.feature[i].builder.update_build_arguments({'n_elements': value})
                         self.feature[i].builder.build()
             elif self.feature.interpolator is not None:
 
-                self.feature.interpolator.n_elements = value
+                self.feature.interpolator.nelements = value
                 self.feature.builder.update_build_arguments({'n_elements': value})
                 self.feature.builder.build()
         else:
