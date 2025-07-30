@@ -11,17 +11,33 @@ class StratigraphicUnitWidget(QWidget):
     thicknessChanged = pyqtSignal(float)  # Signal for thickness changes
     colourChanged = pyqtSignal(str)  # Signal for colour changes
     nameChanged = pyqtSignal(str)  # Signal for name changes
-    def __init__(self, uuid, name: Optional[str] = None, colour: Optional[str] = None, thickness: float = 0.0, parent=None):
+
+    def __init__(
+        self,
+        uuid,
+        name: Optional[str] = None,
+        colour: Optional[str] = None,
+        thickness: float = 0.0,
+        parent=None,
+    ):
         super().__init__(parent)
         uic.loadUi(os.path.join(os.path.dirname(__file__), "stratigraphic_unit.ui"), self)
         self.uuid = uuid
-        self.name = name if name is not None else ""
+        self._name = name if name is not None else ""
         self.colour = colour if colour is not None else ""
         self.thickness = thickness  # Optional thickness attribute
         # Add delete button
         self.buttonDelete.clicked.connect(self.request_delete)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
+
+    @property
+    def name(self):
+        return str(self._name)
+
+    @name.setter
+    def name(self, value: str):
+        self._name = str(value)
 
     def set_thickness(self, thickness: float):
         """
@@ -31,7 +47,7 @@ class StratigraphicUnitWidget(QWidget):
         self.thickness = thickness
         self.spinBoxThickness.setValue(thickness)
         self.validateFields()
-    
+
     def onColourSelectClicked(self):
         """
         Open a color dialog to select a color for the stratigraphic unit.
@@ -51,6 +67,7 @@ class StratigraphicUnitWidget(QWidget):
         self.thickness = thickness
         self.validateFields()
         self.thicknessChanged.emit(thickness)
+
     def onNameChanged(self):
         """
         Update the name of the stratigraphic unit.
@@ -61,11 +78,10 @@ class StratigraphicUnitWidget(QWidget):
             self.name = name
             self.validateFields()
             self.nameChanged.emit(name)
+
     def request_delete(self):
 
         self.deleteRequested.emit(self)
-
-
 
     def validateFields(self):
         """
@@ -90,7 +106,7 @@ class StratigraphicUnitWidget(QWidget):
         :param data: A dictionary containing 'name' and 'colour' keys.
         """
         if data:
-            self.name = data.get("name", "")
+            self.name = str(data.get("name", ""))
             self.colour = data.get("colour", "")
             self.lineEditName.setText(self.name)
             # self.lineEditColour.setText(self.colour)
@@ -111,5 +127,5 @@ class StratigraphicUnitWidget(QWidget):
             "uuid": self.uuid,
             "name": self.name,
             "colour": self.colour,
-            "thickness": self.thickness
+            "thickness": self.thickness,
         }
