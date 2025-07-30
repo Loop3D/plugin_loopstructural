@@ -1,7 +1,6 @@
 #! python3
 
-"""Plugin settings form integrated into QGIS 'Options' menu.
-"""
+"""Plugin settings form integrated into QGIS 'Options' menu."""
 
 # standard
 import platform
@@ -89,6 +88,10 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 
         # misc
         settings.debug_mode = self.opt_debug.isChecked()
+        settings.interpolator_nelements = self.n_elements_spin_box.value()
+        settings.interpolator_npw = self.npw_spin_box.value()
+        settings.interpolator_cpw = self.cpw_spin_box.value()
+        settings.interpolator_regularisation = self.regularisation_spin_box.value()
         settings.version = __version__
 
         # dump new settings into QgsSettings
@@ -107,6 +110,11 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         # global
         self.opt_debug.setChecked(settings.debug_mode)
         self.lbl_version_saved_value.setText(settings.version)
+        # self.interpolator_type_combo.setCurrentText(settings.interpolator_type)
+        self.n_elements_spin_box.setValue(settings.interpolator_nelements)
+        self.regularisation_spin_box.setValue(settings.interpolator_regularisation)
+        self.cpw_spin_box.setValue(settings.interpolator_cpw)
+        self.npw_spin_box.setValue(settings.interpolator_npw)
 
     def reset_settings(self):
         """Reset settings to default values (set in preferences.py module)."""

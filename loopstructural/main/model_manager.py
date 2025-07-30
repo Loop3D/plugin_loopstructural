@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Callable
+from operator import ne
 from typing import Callable
 
 import geopandas as gpd
@@ -7,8 +8,9 @@ import pandas as pd
 
 from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
-from loopstructural.main.stratigraphic_column import StratigraphicColumn
 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
+from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
+from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 
 class AllSampler:
@@ -256,7 +258,13 @@ class GeologicalModelManager:
                 continue
             data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(
-                groupname, series_surface_data=data, force_constrained=True
+                groupname,
+                series_surface_data=data,
+                force_constrained=True,
+                nelements=PlgSettingsStructure.interpolator_nelements,
+                npw=PlgSettingsStructure.interpolator_npw,
+                cpw=PlgSettingsStructure.interpolator_cpw,
+                regularisation=PlgSettingsStructure.interpolator_regularisation,
             )
             self.model.add_unconformity(foliation, 0)
         self.model.stratigraphic_column = self.stratigraphic_column
@@ -291,6 +299,10 @@ class GeologicalModelManager:
                     fault_dip=dip,
                     fault_pitch=pitch,
                     fault_data=data,
+                    nelements=PlgSettingsStructure.interpolator_nelements,
+                    npw=PlgSettingsStructure.interpolator_npw,
+                    cpw=PlgSettingsStructure.interpolator_cpw,
+                    regularisation=PlgSettingsStructure.interpolator_regularisation,
                 )
         for f in self.fault_topology.faults:
             for f2 in self.fault_topology.faults:
