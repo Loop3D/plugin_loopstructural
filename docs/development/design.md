@@ -36,7 +36,7 @@ The plugin is designed to be extensible, allowing developers to add new features
     - Adding new tabs or widgets to the GUI.
     - Extending the data_manager to support additional geological data types.
     - Implementing new processing algorithms in the Processing module.
-    
+
 6. Resource Management
 Static resources such as images and translations are stored in the resources module. This ensures that all assets are centralized and easily accessible.
 

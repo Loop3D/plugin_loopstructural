@@ -55,7 +55,7 @@ class StratColumnWidget(QWidget):
         # Update display from data manager
         self.update_display()
         self.data_manager.set_stratigraphic_column_callback(self.update_display)
-    
+
     def clearColumn(self):
         """Clear the stratigraphic column."""
         self.unitList.clear()
@@ -71,7 +71,7 @@ class StratColumnWidget(QWidget):
                 if unit.element_type == StratigraphicColumnElementType.UNIT:
                     self.add_unit(unit_data=unit.to_dict(), create_new=False)
                 elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
-                    
+
                     self.add_unconformity(unconformity_data=unit.to_dict(),create_new=False)
 
     def init_stratigraphic_column_from_basal_contacts(self):
@@ -100,7 +100,7 @@ class StratColumnWidget(QWidget):
         unit_widget = StratigraphicUnitWidget(**unit_data)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         unit_widget.nameChanged.connect(lambda: self.update_element(unit_widget))  # Connect name change signal
-        
+
         unit_widget.thicknessChanged.connect(lambda: self.update_element(unit_widget))  # Connect thickness change signal
 
         unit_widget.set_thickness(unit_data.get('thickness', 0.0))  # Set initial thickness

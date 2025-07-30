@@ -10,7 +10,7 @@ from .dem import DEMWidget
 
 class ModelDefinitionTab(BaseTab):
     def __init__(self, parent=None, data_manager=None):
-        super().__init__(parent, data_manager, scrollable=True)      
+        super().__init__(parent, data_manager, scrollable=True)
         # Add widgets to the QToolBox
         self.bounding_box = BoundingBoxWidget(self, data_manager)
         self.dem = DEMWidget(self, data_manager)

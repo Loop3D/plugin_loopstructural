@@ -23,4 +23,4 @@ class LoopWidget(QWidget):
         )
         tabWidget.addTab(self.modelling_widget, "Modelling")
         tabWidget.addTab(self.visualisation_widget, "Visualisation")
-        
+
