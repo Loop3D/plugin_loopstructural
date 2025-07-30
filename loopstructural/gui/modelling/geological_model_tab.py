@@ -8,12 +8,15 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from loopstructural.gui.modelling.feature_details_panel import FaultFeatureDetailsPanel, FoliationFeatureDetailsPanel
-
+from loopstructural.gui.modelling.feature_details_panel import (
+    FaultFeatureDetailsPanel,
+    FoliationFeatureDetailsPanel,
+)
 from LoopStructural.modelling.features import FeatureType
 
+
 class GeologicalModelTab(QWidget):
-    def __init__(self, parent=None,*, model_manager=None):
+    def __init__(self, parent=None, *, model_manager=None):
         super().__init__(parent)
         self.model_manager = model_manager
 
@@ -43,14 +46,7 @@ class GeologicalModelTab(QWidget):
         mainLayout.insertWidget(0, self.initializeModelButton)
 
         # Action buttons
-        self.saveButton = QPushButton("Save Changes")
-        self.resetButton = QPushButton("Reset Parameters")
-        mainLayout.addWidget(self.saveButton)
-        mainLayout.addWidget(self.resetButton)
 
-        # Connect signals
-        self.saveButton.clicked.connect(self.save_changes)
-        self.resetButton.clicked.connect(self.reset_parameters)
         self.initializeModelButton.clicked.connect(self.initialize_model)
 
         # Connect feature selection to update details panel
@@ -86,7 +82,7 @@ class GeologicalModelTab(QWidget):
             print("Fault feature selected")
             self.featureDetailsPanel = FaultFeatureDetailsPanel(fault=feature)
         elif feature.type == FeatureType.INTERPOLATED:
-            self.featureDetailsPanel = FoliationFeatureDetailsPanel(feature=feature )
+            self.featureDetailsPanel = FoliationFeatureDetailsPanel(feature=feature)
         else:
             self.featureDetailsPanel = QWidget()  # Default empty panel
 
