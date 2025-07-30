@@ -31,6 +31,7 @@ class ObjectListWidget(QWidget):
         self.setLayout(self.mainLayout)
         self.viewer = viewer
         self.viewer.objectAdded.connect(self.update_object_list)
+        self.treeWidget.installEventFilter(self)
 
     def update_object_list(self, new_object):
 
@@ -109,12 +110,12 @@ class ObjectListWidget(QWidget):
         except ImportError:
             has_geoh5py = False
 
-        if hasattr(object, "points"):  # Likely a point cloud
-            formats = ["vtp"]
+        if hasattr(object, "faces"):  # Likely a surface/mesh
+            formats = ["obj", "vtk", "ply"]
             if has_geoh5py:
                 formats.append("geoh5")
-        elif hasattr(object, "faces"):  # Likely a surface/mesh
-            formats = ["obj", "vtk", "ply"]
+        elif hasattr(object, "points"):  # Likely a point cloud
+            formats = ["vtp"]
             if has_geoh5py:
                 formats.append("geoh5")
         else:
@@ -181,9 +182,11 @@ class ObjectListWidget(QWidget):
             item_widget = self.treeWidget.itemWidget(item, 0)
             object_label = item_widget.findChild(QLabel).text()
             # Logic for removing the object
-            self.viewer.remove_object(object_label)
+            if self.viewer and hasattr(self.viewer, 'remove_object'):
+                self.viewer.remove_object(object_label)
+            else:
+                print(f"Error: Viewer is not initialized or does not support object removal.")
             self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(item))
-            print(f"Removing object: {object_label}")
 
     def show_add_object_menu(self):
         menu = QMenu(self)
@@ -217,7 +220,45 @@ class ObjectListWidget(QWidget):
                 raise ValueError("The file does not contain a valid mesh.")
 
             # Add the mesh to the viewer
-            self.viewer.add_mesh(mesh, name=file_name)
+            if self.viewer and hasattr(self.viewer, 'add_mesh'):
+                self.viewer.add_mesh(mesh, name=file_name)
+            else:
+                print("Error: Viewer is not initialized or does not support adding meshes.")
+
             print(f"Loaded mesh from file: {file_path}")
         except Exception as e:
             print(f"Failed to load mesh: {e}")
+
+    def eventFilter(self, source, event):
+        if source == self.treeWidget and event.type() == event.KeyPress:
+            if event.key() == Qt.Key_Space:
+                selected_items = self.treeWidget.selectedItems()
+                for item in selected_items:
+                    item_widget = self.treeWidget.itemWidget(item, 0)
+                    if item_widget:
+                        checkbox = item_widget.findChild(QCheckBox)
+                        if checkbox:
+                            checkbox.setChecked(not checkbox.isChecked())
+                return True
+        return super().eventFilter(source, event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Space:
+            selected_items = self.treeWidget.selectedItems()
+            for item in selected_items:
+                item_widget = self.treeWidget.itemWidget(item, 0)
+                if item_widget:
+                    checkbox = item_widget.findChild(QCheckBox)
+                    if checkbox:
+                        checkbox.setChecked(not checkbox.isChecked())
+        elif event.key() == Qt.Key_Delete:
+            selected_items = self.treeWidget.selectedItems()
+            for item in selected_items:
+                item_widget = self.treeWidget.itemWidget(item, 0)
+                if item_widget:
+                    object_label = item_widget.findChild(QLabel).text()
+                    if self.viewer and hasattr(self.viewer, 'remove_object'):
+                        self.viewer.remove_object(object_label)
+                    self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(item))
+        else:
+            super().keyPressEvent(event)
