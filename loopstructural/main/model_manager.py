@@ -181,7 +181,8 @@ class GeologicalModelManager:
         use_z_coordinate=False,
     ):
         """Add structural orientation data to the geological model."""
-
+        if structural_orientations is None or structural_orientations.empty:
+            return
         if (
             strike_field is None
             or strike_field not in structural_orientations.columns
@@ -204,7 +205,7 @@ class GeologicalModelManager:
         ]
         if dip_direction:
             structural_orientations['dip'] = structural_orientations[dip_field]
-            structural_orientations['strike'] = structural_orientations[strike_field] + 90
+            structural_orientations['strike'] = structural_orientations[strike_field] - 90
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
@@ -254,7 +255,9 @@ class GeologicalModelManager:
                 print(f"No data found for group {groupname}, skipping.")
                 continue
             data = pd.concat(data, ignore_index=True)
-            foliation = self.model.create_and_add_foliation(groupname, series_surface_data=data)
+            foliation = self.model.create_and_add_foliation(
+                groupname, series_surface_data=data, force_constrained=True
+            )
             self.model.add_unconformity(foliation, 0)
         self.model.stratigraphic_column = self.stratigraphic_column
 
