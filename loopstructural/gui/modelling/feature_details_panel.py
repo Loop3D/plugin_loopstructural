@@ -93,12 +93,12 @@ class BaseFeatureDetailsPanel(QWidget):
                 for i in range(3):
                     if self.feature[i].interpolator is not None:
                         self.feature[i].interpolator.nelements = value
-                        self.feature[i].builder.update_build_arguments({'n_elements': value})
+                        self.feature[i].builder.update_build_arguments({'nelements': value})
                         self.feature[i].builder.build()
             elif self.feature.interpolator is not None:
 
                 self.feature.interpolator.nelements = value
-                self.feature.builder.update_build_arguments({'n_elements': value})
+                self.feature.builder.update_build_arguments({'nelements': value})
                 self.feature.builder.build()
         else:
             print("Error: Feature is not initialized.")
