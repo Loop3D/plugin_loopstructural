@@ -130,3 +130,4 @@ dmypy.json
 *.qm
 
 loopstructural/embedded_external_libs/*
+.DS_Store

@@ -26,3 +26,4 @@ changelog=
 
 # python deps
 plugin_dependencies=qpip
+
