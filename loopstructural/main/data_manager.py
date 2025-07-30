@@ -136,6 +136,12 @@ class ModellingDataManager:
         """Set the callback for when the stratigraphic column is updated."""
         self.stratigraphic_column_callback = callback
 
+    def set_dem_callback(self, callback):
+        """Set the callback for when the DEM layer is updated."""
+        self.dem_callback = callback
+        if self.dem_layer:
+            self.dem_callback(self.dem_layer)
+
     def get_bounding_box(self):
         """Get the current bounding box."""
         return self._bounding_box
@@ -155,12 +161,24 @@ class ModellingDataManager:
                 log_level=2,
             )
         else:
-            self.dem_function = lambda x, y: (
-                self.dem_layer.dataProvider().sample(QgsPointXY(x, y), 1)[0]
-                if self.dem_layer
-                else np.nan
-            )
+
+            def dem_function(x, y):
+                if not self.dem_layer.isValid():
+                    self.logger(
+                        message="DEM layer is not valid, using 0.0 for elevation.",
+                        log_level=2,
+                    )
+                    return 0.0
+                return (
+                    self.dem_layer.dataProvider().sample(QgsPointXY(x, y), 1)[0]
+                    if self.dem_layer
+                    else np.nan
+                )
+
+            self.dem_function = dem_function
             self._model_manager.set_dem_function(self.dem_function)
+        if self.dem_callback:
+            self.dem_callback(self.dem_layer)
 
     def set_use_dem(self, use_dem):
         self.use_dem = use_dem
@@ -391,6 +409,8 @@ class ModellingDataManager:
             and structural_orientations['layer'] is not None
         ):
             structural_orientations['layer'] = structural_orientations['layer'].name()
+        if self.dem_layer is not None:
+            dem_layer_name = self.dem_layer.name()
 
         return {
             'bounding_box': self._bounding_box.to_dict(),
@@ -400,6 +420,9 @@ class ModellingDataManager:
             'stratigraphic_column': (
                 self._stratigraphic_column.to_dict() if self._stratigraphic_column else None
             ),
+            'dem_layer': dem_layer_name if self.dem_layer else None,
+            'use_dem': self.use_dem,
+            'elevation': self.elevation,
         }
 
     def from_dict(self, data):
@@ -413,7 +436,19 @@ class ModellingDataManager:
                 zmin=data['bounding_box']['origin'][2],
                 zmax=data['bounding_box']['maximum'][2],
             )
-
+        if 'dem_layer' in data and data['dem_layer'] is not None:
+            dem_layer = QgsProject.instance().mapLayersByName(data['dem_layer'])
+            if dem_layer:
+                self.set_dem_layer(dem_layer[0])
+            else:
+                self.logger(
+                    message=f"DEM layer '{data['dem_layer']}' not found in project.",
+                    log_level=2,
+                )
+        if 'use_dem' in data:
+            self.set_use_dem(data['use_dem'])
+        if 'elevation' in data:
+            self.set_elevation(data['elevation'])
         if 'basal_contacts' in data:
             self._basal_contacts = data['basal_contacts']
         if 'fault_traces' in data:
@@ -437,6 +472,19 @@ class ModellingDataManager:
             )
         else:
             self.set_bounding_box(**default_bounding_box)
+        if 'dem_layer' in data and data['dem_layer'] is not None:
+            dem_layer = QgsProject.instance().mapLayersByName(data['dem_layer'])
+            if dem_layer:
+                self.set_dem_layer(dem_layer[0])
+            else:
+                self.logger(
+                    message=f"DEM layer '{data['dem_layer']}' not found in project.",
+                    log_level=2,
+                )
+        if 'use_dem' in data:
+            self.set_use_dem(data['use_dem'])
+        if 'elevation' in data:
+            self.set_elevation(data['elevation'])
         if (
             'basal_contacts' in data
             and data['basal_contacts'] is not None
