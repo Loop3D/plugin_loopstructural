@@ -70,9 +70,7 @@ class StratigraphicLayersWidget(QWidget):
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
-                self.data_manager.logger(
-                    message=f"Layer {layer.name()} has Z coordinate: {has_z}", log_level=2
-                )
+
                 self.enableBasalContactsZCheckBox(has_z)
             else:
                 self.data_manager.logger(message="Unknown geometry type.", log_level=2)
@@ -96,8 +94,6 @@ class StratigraphicLayersWidget(QWidget):
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
-                # self.data_manager.logger(m
-                # essage=f"Layer {layer.name()} has Z coordinate: {has_z}",level=2)
                 self.enableStructuralPointsZCheckBox(has_z)
             else:
                 self.data_manager.logger(message="Unknown geometry type.", level=2)

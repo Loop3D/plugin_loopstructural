@@ -57,7 +57,6 @@ class FaultLayersWidget(QWidget):
         if layer is not None and layer.isValid():
             if layer.wkbType() != QgsWkbTypes.Unknown:
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
-                # self.data_manager.logger(message=f"Layer {layer.name()} has Z coordinate: {has_z}", log_level=2)
                 self.enableZCheckbox(has_z)
                 self.useZCoordinateCheckBox.setChecked(use_z_coordinate)
                 self.useZCoordinate = use_z_coordinate
@@ -72,7 +71,6 @@ class FaultLayersWidget(QWidget):
             if layer.wkbType() != QgsWkbTypes.Unknown:
 
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
-                print(f"Layer {layer.name()} has Z coordinate: {has_z}")
                 self.enableZCheckbox(has_z)
         if layer is None or not layer.isValid():
             self.data_manager.set_fault_trace_layer(
