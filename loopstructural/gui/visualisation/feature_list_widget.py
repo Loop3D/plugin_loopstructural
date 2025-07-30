@@ -1,12 +1,10 @@
+from typing import Optional, Union
+
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
-    QVBoxLayout,
-    QMenu,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QWidget,
-    QPushButton
-)
+from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+
+from LoopStructural.datatypes import VectorPoints
+
 
 class FeatureListWidget(QWidget):
     def __init__(self, parent=None, *, model_manager=None, viewer=None):
@@ -37,6 +35,7 @@ class FeatureListWidget(QWidget):
         # Populate the feature list
         self.update_feature_list()
         self.model_manager.observers.append(self.update_feature_list)
+
     def update_feature_list(self):
         if not self.model_manager:
             return
@@ -44,6 +43,18 @@ class FeatureListWidget(QWidget):
         self.treeWidget.clear()
         for feature in self.model_manager.features():
             self.add_feature(feature)
+
+    def _get_vector_scale(self, scale: Optional[Union[float, int]] = None) -> float:
+        autoscale = 1.0
+        if self.model_manager.model is not None:
+            # automatically scale vector data to be 5% of the bounding box length
+            autoscale = self.model_manager.model.bounding_box.length.max() * 0.05
+        if scale is None:
+            scale = autoscale
+        else:
+            scale = scale * autoscale
+
+        return scale
 
     def add_feature(self, feature):
         featureItem = QTreeWidgetItem(self.treeWidget)
@@ -87,13 +98,21 @@ class FeatureListWidget(QWidget):
 
     def add_vector_field(self, feature_name):
         vector_field = self.model_manager.model[feature_name].vector_field()
-        self.viewer.add_mesh(vector_field.vtk(), name=f'{feature_name}_vector_field')
+        scale = self._get_vector_scale()
+        self.viewer.add_mesh(vector_field.vtk(scale=scale), name=f'{feature_name}_vector_field')
         print(f"Adding vector field to feature: {feature_name}")
 
     def add_data(self, feature_name):
         data = self.model_manager.model[feature_name].get_data()
         for d in data:
-            self.viewer.add_mesh(d.vtk(), name=f'{feature_name}_{d.name}') 
+            if issubclass(type(d), VectorPoints):
+                scale = self._get_vector_scale()
+                # tolerance is None means all points are shown
+                self.viewer.add_mesh(
+                    d.vtk(scale=scale, tolerance=None), name=f'{feature_name}_{d.name}_points'
+                )
+            else:
+                self.viewer.add_mesh(d.vtk(), name=f'{feature_name}_{d.name}')
         print(f"Adding data to feature: {feature_name}")
 
     def add_model_bounding_box(self):
