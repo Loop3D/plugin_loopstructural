@@ -4,16 +4,25 @@
 
 This plugin is published on the official QGIS plugins repository: <https://plugins.qgis.org/plugins/loopstructural/>.
 
-## Beta versions released
+LoopStructural plugin requires the installation of LoopStructural, pyvista, pyvistaqt, meshio and geoh5py Python packages. 
 
-Enable experimental extensions in the QGIS plugins manager settings panel.
+To install these dependencies you can follow the instructions below for your operating system.
 
-## Earlier development version
+----
 
-If you define yourself as early adopter or a tester and can't wait for the release, the plugin is automatically packaged for each commit to main, so you can use this address as repository URL in your QGIS extensions manager settings:
+```{toctree}
+:caption: Installation
+:maxdepth: 1
 
-```url
-https://github.com/Loop3d/loopstructural-qgis//plugins.xml
+install/windows
+install/linux
+install/macosx
 ```
 
-Be careful, this version can be unstable.
+---
+```{toctree}
+:caption: Development
+:maxdepth: 1
+
+install/development
+```
