@@ -369,6 +369,7 @@ class ModellingDataManager:
                 qgsLayerToGeoDataFrame(self._fault_traces['layer']),
                 fault_name_field=self._fault_traces['fault_name_field'],
                 fault_dip_field=self._fault_traces['fault_dip_field'],
+                fault_pitch_field=self._fault_traces.get('fault_pitch_field', None),
                 fault_displacement_field=self._fault_traces['fault_displacement_field'],
                 use_z_coordinate=self._fault_traces['use_z_coordinate'],
             )

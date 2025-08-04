@@ -107,6 +107,7 @@ class GeologicalModelManager:
         fault_name_field=None,
         fault_dip_field=None,
         fault_displacement_field=None,
+        fault_pitch_field=None,
         sampler=AllSampler(),
         use_z_coordinate=False,
     ):
@@ -134,6 +135,9 @@ class GeologicalModelManager:
         ):
             fault_points['displacement'] = fault_points[fault_displacement_field]
             cols.append('displacement')
+        if fault_pitch_field is not None and fault_pitch_field in fault_points.columns:
+            fault_points['pitch'] = fault_points[fault_pitch_field]
+            cols.append('pitch')
         existing_faults = set(self.fault_topology.faults)
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
