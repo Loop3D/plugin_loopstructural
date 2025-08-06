@@ -94,6 +94,7 @@ class StratColumnWidget(QWidget):
                     unit_data['uuid']
                 )
         unit_data.pop('type', None)  # Remove type if present
+        unit_data.pop('id', None)
         for k in list(unit_data.keys()):
             if unit_data[k] is None:
                 unit_data.pop(k)
