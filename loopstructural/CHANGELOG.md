@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.7...v0.1.8) (2025-08-06)
+
+
+### Bug Fixes
+
+* don't try and add id to widget ([4286e07](https://github.com/Loop3D/plugin_loopstructural/commit/4286e07c10fc95075a68c2b4c00e4ab762b779c9))
+* pass pitch to fault model ([d32d962](https://github.com/Loop3D/plugin_loopstructural/commit/d32d96225af1f08103279bee4b22395110c37dcf))
+
 ## [0.1.7](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.6...v0.1.7) (2025-07-30)
 
 
