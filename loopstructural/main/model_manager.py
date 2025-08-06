@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Callable
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from LoopStructural import GeologicalModel
@@ -208,8 +209,7 @@ class GeologicalModelManager:
             ['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']
         ]
         if dip_direction:
-            structural_orientations['dip'] = structural_orientations[dip_field]
-            structural_orientations['strike'] = structural_orientations[strike_field] - 90
+            structural_orientations['strike'] = structural_orientations['strike'] - 90
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
@@ -249,7 +249,7 @@ class GeologicalModelManager:
                     if 'orientations' in unit_data:
                         orientations = unit_data['orientations']
                         if not orientations.empty:
-                            orientations['val'] = val
+                            orientations['val'] = np.nan
                             orientations['feature_name'] = groupname
                             data.append(orientations)
 

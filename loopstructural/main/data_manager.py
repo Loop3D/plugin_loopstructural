@@ -345,7 +345,7 @@ class ModellingDataManager:
                     unit_name_field=self._structural_orientations['unitname_field'],
                     dip_direction=(
                         True
-                        if self._structural_orientations['orientation_type'] == "Dip Direction"
+                        if self._structural_orientations['orientation_type'] == "Dip Direction/Dip"
                         else False
                     ),
                 )
