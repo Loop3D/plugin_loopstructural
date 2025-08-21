@@ -31,7 +31,7 @@ class ModellingWidget(QWidget):
         )
         self.fault_adjacency_tab_widget = FaultAdjacencyTab(self, data_manager=self.data_manager)
         self.geological_model_tab_widget = GeologicalModelTab(
-            self, model_manager=self.model_manager
+            self, model_manager=self.model_manager, data_manager=self.data_manager
         )
 
         mainLayout = QVBoxLayout(self)
