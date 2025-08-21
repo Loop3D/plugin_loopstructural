@@ -14,16 +14,19 @@ from loopstructural.gui.modelling.add_fault_dialog import AddFaultDialog
 from loopstructural.gui.modelling.add_fold_frame_dialog import AddFoldFrameDialog
 from loopstructural.gui.modelling.feature_details_panel import (
     FaultFeatureDetailsPanel,
+    FoldedFeatureDetailsPanel,
     FoliationFeatureDetailsPanel,
+    StructuralFrameFeatureDetailsPanel,
 )
 from LoopStructural.modelling.features import FeatureType
 
 
 class GeologicalModelTab(QWidget):
-    def __init__(self, parent=None, *, model_manager=None):
+    def __init__(self, parent=None, *, model_manager=None, data_manager=None):
         super().__init__(parent)
         self.model_manager = model_manager
-
+        self.data_manager = data_manager
+        self.model_manager.observers.append(self.update_feature_list)
         # Main layout
         mainLayout = QVBoxLayout(self)
 
@@ -87,14 +90,16 @@ class GeologicalModelTab(QWidget):
             print("Fault data:", fault_data)
 
     def open_add_fold_frame_dialog(self):
-        dialog = AddFoldFrameDialog(self)
+        dialog = AddFoldFrameDialog(
+            self, data_manager=self.data_manager, model_manager=self.model_manager
+        )
         if dialog.exec_() == dialog.Accepted:
-            fold_data = dialog.get_fold_data()
-            # TODO: Add logic to use fold_data to add the fold to the model
-            print("Fold data:", fold_data)
+            pass
 
     def initialize_model(self):
         self.model_manager.update_model()
+
+    def update_feature_list(self):
         self.featureList.clear()  # Clear the feature list before populating it
         for feature in self.model_manager.features():
             if feature.name.startswith("__"):
@@ -110,12 +115,24 @@ class GeologicalModelTab(QWidget):
         # self.featureList.itemClicked.connect(self.on_feature_selected)
 
     def on_feature_selected(self, item):
-        feature = item.data(0, 1)
+        feature_name = item.text(0)
+        feature = self.model_manager.model.get_feature_by_name(feature_name)
         if feature.type == FeatureType.FAULT:
-            print("Fault feature selected")
-            self.featureDetailsPanel = FaultFeatureDetailsPanel(fault=feature)
+            self.featureDetailsPanel = FaultFeatureDetailsPanel(
+                fault=feature, model_manager=self.model_manager
+            )
         elif feature.type == FeatureType.INTERPOLATED:
-            self.featureDetailsPanel = FoliationFeatureDetailsPanel(feature=feature)
+            self.featureDetailsPanel = FoliationFeatureDetailsPanel(
+                feature=feature, model_manager=self.model_manager
+            )
+        elif feature.type == FeatureType.STRUCTURALFRAME:
+            self.featureDetailsPanel = StructuralFrameFeatureDetailsPanel(
+                feature=feature, model_manager=self.model_manager
+            )
+        elif feature.type == FeatureType.FOLDED:
+            self.featureDetailsPanel = FoldedFeatureDetailsPanel(
+                feature=feature, model_manager=self.model_manager
+            )
         else:
             self.featureDetailsPanel = QWidget()  # Default empty panel
 
