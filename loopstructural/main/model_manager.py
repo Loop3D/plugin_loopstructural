@@ -9,6 +9,7 @@ from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
+from LoopStructural.modelling.features import FeatureType
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 
@@ -344,3 +345,54 @@ class GeologicalModelManager:
 
     def features(self):
         return self.model.features
+
+    def add_fold_frame(
+        self,
+        name: str,
+        data: dict,
+        folded_feature_name=None,
+        sampler=AllSampler(),
+        use_z_coordinate=False,
+    ):
+        # for z
+        dfs = []
+        for layer_data in data:
+            if layer_data['type'] == 'Orientation':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['strike'] = df[layer_data['strike_field']]
+                df['dip'] = df[layer_data['dip_field']]
+                df['feature_name'] = name
+                dfs.append(df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']])
+            elif layer_data['type'] == 'Formline':
+                pass
+            else:
+                pass
+        self.model.create_and_add_fold_frame(
+            name, fold_frame_data=pd.concat(dfs, ignore_index=True)
+        )
+        # if folded_feature_name is not None:
+        #     from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
+
+        #     folded_feature = self.model.get_feature_by_name(folded_feature_name)
+        #     folded_feature_name = add_fold_to_feature(frame, folded_feature)
+        #     self.model[folded_feature_name] = folded_feature
+        for observer in self.observers:
+            observer()
+
+    def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
+
+        from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
+
+        fold_frame = self.model.get_feature_by_name(fold_frame_name)
+        if fold_frame is None:
+            raise ValueError(f"Fold frame '{fold_frame_name}' not found in the model.")
+        feature = self.model.get_feature_by_name(feature_name)
+        if feature is None:
+            raise ValueError(f"Feature '{feature_name}' not found in the model.")
+        folded_feature = add_fold_to_feature(feature, fold_frame)
+        self.model[feature_name] = folded_feature
+
+    @property
+    def fold_frames(self):
+        """Return the fold frames in the model."""
+        return [f for f in self.model.features if f.type == FeatureType.STRUCTURALFRAME]
