@@ -10,11 +10,15 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 from PyQt5.uic import loadUi
+from qgis.core import QgsMapLayerProxyModel
+from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
 
 class AddFoldFrameDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, data_manager=None, model_manager=None):
         super().__init__(parent)
+        self.data_manager = data_manager
+        self.model_manager = model_manager
         ui_path = os.path.join(os.path.dirname(__file__), 'add_fold_frame_dialog.ui')
         loadUi(ui_path, self)
         self.setWindowTitle('Add Fold Frame')
@@ -23,6 +27,37 @@ class AddFoldFrameDialog(QDialog):
         self.items_table.setHorizontalHeaderLabels(["Type", "Select Layer", "Delete"])
         # Connect add button
         self.add_item_button.clicked.connect(self.add_item_row)
+        self.buttonBox.accepted.connect(self.add_fold_frame)
+        self.buttonBox.rejected.connect(self.reject)
+
+        self.modelFeatureComboBox.addItems(
+            [f.name for f in self.model_manager.features() if not f.name.startswith("__")]
+        )
+        self.name_valid = False
+        self.name_error = ""
+
+        def validate_name_field(text):
+            """Validate the feature name field."""
+            valid = True
+            if not text.strip():
+                valid = False
+                self.name_error = "Feature name cannot be empty."
+            if text.strip() in [f.name for f in self.model_manager.features()]:
+                valid = False
+                self.name_error = "Feature name must be unique."
+
+            if not valid:
+                self.name_valid = False
+                self.feature_name_input.setStyleSheet("border: 1px solid red;")
+            else:
+                self.feature_name_input.setStyleSheet("")
+                self.name_valid = True
+
+        self.feature_name_input.textChanged.connect(validate_name_field)
+
+    @property
+    def name(self):
+        return self.feature_name_input.text().strip()
 
     def add_item_row(self):
         row = self.items_table.rowCount()
@@ -37,63 +72,73 @@ class AddFoldFrameDialog(QDialog):
         del_btn = self._create_delete_button(row)
         self.items_table.setCellWidget(row, 2, del_btn)
 
+    def add_layer_to_data_manager(self, layer_data: dict):
+        """Add selected layer data to the data manager."""
+        if not isinstance(layer_data, dict):
+            raise ValueError("layer_data must be a dictionary.")
+        if self.data_manager:
+            self.data_manager.update_fold_frame_data(self.name, layer_data)
+        else:
+            raise RuntimeError("Data manager is not set.")
+
     def _create_select_layer_button(self, row, type_combo):
         btn = QPushButton("Select Layer")
 
         def open_layer_dialog():
+            if not self.name_valid:
+                self.data_manager.logger(f'Name is invalid: {self.name_error}', log_level=2)
+                return
             dialog = QDialog(self)
             dialog.setWindowTitle("Select Layer")
             layout = QVBoxLayout(dialog)
             # Layer combo box (replace with QgsLayerComboBox in QGIS environment)
             layer_label = QLabel("Layer:")
             layout.addWidget(layer_label)
-            layer_combo = QComboBox(dialog)
-            # TODO: Populate with actual layer names from QGIS
-            layer_combo.addItems(["Layer1", "Layer2", "Layer3"])
+            layer_combo = QgsMapLayerComboBox()
+            layer_combo.setFilters(
+                QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
+            )
             layout.addWidget(layer_combo)
-
             strike_field_combo = None
             dip_field_combo = None
-            field_layout = None
+            if type_combo.currentText() == "Orientation":
+                field_layout = QHBoxLayout()
+                strike_field_label = QLabel("Strike:")
+                dip_field_label = QLabel("Dip:")
 
-            def update_fields():
-                nonlocal strike_field_combo, dip_field_combo, field_layout
-                if type_combo.currentText() == "Orientation":
-                    if not field_layout:
-                        field_layout = QHBoxLayout()
-                        strike_field_combo = QComboBox(dialog)
-                        dip_field_combo = QComboBox(dialog)
-                        # TODO: Populate with actual field names from selected layer
-                        strike_field_combo.addItems(["strike1", "strike2"])
-                        dip_field_combo.addItems(["dip1", "dip2"])
-                        field_layout.addWidget(QLabel("Strike:"))
-                        field_layout.addWidget(strike_field_combo)
-                        field_layout.addWidget(QLabel("Dip:"))
-                        field_layout.addWidget(dip_field_combo)
-                        layout.addLayout(field_layout)
-                else:
-                    if field_layout:
-                        # Remove field combo boxes if not orientation
-                        for i in reversed(range(field_layout.count())):
-                            widget = field_layout.itemAt(i).widget()
-                            if widget:
-                                widget.setParent(None)
-                        layout.removeItem(field_layout)
-                        strike_field_combo = None
-                        dip_field_combo = None
-                        field_layout = None
+                strike_field_combo = QgsFieldComboBox()
+                dip_field_combo = QgsFieldComboBox()
+                field_layout.addWidget(strike_field_label)
+                field_layout.addWidget(strike_field_combo)
+                field_layout.addWidget(dip_field_label)
+                field_layout.addWidget(dip_field_combo)
+                layer_combo.layerChanged.connect(strike_field_combo.setLayer)
 
-            type_combo.currentIndexChanged.connect(update_fields)
-            update_fields()
-
+                layer_combo.layerChanged.connect(dip_field_combo.setLayer)
+                layout.addLayout(field_layout)
             button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
             layout.addWidget(button_box)
             button_box.accepted.connect(dialog.accept)
             button_box.rejected.connect(dialog.reject)
 
+            def on_accepted():
+                """Handle the accepted signal from the dialog."""
+                data = {}
+                if layer_combo.currentLayer() is None:
+                    return
+                if type_combo.currentText() == "Orientation":
+                    if not strike_field_combo.currentField() or not dip_field_combo.currentField():
+                        return
+                    data['strike_field'] = strike_field_combo.currentField()
+                    data['dip_field'] = dip_field_combo.currentField()
+                data['layer'] = layer_combo.currentLayer()
+                data['type'] = type_combo.currentText()
+                self.add_layer_to_data_manager(data)
+
             if dialog.exec_() == QDialog.Accepted:
                 selected_layer = layer_combo.currentText()
                 btn.setText(selected_layer)
+                on_accepted()
                 # Optionally, store selected layer/fields in table for later retrieval
                 btn.selected_layer = selected_layer
                 if strike_field_combo and dip_field_combo:
@@ -123,27 +168,16 @@ class AddFoldFrameDialog(QDialog):
     def delete_item_row(self, row):
         self.items_table.removeRow(row)
 
-    def get_fold_frame_data(self):
-        # Collect feature name and all items from the table
-        feature_name = (
-            self.feature_name_input.text() if hasattr(self, 'feature_name_input') else None
-        )
-        items = []
-        for row in range(self.items_table.rowCount()):
-            type_widget = self.items_table.cellWidget(row, 0)
-            select_layer_btn = self.items_table.cellWidget(row, 1)
-            item_type = type_widget.currentText() if type_widget else None
-            layer = getattr(select_layer_btn, 'selected_layer', None) if select_layer_btn else None
-            strike_field = (
-                getattr(select_layer_btn, 'strike_field', None) if select_layer_btn else None
-            )
-            dip_field = getattr(select_layer_btn, 'dip_field', None) if select_layer_btn else None
-            items.append(
-                {
-                    'type': item_type,
-                    'layer': layer,
-                    'strike_field': strike_field,
-                    'dip_field': dip_field,
-                }
-            )
-        return {'feature_name': feature_name, 'items': items}
+    def add_fold_frame(self):
+        if not self.name_valid:
+            self.data_manager.logger(f'Name is invalid: {self.name_error}', log_level=2)
+            return
+        if len(self.data_manager.fold_data[self.name]) == 0:
+            self.data_manager.logger("No layers selected for the fold frame.", log_level=2)
+            return
+        folded_feature_name = None
+        if self.modelFeatureComboBox.currentText() != "":
+            folded_feature_name = self.modelFeatureComboBox.currentText()
+
+        self.data_manager.add_fold_to_model(self.name, folded_feature_name=folded_feature_name)
+        self.accept()  # Close the dialog
