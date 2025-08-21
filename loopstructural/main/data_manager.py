@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 
 import numpy as np
 from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
@@ -63,6 +64,7 @@ class ModellingDataManager:
         self.dem_layer = None
         self.use_dem = True
         self.dem_callback = None
+        self.fold_data = defaultdict(list)
 
     def onSaveProject(self):
         """Save project data."""
@@ -557,3 +559,27 @@ class ModellingDataManager:
             else:
                 self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
                 return None
+
+    def update_fold_frame_data(self, fold_frame_name: str, fold_frame_data: dict):
+        """Update the fold frame data in the data manager."""
+        if not isinstance(fold_frame_data, dict):
+            raise ValueError("fold_frame_data must be a dictionary.")
+        self.fold_data[fold_frame_name].append(fold_frame_data)
+        self.logger(message=f"Updated fold frame data for '{fold_frame_name}'.")
+
+    def add_fold_to_model(self, fold_frame_name: str, *, folded_feature_name=None):
+        """Add a fold frame to the model."""
+        if fold_frame_name not in self.fold_data:
+            raise ValueError(f"Fold frame '{fold_frame_name}' does not exist in the data manager.")
+        fold_data = self.fold_data[fold_frame_name]
+        for layer in fold_data:
+            layer['df'] = qgsLayerToGeoDataFrame(
+                layer['layer']
+            )  # Convert QgsVectorLayer to GeoDataFrame
+        if self._model_manager:
+            self._model_manager.add_fold_frame(
+                fold_frame_name, fold_data, folded_feature_name=folded_feature_name
+            )
+            self.logger(message=f"Added fold frame '{fold_frame_name}' to the model.")
+        else:
+            raise RuntimeError("Model manager is not set.")
