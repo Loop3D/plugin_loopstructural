@@ -9,9 +9,6 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-# Import the AddFaultDialog
-from loopstructural.gui.modelling.add_fault_dialog import AddFaultDialog
-from loopstructural.gui.modelling.add_fold_frame_dialog import AddFoldFrameDialog
 from loopstructural.gui.modelling.feature_details_panel import (
     FaultFeatureDetailsPanel,
     FoldedFeatureDetailsPanel,
@@ -19,6 +16,10 @@ from loopstructural.gui.modelling.feature_details_panel import (
     StructuralFrameFeatureDetailsPanel,
 )
 from LoopStructural.modelling.features import FeatureType
+
+# Import the AddFaultDialog
+from .add_fault_dialog import AddFaultDialog
+from .add_foliation_dialog import AddFoliationDialog
 
 
 class GeologicalModelTab(QWidget):
@@ -73,14 +74,14 @@ class GeologicalModelTab(QWidget):
     def show_add_feature_menu(self, *args):
         menu = QMenu(self)
         add_fault = menu.addAction("Add Fault")
-        add_fold_frame = menu.addAction("Add Fold Frame")
+        add_foliaton = menu.addAction("Add Foliation")
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec_(buttonPosition)
 
         if action == add_fault:
             self.open_add_fault_dialog()
-        elif action == add_fold_frame:
-            self.open_add_fold_frame_dialog()
+        elif action == add_foliaton:
+            self.open_add_foliation_dialog()
 
     def open_add_fault_dialog(self):
         dialog = AddFaultDialog(self)
@@ -89,8 +90,8 @@ class GeologicalModelTab(QWidget):
             # TODO: Add logic to use fault_data to add the fault to the model
             print("Fault data:", fault_data)
 
-    def open_add_fold_frame_dialog(self):
-        dialog = AddFoldFrameDialog(
+    def open_add_foliation_dialog(self):
+        dialog = AddFoliationDialog(
             self, data_manager=self.data_manager, model_manager=self.model_manager
         )
         if dialog.exec_() == dialog.Accepted:

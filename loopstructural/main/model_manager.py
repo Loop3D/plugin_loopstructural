@@ -346,7 +346,7 @@ class GeologicalModelManager:
     def features(self):
         return self.model.features
 
-    def add_fold_frame(
+    def add_foliation(
         self,
         name: str,
         data: dict,
@@ -365,11 +365,22 @@ class GeologicalModelManager:
                 dfs.append(df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']])
             elif layer_data['type'] == 'Formline':
                 pass
+            elif layer_data['type'] == 'Value':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['val'] = df[layer_data['value_field']]
+                df['feature_name'] = name
+                dfs.append(df[['X', 'Y', 'Z', 'val', 'feature_name']])
+
+            elif layer_data['type'] == 'Inequality':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['l'] = df[layer_data['lower_field']]
+                df['u'] = df[layer_data['upper_field']]
+                df['feature_name'] = name
+                dfs.append(df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']])
+
             else:
-                pass
-        self.model.create_and_add_fold_frame(
-            name, fold_frame_data=pd.concat(dfs, ignore_index=True)
-        )
+                raise ValueError(f"Unknown layer type: {layer_data['type']}")
+        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True))
         # if folded_feature_name is not None:
         #     from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
 

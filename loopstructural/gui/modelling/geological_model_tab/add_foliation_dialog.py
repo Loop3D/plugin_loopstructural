@@ -14,20 +14,20 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
 
-class AddFoldFrameDialog(QDialog):
+class AddFoliationDialog(QDialog):
     def __init__(self, parent=None, *, data_manager=None, model_manager=None):
         super().__init__(parent)
         self.data_manager = data_manager
         self.model_manager = model_manager
-        ui_path = os.path.join(os.path.dirname(__file__), 'add_fold_frame_dialog.ui')
+        ui_path = os.path.join(os.path.dirname(__file__), 'add_foliation_dialog.ui')
         loadUi(ui_path, self)
-        self.setWindowTitle('Add Fold Frame')
+        self.setWindowTitle('Add Foliation')
         # Setup table columns
         self.items_table.setColumnCount(3)
         self.items_table.setHorizontalHeaderLabels(["Type", "Select Layer", "Delete"])
         # Connect add button
         self.add_item_button.clicked.connect(self.add_item_row)
-        self.buttonBox.accepted.connect(self.add_fold_frame)
+        self.buttonBox.accepted.connect(self.add_foliation)
         self.buttonBox.rejected.connect(self.reject)
 
         self.modelFeatureComboBox.addItems(
@@ -77,7 +77,7 @@ class AddFoldFrameDialog(QDialog):
         if not isinstance(layer_data, dict):
             raise ValueError("layer_data must be a dictionary.")
         if self.data_manager:
-            self.data_manager.update_fold_frame_data(self.name, layer_data)
+            self.data_manager.update_feature_data(self.name, layer_data)
         else:
             raise RuntimeError("Data manager is not set.")
 
@@ -103,9 +103,20 @@ class AddFoldFrameDialog(QDialog):
             dip_field_combo = None
             if type_combo.currentText() == "Orientation":
                 field_layout = QHBoxLayout()
+
                 strike_field_label = QLabel("Strike:")
                 dip_field_label = QLabel("Dip:")
+                format_combo = QComboBox()
+                format_combo.addItems(["Strike", "Dip Direction"])
 
+                def update_strike_label(text):
+                    if text == "Dip Direction":
+                        strike_field_label.setText("Dip Direction:")
+                    else:
+                        strike_field_label.setText("Strike:")
+
+                format_combo.currentTextChanged.connect(update_strike_label)
+                field_layout.addWidget(format_combo)
                 strike_field_combo = QgsFieldComboBox()
                 dip_field_combo = QgsFieldComboBox()
                 field_layout.addWidget(strike_field_label)
@@ -116,6 +127,30 @@ class AddFoldFrameDialog(QDialog):
 
                 layer_combo.layerChanged.connect(dip_field_combo.setLayer)
                 layout.addLayout(field_layout)
+            if type_combo.currentText() == "Value":
+                field_layout = QHBoxLayout()
+                value_field_label = QLabel("Value Field:")
+                value_field_combo = QgsFieldComboBox()
+                value_field_combo.setLayer(layer_combo.currentLayer())
+                field_layout.addWidget(value_field_label)
+                field_layout.addWidget(value_field_combo)
+                layout.addLayout(field_layout)
+                layer_combo.layerChanged.connect(value_field_combo.setLayer)
+            if type_combo.currentText() == "Inequality":
+                field_layout = QHBoxLayout()
+                lower_field_label = QLabel("Lower")
+                upper_field_label = QLabel("Upper")
+                lower_field_combo = QgsFieldComboBox()
+                upper_field_combo = QgsFieldComboBox()
+                lower_field_combo.setLayer(layer_combo.currentLayer())
+                upper_field_combo.setLayer(layer_combo.currentLayer())
+                field_layout.addWidget(lower_field_label)
+                field_layout.addWidget(lower_field_combo)
+                field_layout.addWidget(upper_field_label)
+                field_layout.addWidget(upper_field_combo)
+                layout.addLayout(field_layout)
+                layer_combo.layerChanged.connect(lower_field_combo.setLayer)
+                layer_combo.layerChanged.connect(upper_field_combo.setLayer)
             button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
             layout.addWidget(button_box)
             button_box.accepted.connect(dialog.accept)
@@ -131,6 +166,16 @@ class AddFoldFrameDialog(QDialog):
                         return
                     data['strike_field'] = strike_field_combo.currentField()
                     data['dip_field'] = dip_field_combo.currentField()
+                elif type_combo.currentText() == "Value":
+                    if not value_field_combo.currentField():
+                        return
+                    data['value_field'] = value_field_combo.currentField()
+                elif type_combo.currentText() == "Inequality":
+                    if not lower_field_combo.currentField() or not upper_field_combo.currentField():
+                        return
+                    data['lower_field'] = lower_field_combo.currentField()
+                    data['upper_field'] = upper_field_combo.currentField()
+
                 data['layer'] = layer_combo.currentLayer()
                 data['type'] = type_combo.currentText()
                 self.add_layer_to_data_manager(data)
@@ -155,7 +200,7 @@ class AddFoldFrameDialog(QDialog):
         from PyQt5.QtWidgets import QComboBox
 
         combo = QComboBox()
-        combo.addItems(["Form Line", "Orientation"])
+        combo.addItems(["Value", "Form Line", "Orientation", "Inequality"])
         return combo
 
     def _create_delete_button(self, row):
@@ -168,16 +213,16 @@ class AddFoldFrameDialog(QDialog):
     def delete_item_row(self, row):
         self.items_table.removeRow(row)
 
-    def add_fold_frame(self):
+    def add_foliation(self):
         if not self.name_valid:
             self.data_manager.logger(f'Name is invalid: {self.name_error}', log_level=2)
             return
-        if len(self.data_manager.fold_data[self.name]) == 0:
-            self.data_manager.logger("No layers selected for the fold frame.", log_level=2)
+        if len(self.data_manager.feature_data[self.name]) == 0:
+            self.data_manager.logger("No layers selected for the foliation.", log_level=2)
             return
         folded_feature_name = None
         if self.modelFeatureComboBox.currentText() != "":
             folded_feature_name = self.modelFeatureComboBox.currentText()
 
-        self.data_manager.add_fold_to_model(self.name, folded_feature_name=folded_feature_name)
+        self.data_manager.add_foliation_to_model(self.name, folded_feature_name=folded_feature_name)
         self.accept()  # Close the dialog
