@@ -261,7 +261,7 @@ class GeologicalModelManager:
             data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(
                 groupname,
-                series_surface_data=data,
+                data=data,
                 force_constrained=True,
                 nelements=PlgSettingsStructure.interpolator_nelements,
                 npw=PlgSettingsStructure.interpolator_npw,
@@ -300,7 +300,7 @@ class GeologicalModelManager:
                     displacement=displacement,
                     fault_dip=dip,
                     fault_pitch=pitch,
-                    fault_data=data,
+                    data=data,
                     nelements=PlgSettingsStructure.interpolator_nelements,
                     npw=PlgSettingsStructure.interpolator_npw,
                     cpw=PlgSettingsStructure.interpolator_cpw,
