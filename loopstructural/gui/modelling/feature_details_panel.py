@@ -209,6 +209,11 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
         fold_frame_combobox.currentTextChanged.connect(self.on_fold_frame_changed)
         form_layout.addRow("Attach fold frame", fold_frame_combobox)
 
+        convert_to_frame_button = QPushButton("Convert to Structural Frame")
+        convert_to_frame_button.clicked.connect(
+            lambda: self.model_manager.convert_feature_to_structural_frame(self.feature.name)
+        )
+        form_layout.addRow(convert_to_frame_button)
         QgsCollapsibleGroupBox = QWidget()
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)
