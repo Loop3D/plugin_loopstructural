@@ -9,17 +9,20 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QVBoxLayout,
     QWidget,
+    QTableWidget,
 )
 
+from .layer_selection_table import LayerSelectionTable
 from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip, plungeazimuth2vector
 
 
 class BaseFeatureDetailsPanel(QWidget):
-    def __init__(self, parent=None, *, feature=None, model_manager=None):
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
         super().__init__(parent)
         self.feature = feature
         self.model_manager = model_manager
+        self.data_manager = data_manager
         # Create a scroll area for horizontal scrolling
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -73,6 +76,13 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
 
+        self.items_table = QTableWidget()
+        self.layer_table = LayerSelectionTable(
+            table_widget=self.items_table,
+            data_manager=self.data_manager,
+            feature_name_provider=lambda: self.feature.name,
+            name_validator=lambda: True,  # Always valid in this context
+        )
         # Form layout for better organization
         form_layout = QFormLayout()
         form_layout.addRow(self.interpolator_type_label, self.interpolator_type_combo)
@@ -80,7 +90,7 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout.addRow('Regularisation', self.regularisation_spin_box)
         form_layout.addRow('Contact points weight', self.cpw_spin_box)
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
-
+        form_layout.addRow(QLabel("Data Layers:"), self.items_table)
         QgsCollapsibleGroupBox = QWidget()
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)
@@ -116,8 +126,8 @@ class BaseFeatureDetailsPanel(QWidget):
 
 class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
-    def __init__(self, parent=None, *, fault=None, model_manager=None):
-        super().__init__(parent, feature=fault, model_manager=model_manager)
+    def __init__(self, parent=None, *, fault=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=fault, model_manager=model_manager, data_manager=data_manager)
         if fault is None:
             raise ValueError("Fault must be provided.")
         self.fault = fault
@@ -198,8 +208,8 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
 
 class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
-    def __init__(self, parent=None, *, feature=None, model_manager=None):
-        super().__init__(parent, feature=feature, model_manager=model_manager)
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
         if feature is None:
             raise ValueError("Feature must be provided.")
         self.feature = feature
@@ -226,13 +236,13 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
 
 class StructuralFrameFeatureDetailsPanel(BaseFeatureDetailsPanel):
-    def __init__(self, parent=None, *, feature=None, model_manager=None):
-        super().__init__(parent, feature=feature, model_manager=model_manager)
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
 
 
 class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
-    def __init__(self, parent=None, *, feature=None, model_manager=None):
-        super().__init__(parent, feature=feature, model_manager=model_manager)
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
         # Remove redundant layout setting
         # self.setLayout(self.layout)
         form_layout = QFormLayout()

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from loopstructural.gui.modelling.feature_details_panel import (
+from .feature_details_panel import (
     FaultFeatureDetailsPanel,
     FoldedFeatureDetailsPanel,
     FoliationFeatureDetailsPanel,
@@ -120,19 +120,19 @@ class GeologicalModelTab(QWidget):
         feature = self.model_manager.model.get_feature_by_name(feature_name)
         if feature.type == FeatureType.FAULT:
             self.featureDetailsPanel = FaultFeatureDetailsPanel(
-                fault=feature, model_manager=self.model_manager
+                fault=feature, model_manager=self.model_manager, data_manager=self.data_manager
             )
         elif feature.type == FeatureType.INTERPOLATED:
             self.featureDetailsPanel = FoliationFeatureDetailsPanel(
-                feature=feature, model_manager=self.model_manager
+                feature=feature, model_manager=self.model_manager, data_manager=self.data_manager
             )
         elif feature.type == FeatureType.STRUCTURALFRAME:
             self.featureDetailsPanel = StructuralFrameFeatureDetailsPanel(
-                feature=feature, model_manager=self.model_manager
+                feature=feature, model_manager=self.model_manager, data_manager=self.data_manager
             )
         elif feature.type == FeatureType.FOLDED:
             self.featureDetailsPanel = FoldedFeatureDetailsPanel(
-                feature=feature, model_manager=self.model_manager
+                feature=feature, model_manager=self.model_manager, data_manager=self.data_manager
             )
         else:
             self.featureDetailsPanel = QWidget()  # Default empty panel
