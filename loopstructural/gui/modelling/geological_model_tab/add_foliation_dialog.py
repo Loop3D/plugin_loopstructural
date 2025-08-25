@@ -255,11 +255,11 @@ class AddFoliationDialog(QDialog):
         combo.addItems(["Value", "Form Line", "Orientation", "Inequality"])
         return combo
 
-    def _create_delete_button(self, row, layer_name):
+    def _create_delete_button(self, row):
         from PyQt5.QtWidgets import QPushButton
 
         btn = QPushButton("Delete")
-        btn.clicked.connect(lambda: self.delete_item_row(row, layer_name=btn.text()))
+        btn.clicked.connect(lambda: self.delete_item_row(row))
         return btn
 
     def delete_item_row(self, row, layer_name):
