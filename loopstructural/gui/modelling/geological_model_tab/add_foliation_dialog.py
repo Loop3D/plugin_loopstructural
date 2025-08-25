@@ -39,12 +39,16 @@ class AddFoliationDialog(QDialog):
         def validate_name_field(text):
             """Validate the feature name field."""
             valid = True
+            old_name = self.name
             if not text.strip():
                 valid = False
                 self.name_error = "Feature name cannot be empty."
-            if text.strip() in [f.name for f in self.model_manager.features()]:
+            elif text.strip() in [f.name for f in self.model_manager.features()]:
                 valid = False
                 self.name_error = "Feature name must be unique."
+            elif text.strip() in self.data_manager.feature_data:
+                valid = False
+                self.name_error = "Layer already exists in the data manager."
 
             if not valid:
                 self.name_valid = False
@@ -52,6 +56,15 @@ class AddFoliationDialog(QDialog):
             else:
                 self.feature_name_input.setStyleSheet("")
                 self.name_valid = True
+
+            # Enable/disable the OK button based on validation
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.name_valid)
+
+            # if the name changes make sure the data manager updates the key
+            if old_name in self.data_manager.feature_data and old_name != self.name:
+                self.data_manager.feature_data[self.name] = self.data_manager.feature_data.pop(
+                    old_name
+                )
 
         self.feature_name_input.textChanged.connect(validate_name_field)
 
@@ -101,6 +114,23 @@ class AddFoliationDialog(QDialog):
             layout.addWidget(layer_combo)
             strike_field_combo = None
             dip_field_combo = None
+            data = {}
+            button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+
+            def validate_layer_selection():
+                if layer_combo.currentLayer().name() in self.data_manager.feature_data[self.name]:
+                    self.data_manager.logger("Layer already selected.", log_level=2)
+                    button_box.button(QDialogButtonBox.Ok).setEnabled(False)
+                    return False
+                button_box.button(QDialogButtonBox.Ok).setEnabled(True)
+                return True
+
+            layer_combo.layerChanged.connect(validate_layer_selection)
+            if btn.text() != "Select Layer" and hasattr(btn, 'selected_layer'):
+                data = self.data_manager.feature_data[self.name].get(btn.text(), {})
+            if 'layer' in data:
+                layer_combo.setLayer(data['layer'])
+
             if type_combo.currentText() == "Orientation":
                 field_layout = QHBoxLayout()
 
@@ -119,14 +149,23 @@ class AddFoliationDialog(QDialog):
                 field_layout.addWidget(format_combo)
                 strike_field_combo = QgsFieldComboBox()
                 dip_field_combo = QgsFieldComboBox()
+                strike_field_combo.setLayer(layer_combo.currentLayer())
+                dip_field_combo.setLayer(layer_combo.currentLayer())
                 field_layout.addWidget(strike_field_label)
                 field_layout.addWidget(strike_field_combo)
                 field_layout.addWidget(dip_field_label)
                 field_layout.addWidget(dip_field_combo)
                 layer_combo.layerChanged.connect(strike_field_combo.setLayer)
-
                 layer_combo.layerChanged.connect(dip_field_combo.setLayer)
                 layout.addLayout(field_layout)
+
+                # Populate fields with pre-existing data
+                if 'strike_field' in data:
+                    strike_field_combo.setField(data['strike_field'])
+                if 'dip_field' in data:
+                    dip_field_combo.setField(data['dip_field'])
+                if 'orientation_format' in data:
+                    format_combo.setCurrentText(data['orientation_format'])
             if type_combo.currentText() == "Value":
                 field_layout = QHBoxLayout()
                 value_field_label = QLabel("Value Field:")
@@ -136,6 +175,11 @@ class AddFoliationDialog(QDialog):
                 field_layout.addWidget(value_field_combo)
                 layout.addLayout(field_layout)
                 layer_combo.layerChanged.connect(value_field_combo.setLayer)
+
+                # Populate fields with pre-existing data
+                if 'value_field' in data:
+                    value_field_combo.setField(data['value_field'])
+
             if type_combo.currentText() == "Inequality":
                 field_layout = QHBoxLayout()
                 lower_field_label = QLabel("Lower")
@@ -151,7 +195,13 @@ class AddFoliationDialog(QDialog):
                 layout.addLayout(field_layout)
                 layer_combo.layerChanged.connect(lower_field_combo.setLayer)
                 layer_combo.layerChanged.connect(upper_field_combo.setLayer)
-            button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+
+                # Populate fields with pre-existing data
+                if 'lower_field' in data:
+                    lower_field_combo.setField(data['lower_field'])
+                if 'upper_field' in data:
+                    upper_field_combo.setField(data['upper_field'])
+
             layout.addWidget(button_box)
             button_box.accepted.connect(dialog.accept)
             button_box.rejected.connect(dialog.reject)
@@ -166,6 +216,7 @@ class AddFoliationDialog(QDialog):
                         return
                     data['strike_field'] = strike_field_combo.currentField()
                     data['dip_field'] = dip_field_combo.currentField()
+                    data['orientation_format'] = format_combo.currentText()
                 elif type_combo.currentText() == "Value":
                     if not value_field_combo.currentField():
                         return
@@ -177,6 +228,7 @@ class AddFoliationDialog(QDialog):
                     data['upper_field'] = upper_field_combo.currentField()
 
                 data['layer'] = layer_combo.currentLayer()
+                data['layer_name'] = layer_combo.currentLayer().name()
                 data['type'] = type_combo.currentText()
                 self.add_layer_to_data_manager(data)
 
@@ -203,15 +255,18 @@ class AddFoliationDialog(QDialog):
         combo.addItems(["Value", "Form Line", "Orientation", "Inequality"])
         return combo
 
-    def _create_delete_button(self, row):
+    def _create_delete_button(self, row, layer_name):
         from PyQt5.QtWidgets import QPushButton
 
         btn = QPushButton("Delete")
-        btn.clicked.connect(lambda: self.delete_item_row(row))
+        btn.clicked.connect(lambda: self.delete_item_row(row, layer_name=btn.text()))
         return btn
 
-    def delete_item_row(self, row):
+    def delete_item_row(self, row, layer_name):
         self.items_table.removeRow(row)
+        print(f'removing layer: {layer_name} for foliation: {self.name}')
+        self.data_manager.feature_data[self.name].pop(layer_name, None)
+        print(self.data_manager.feature_data[self.name].keys())
 
     def add_foliation(self):
         if not self.name_valid:

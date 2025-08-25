@@ -356,7 +356,7 @@ class GeologicalModelManager:
     ):
         # for z
         dfs = []
-        for layer_data in data:
+        for layer_data in data.values():
             if layer_data['type'] == 'Orientation':
                 df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
                 df['strike'] = df[layer_data['strike_field']]
@@ -402,6 +402,13 @@ class GeologicalModelManager:
             raise ValueError(f"Feature '{feature_name}' not found in the model.")
         folded_feature = add_fold_to_feature(feature, fold_frame)
         self.model[feature_name] = folded_feature
+
+    def convert_feature_to_structural_frame(self, feature_name: str):
+        from LoopStructural.modelling.features.builders import StructuralFrameBuilder
+
+        builder = self.model.get_feature_by_name(feature_name).builder
+        new_builder = StructuralFrameBuilder.from_feature_builder(builder)
+        self.model[feature_name] = new_builder.frame
 
     @property
     def fold_frames(self):

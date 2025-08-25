@@ -64,7 +64,7 @@ class ModellingDataManager:
         self.dem_layer = None
         self.use_dem = True
         self.dem_callback = None
-        self.feature_data = defaultdict(list)
+        self.feature_data = defaultdict(dict)
 
     def onSaveProject(self):
         """Save project data."""
@@ -564,7 +564,7 @@ class ModellingDataManager:
         """Update the feature data in the data manager."""
         if not isinstance(feature_data, dict):
             raise ValueError("feature_data must be a dictionary.")
-        self.feature_data[feature_name].append(feature_data)
+        self.feature_data[feature_name][feature_data['layer_name']] = feature_data
         self.logger(message=f"Updated feature data for '{feature_name}'.")
 
     def add_foliation_to_model(self, foliation_name: str, *, folded_feature_name=None):
@@ -572,7 +572,7 @@ class ModellingDataManager:
         if foliation_name not in self.feature_data:
             raise ValueError(f"Foliation '{foliation_name}' does not exist in the data manager.")
         foliation_data = self.feature_data[foliation_name]
-        for layer in foliation_data:
+        for layer in foliation_data.values():
             layer['df'] = qgsLayerToGeoDataFrame(
                 layer['layer']
             )  # Convert QgsVectorLayer to GeoDataFrame
