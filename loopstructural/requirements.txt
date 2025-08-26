@@ -1,3 +1,4 @@
 pyvistaqt
 pyvista
 LoopStructural==1.6.20
+pyqtgraph
