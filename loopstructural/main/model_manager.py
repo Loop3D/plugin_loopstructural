@@ -9,7 +9,8 @@ from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
-from LoopStructural.modelling.features import FeatureType
+from LoopStructural.modelling.features import FeatureType, StructuralFrame
+from LoopStructural.modelling.features.fold import FoldFrame
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 
@@ -397,12 +398,14 @@ class GeologicalModelManager:
             self.model.add_unconformity(foliation, value)
         elif type == FeatureType.ONLAPUNCONFORMITY:
             self.model.add_onlap_unconformity(foliation, value)
-            
+
     def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
 
         from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
 
         fold_frame = self.model.get_feature_by_name(fold_frame_name)
+        if isinstance(fold_frame,StructuralFrame):
+            fold_frame = FoldFrame(fold_frame.name,fold_frame.features, None, fold_frame.model)
         if fold_frame is None:
             raise ValueError(f"Fold frame '{fold_frame_name}' not found in the model.")
         feature = self.model.get_feature_by_name(feature_name)
