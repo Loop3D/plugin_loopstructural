@@ -15,16 +15,16 @@ class AddFoliationDialog(QDialog):
         loadUi(ui_path, self)
         self.setWindowTitle('Add Foliation')
         
-        # Initialize the abstracted table
+        # Create the layer selection table widget
         self.layer_table = LayerSelectionTable(
-            table_widget=self.items_table,
             data_manager=self.data_manager,
             feature_name_provider=lambda: self.name,
             name_validator=lambda: (self.name_valid, self.name_error)
         )
         
-        # Connect add button
-        self.add_item_button.clicked.connect(self.layer_table.add_item_row)
+        # Replace or integrate with existing UI
+        self._integrate_layer_table()
+        
         self.buttonBox.accepted.connect(self.add_foliation)
         self.buttonBox.rejected.connect(self.cancel)
 
@@ -99,9 +99,50 @@ class AddFoliationDialog(QDialog):
 
         self.data_manager.add_foliation_to_model(self.name, folded_feature_name=folded_feature_name)
         self.accept()  # Close the dialog
-        
+
     def cancel(self):
         # Clean up any temporary data if necessary
         if self.name in self.data_manager.feature_data:
             self.data_manager.feature_data.pop(self.name, None)
         self.reject()
+
+    def _integrate_layer_table(self):
+        """Integrate the layer table widget with the existing UI."""
+        # Try to replace existing table widget if it exists
+        if hasattr(self, 'items_table'):
+            table_parent = self.items_table.parent()
+            
+            # Get the position of the original table
+            if hasattr(table_parent, 'layout') and table_parent.layout():
+                layout = table_parent.layout()
+                
+                # Find the index of the original table in the layout
+                table_index = -1
+                for i in range(layout.count()):
+                    item = layout.itemAt(i)
+                    if item and item.widget() == self.items_table:
+                        table_index = i
+                        break
+                
+                # Remove original widgets
+                if hasattr(self, 'items_table'):
+                    self.items_table.setParent(None)
+                if hasattr(self, 'add_item_button'):
+                    self.add_item_button.setParent(None)
+                
+                # Insert new widget at the same position
+                if table_index >= 0:
+                    layout.insertWidget(table_index, self.layer_table)
+                else:
+                    layout.addWidget(self.layer_table)
+            else:
+                # Fallback: add to parent widget directly
+                if hasattr(table_parent, 'layout') and not table_parent.layout():
+                    from PyQt5.QtWidgets import QVBoxLayout
+                    layout = QVBoxLayout(table_parent)
+                    table_parent.setLayout(layout)
+                    layout.addWidget(self.layer_table)
+        
+        # If no existing table found, try to add to main layout
+        elif hasattr(self, 'layout') and self.layout():
+            self.layout().addWidget(self.layer_table)

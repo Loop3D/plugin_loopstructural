@@ -7,32 +7,69 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QTableWidget,
     QVBoxLayout,
+    QWidget,
 )
 from qgis.core import QgsMapLayerProxyModel
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
 
-class LayerSelectionTable:
-    """Handles layer selection table functionality for geological features."""
+class LayerSelectionTable(QWidget):
+    """
+    Self-contained widget for layer selection table functionality for geological features.
     
-    def __init__(self, table_widget, data_manager, feature_name_provider, name_validator):
+    This widget includes:
+    - A table for displaying selected layers with Type, Layer, and Delete columns
+    - An "Add Data" button at the bottom for adding new layers
+    - Complete data management integration with data_manager.feature_data
+    
+    Usage example:
+        # Create the widget
+        layer_table = LayerSelectionTable(
+            data_manager=my_data_manager,
+            feature_name_provider=lambda: "my_feature_name",
+            name_validator=lambda: (True, "")  # or your validation logic
+        )
+        
+        # Add to your layout
+        layout.addWidget(layer_table)
+        
+        # Access data
+        if layer_table.has_layers():
+            data = layer_table.get_table_data()
+    """
+    
+    def __init__(self, data_manager, feature_name_provider, name_validator, parent=None):
         """
-        Initialize the layer selection table.
+        Initialize the layer selection table widget.
         
         Args:
-            table_widget: QTableWidget instance
             data_manager: Data manager instance
             feature_name_provider: Callable that returns the current feature name
             name_validator: Callable that returns (is_valid, error_message)
+            parent: Parent widget (optional)
         """
-        self.table = table_widget
+        super().__init__(parent)
         self.data_manager = data_manager
         self.get_feature_name = feature_name_provider
         self.validate_name = name_validator
         
-        self._setup_table()
+        self._setup_ui()
         self.initialize_feature_data()
         self.restore_table_state()
+    
+    def _setup_ui(self):
+        """Setup the widget UI with table and add button."""
+        layout = QVBoxLayout(self)
+        
+        # Create the table widget
+        self.table = QTableWidget()
+        self._setup_table()
+        layout.addWidget(self.table)
+        
+        # Create add button
+        self.add_button = QPushButton("Add Data")
+        self.add_button.clicked.connect(self.add_item_row)
+        layout.addWidget(self.add_button)
     
     def _setup_table(self):
         """Setup table columns and headers."""
@@ -275,6 +312,33 @@ class LayerSelectionTable:
         if feature_name and feature_name in self.data_manager.feature_data:
             return list(self.data_manager.feature_data[feature_name].keys())
         return []
+    
+    def get_table_widget(self):
+        """Get the internal table widget for direct access if needed."""
+        return self.table
+    
+    def get_add_button(self):
+        """Get the add button widget for customization if needed."""
+        return self.add_button
+    
+    def set_add_button_text(self, text):
+        """Set the text of the add button."""
+        self.add_button.setText(text)
+    
+    def set_table_headers(self, headers):
+        """Set custom table headers."""
+        if len(headers) == 3:
+            self.table.setHorizontalHeaderLabels(headers)
+        else:
+            raise ValueError("Headers list must contain exactly 3 items")
+    
+    def set_add_button_enabled(self, enabled):
+        """Enable or disable the add button."""
+        self.add_button.setEnabled(enabled)
+    
+    def is_add_button_enabled(self):
+        """Check if the add button is enabled."""
+        return self.add_button.isEnabled()
 
 
 class LayerSelectionDialog(QDialog):

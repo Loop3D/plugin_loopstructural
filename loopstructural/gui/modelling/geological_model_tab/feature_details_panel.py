@@ -78,7 +78,6 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.items_table = QTableWidget()
         self.layer_table = LayerSelectionTable(
-            table_widget=self.items_table,
             data_manager=self.data_manager,
             feature_name_provider=lambda: self.feature.name,
             name_validator=lambda: True,  # Always valid in this context
