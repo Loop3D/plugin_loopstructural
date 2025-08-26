@@ -36,7 +36,7 @@ from loopstructural.gui.loop_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.toolbelt import PlgLogger
-
+from loopstructural.processing.provider import LoopstructuralProvider 
 # ############################################################################
 # ########## Classes ###############
 # ##################################
@@ -52,7 +52,6 @@ class LoopstructuralPlugin:
         """
         self.iface = iface
         self.log = PlgLogger().log
-
         # translation
         # initialize the locale
         self.locale: str = QgsSettings().value("locale/userLocale", QLocale().name())[0:2]
@@ -80,7 +79,11 @@ class LoopstructuralPlugin:
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
 
         LoopStructural.setLogging(level="warning", handler=handler)
-
+    def initProcessing(self):
+        """Initialize the processing provider."""
+        self.provider = LoopstructuralProvider()
+        print("Registering processing provider")
+        QgsApplication.processingRegistry().addProvider(self.provider)
     def initGui(self):
         """Set up plugin UI elements."""
         self.injectLogHandler()
@@ -89,6 +92,7 @@ class LoopstructuralPlugin:
         # settings page within the QGIS preferences menu
         self.options_factory = PlgOptionsFactory()
         self.iface.registerOptionsWidgetFactory(self.options_factory)
+        self.initProcessing()
 
         # -- Actions
         self.action_help = QAction(

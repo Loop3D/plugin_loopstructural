@@ -10,7 +10,9 @@ from qgis.PyQt.QtGui import QIcon
 
 # project
 from loopstructural.__about__ import __icon_path__, __title__, __version__
-
+from .algorithms.interpolation.interpolation_algorithm import (
+    LoopStructuralInterpolationAlgorithm,
+)
 # ############################################################################
 # ########## Classes ###############
 # ##################################
@@ -21,6 +23,7 @@ class LoopstructuralProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):
         """Loads all algorithms belonging to this provider."""
+        self.addAlgorithm(LoopStructuralInterpolationAlgorithm())
         pass
 
     def id(self) -> str:

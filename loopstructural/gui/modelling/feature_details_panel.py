@@ -70,6 +70,12 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
 
+        self.items_table = QTableWidget()
+        self.layer_table = LayerSelectionTable(
+            data_manager=self.data_manager,
+            feature_name_provider=lambda: self.feature.name,
+            name_validator=lambda: True,  # Always valid in this context
+        )
         # Form layout for better organization
         form_layout = QFormLayout()
         form_layout.addRow(self.interpolator_type_label, self.interpolator_type_combo)
