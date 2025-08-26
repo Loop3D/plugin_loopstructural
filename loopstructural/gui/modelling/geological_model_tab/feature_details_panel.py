@@ -76,11 +76,10 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
 
-        self.items_table = QTableWidget()
         self.layer_table = LayerSelectionTable(
             data_manager=self.data_manager,
             feature_name_provider=lambda: self.feature.name,
-            name_validator=lambda: True,  # Always valid in this context
+            name_validator=lambda: (True, ''),  # Always valid in this context
         )
         # Form layout for better organization
         form_layout = QFormLayout()
@@ -89,10 +88,10 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout.addRow('Regularisation', self.regularisation_spin_box)
         form_layout.addRow('Contact points weight', self.cpw_spin_box)
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
-        form_layout.addRow(QLabel("Data Layers:"), self.items_table)
         QgsCollapsibleGroupBox = QWidget()
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)
+        self.layout.addWidget(self.layer_table)
 
         # self.layout.addLayout(form_layout)
 
