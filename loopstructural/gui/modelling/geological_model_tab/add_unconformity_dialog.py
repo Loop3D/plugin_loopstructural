@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QVBoxLayout,
-    QWidget,
+
 )
 from LoopStructural.modelling.features import FeatureType
 class AddUnconformityDialog(QDialog):

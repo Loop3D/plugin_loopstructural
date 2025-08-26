@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QVBoxLayout,
     QWidget,
-    QTableWidget,
 )
 
 from .layer_selection_table import LayerSelectionTable
@@ -339,7 +338,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         # splot_button.clicked.connect(
         #     lambda: self.open_splot_dialog()
         # )
-        form_layout.addRow(splot_button)
+        # form_layout.addRow(splot_button)
         QgsCollapsibleGroupBox = QWidget()
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)

@@ -105,7 +105,7 @@ class ObjectListWidget(QWidget):
         # Determine available formats based on object type and dependencies
         formats = []
         try:
-            import geoh5py  # noqa: F401
+            import geoh5py  
             has_geoh5py = True
         except ImportError:
             has_geoh5py = False

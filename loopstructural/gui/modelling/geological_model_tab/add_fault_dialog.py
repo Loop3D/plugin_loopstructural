@@ -1,6 +1,6 @@
 import os
 
-from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
+from PyQt5.QtWidgets import QDialog
 from PyQt5.uic import loadUi
 
 

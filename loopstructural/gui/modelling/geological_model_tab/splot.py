@@ -1,15 +1,10 @@
-import numpy as np
+
 import pyqtgraph as pg
 from qgis.PyQt.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
-    QFormLayout,
     QVBoxLayout,
-    QWidget,
 )
-from LoopStructural.modelling.features import FeatureType
 
 
 class SPlotDialog(QDialog):
