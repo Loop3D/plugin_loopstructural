@@ -389,7 +389,15 @@ class GeologicalModelManager:
         #     self.model[folded_feature_name] = folded_feature
         for observer in self.observers:
             observer()
-
+    def add_unconformity(self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY):
+        foliation = self.model.get_feature_by_name(foliation_name)
+        if foliation is None:
+            raise ValueError(f"Foliation '{foliation_name}' not found in the model.")
+        if type == FeatureType.UNCONFORMITY:
+            self.model.add_unconformity(foliation, value)
+        elif type == FeatureType.ONLAPUNCONFORMITY:
+            self.model.add_onlap_unconformity(foliation, value)
+            
     def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
 
         from LoopStructural.modelling.features._feature_converters import add_fold_to_feature

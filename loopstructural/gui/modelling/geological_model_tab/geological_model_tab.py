@@ -20,6 +20,7 @@ from LoopStructural.modelling.features import FeatureType
 # Import the AddFaultDialog
 from .add_fault_dialog import AddFaultDialog
 from .add_foliation_dialog import AddFoliationDialog
+from .add_unconformity_dialog import AddUnconformityDialog
 
 
 class GeologicalModelTab(QWidget):
@@ -75,6 +76,7 @@ class GeologicalModelTab(QWidget):
         menu = QMenu(self)
         add_fault = menu.addAction("Add Fault")
         add_foliaton = menu.addAction("Add Foliation")
+        add_unconformity = menu.addAction("Add Unconformity")
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec_(buttonPosition)
 
@@ -82,7 +84,8 @@ class GeologicalModelTab(QWidget):
             self.open_add_fault_dialog()
         elif action == add_foliaton:
             self.open_add_foliation_dialog()
-
+        elif action == add_unconformity:
+            self.open_add_unconformity_dialog()
     def open_add_fault_dialog(self):
         dialog = AddFaultDialog(self)
         if dialog.exec_() == dialog.Accepted:
@@ -96,7 +99,12 @@ class GeologicalModelTab(QWidget):
         )
         if dialog.exec_() == dialog.Accepted:
             pass
-
+    def open_add_unconformity_dialog(self):
+        dialog = AddUnconformityDialog(
+            self, data_manager=self.data_manager, model_manager=self.model_manager
+        )
+        if dialog.exec_() == dialog.Accepted:
+            pass
     def initialize_model(self):
         self.model_manager.update_model()
 
