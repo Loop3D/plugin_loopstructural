@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 )
 
 from .layer_selection_table import LayerSelectionTable
+from .splot import SPlotDialog
 from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip, plungeazimuth2vector
 
@@ -334,12 +335,20 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         form_layout.addRow(average_fold_axis_checkbox)
         form_layout.addRow("Fold Plunge", fold_plunge)
         form_layout.addRow("Fold Azimuth", fold_azimuth)
+        # splot_button = QPushButton("S-Plot")
+        # splot_button.clicked.connect(
+        #     lambda: self.open_splot_dialog()
+        # )
+        form_layout.addRow(splot_button)
         QgsCollapsibleGroupBox = QWidget()
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)
         # Remove redundant layout setting
         self.setLayout(self.layout)
-
+    def open_splot_dialog(self):
+        dialog = SPlotDialog(self, data_manager=self.data_manager, model_manager=self.model_manager, feature_name=self.feature.name)
+        if dialog.exec_() == dialog.Accepted:
+            pass
     def remove_fold_frame(self):
         pass
 
