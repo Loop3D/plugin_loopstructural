@@ -67,7 +67,7 @@ class StratColumnWidget(QWidget):
         """Update the widget display based on the data manager's stratigraphic column."""
         self.unitList.clear()
         if self.data_manager and self.data_manager._stratigraphic_column:
-            for unit in self.data_manager._stratigraphic_column.order:
+            for unit in reversed(self.data_manager._stratigraphic_column.order):
                 if unit.element_type == StratigraphicColumnElementType.UNIT:
                     self.add_unit(unit_data=unit.to_dict(), create_new=False)
                 elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:

@@ -1,5 +1,4 @@
 pyvistaqt
 pyvista
-LoopStructural==1.6.17
-geoh5py
-meshio
+LoopStructural==1.6.20
+pyqtgraph
