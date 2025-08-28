@@ -65,6 +65,7 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
                 self.VALUE,
                 "Value data",
                 [QgsProcessing.TypeVectorPoint, QgsProcessing.TypeVectorLine],
+                optional=True
             )
         )
         self.addParameter(
@@ -73,7 +74,7 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
                 "Field to interpolate",
                 parentLayerParameterName=self.VALUE,
                 type=QgsProcessingParameterField.DataType.Numeric,
-                optional=False,
+                optional=True,
             )
         )
         self.addParameter(
