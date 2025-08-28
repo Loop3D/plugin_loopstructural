@@ -28,9 +28,7 @@ class AddFoliationDialog(QDialog):
         self.buttonBox.accepted.connect(self.add_foliation)
         self.buttonBox.rejected.connect(self.cancel)
 
-        self.modelFeatureComboBox.addItems(
-            [f.name for f in self.model_manager.features() if not f.name.startswith("__")]
-        )
+        
         self.name_valid = False
         self.name_error = ""
 
@@ -94,8 +92,7 @@ class AddFoliationDialog(QDialog):
             return
             
         folded_feature_name = None
-        if self.modelFeatureComboBox.currentText() != "":
-            folded_feature_name = self.modelFeatureComboBox.currentText()
+        
 
         self.data_manager.add_foliation_to_model(self.name, folded_feature_name=folded_feature_name)
         self.accept()  # Close the dialog
