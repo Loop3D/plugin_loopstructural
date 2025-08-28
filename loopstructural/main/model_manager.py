@@ -2,12 +2,15 @@ from collections import defaultdict
 from typing import Callable
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
+from LoopStructural.modelling.features import FeatureType, StructuralFrame
+from LoopStructural.modelling.features.fold import FoldFrame
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 
@@ -208,8 +211,7 @@ class GeologicalModelManager:
             ['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']
         ]
         if dip_direction:
-            structural_orientations['dip'] = structural_orientations[dip_field]
-            structural_orientations['strike'] = structural_orientations[strike_field] - 90
+            structural_orientations['strike'] = structural_orientations['strike'] - 90
         for unit_name in structural_orientations['unit_name'].unique():
             orientations = structural_orientations.loc[
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
@@ -249,7 +251,7 @@ class GeologicalModelManager:
                     if 'orientations' in unit_data:
                         orientations = unit_data['orientations']
                         if not orientations.empty:
-                            orientations['val'] = val
+                            orientations['val'] = np.nan
                             orientations['feature_name'] = groupname
                             data.append(orientations)
 
@@ -260,7 +262,7 @@ class GeologicalModelManager:
             data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(
                 groupname,
-                series_surface_data=data,
+                data=data,
                 force_constrained=True,
                 nelements=PlgSettingsStructure.interpolator_nelements,
                 npw=PlgSettingsStructure.interpolator_npw,
@@ -299,7 +301,7 @@ class GeologicalModelManager:
                     displacement=displacement,
                     fault_dip=dip,
                     fault_pitch=pitch,
-                    fault_data=data,
+                    data=data,
                     nelements=PlgSettingsStructure.interpolator_nelements,
                     npw=PlgSettingsStructure.interpolator_npw,
                     cpw=PlgSettingsStructure.interpolator_cpw,
@@ -344,3 +346,82 @@ class GeologicalModelManager:
 
     def features(self):
         return self.model.features
+
+    def add_foliation(
+        self,
+        name: str,
+        data: dict,
+        folded_feature_name=None,
+        sampler=AllSampler(),
+        use_z_coordinate=False,
+    ):
+        # for z
+        dfs = []
+        for layer_data in data.values():
+            if layer_data['type'] == 'Orientation':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['strike'] = df[layer_data['strike_field']]
+                df['dip'] = df[layer_data['dip_field']]
+                df['feature_name'] = name
+                dfs.append(df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']])
+            elif layer_data['type'] == 'Formline':
+                pass
+            elif layer_data['type'] == 'Value':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['val'] = df[layer_data['value_field']]
+                df['feature_name'] = name
+                dfs.append(df[['X', 'Y', 'Z', 'val', 'feature_name']])
+
+            elif layer_data['type'] == 'Inequality':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['l'] = df[layer_data['lower_field']]
+                df['u'] = df[layer_data['upper_field']]
+                df['feature_name'] = name
+                dfs.append(df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']])
+
+            else:
+                raise ValueError(f"Unknown layer type: {layer_data['type']}")
+        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True))
+        # if folded_feature_name is not None:
+        #     from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
+
+        #     folded_feature = self.model.get_feature_by_name(folded_feature_name)
+        #     folded_feature_name = add_fold_to_feature(frame, folded_feature)
+        #     self.model[folded_feature_name] = folded_feature
+        for observer in self.observers:
+            observer()
+    def add_unconformity(self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY):
+        foliation = self.model.get_feature_by_name(foliation_name)
+        if foliation is None:
+            raise ValueError(f"Foliation '{foliation_name}' not found in the model.")
+        if type == FeatureType.UNCONFORMITY:
+            self.model.add_unconformity(foliation, value)
+        elif type == FeatureType.ONLAPUNCONFORMITY:
+            self.model.add_onlap_unconformity(foliation, value)
+
+    def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
+
+        from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
+
+        fold_frame = self.model.get_feature_by_name(fold_frame_name)
+        if isinstance(fold_frame,StructuralFrame):
+            fold_frame = FoldFrame(fold_frame.name,fold_frame.features, None, fold_frame.model)
+        if fold_frame is None:
+            raise ValueError(f"Fold frame '{fold_frame_name}' not found in the model.")
+        feature = self.model.get_feature_by_name(feature_name)
+        if feature is None:
+            raise ValueError(f"Feature '{feature_name}' not found in the model.")
+        folded_feature = add_fold_to_feature(feature, fold_frame)
+        self.model[feature_name] = folded_feature
+
+    def convert_feature_to_structural_frame(self, feature_name: str):
+        from LoopStructural.modelling.features.builders import StructuralFrameBuilder
+
+        builder = self.model.get_feature_by_name(feature_name).builder
+        new_builder = StructuralFrameBuilder.from_feature_builder(builder)
+        self.model[feature_name] = new_builder.frame
+
+    @property
+    def fold_frames(self):
+        """Return the fold frames in the model."""
+        return [f for f in self.model.features if f.type == FeatureType.STRUCTURALFRAME]

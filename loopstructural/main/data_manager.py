@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 
 import numpy as np
 from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
@@ -63,6 +64,7 @@ class ModellingDataManager:
         self.dem_layer = None
         self.use_dem = True
         self.dem_callback = None
+        self.feature_data = defaultdict(dict)
 
     def onSaveProject(self):
         """Save project data."""
@@ -345,7 +347,7 @@ class ModellingDataManager:
                     unit_name_field=self._structural_orientations['unitname_field'],
                     dip_direction=(
                         True
-                        if self._structural_orientations['orientation_type'] == "Dip Direction"
+                        if self._structural_orientations['orientation_type'] == "Dip Direction/Dip"
                         else False
                     ),
                 )
@@ -557,3 +559,27 @@ class ModellingDataManager:
             else:
                 self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
                 return None
+
+    def update_feature_data(self, feature_name: str, feature_data: dict):
+        """Update the feature data in the data manager."""
+        if not isinstance(feature_data, dict):
+            raise ValueError("feature_data must be a dictionary.")
+        self.feature_data[feature_name][feature_data['layer_name']] = feature_data
+        self.logger(message=f"Updated feature data for '{feature_name}'.")
+
+    def add_foliation_to_model(self, foliation_name: str, *, folded_feature_name=None):
+        """Add a foliation to the model."""
+        if foliation_name not in self.feature_data:
+            raise ValueError(f"Foliation '{foliation_name}' does not exist in the data manager.")
+        foliation_data = self.feature_data[foliation_name]
+        for layer in foliation_data.values():
+            layer['df'] = qgsLayerToGeoDataFrame(
+                layer['layer']
+            )  # Convert QgsVectorLayer to GeoDataFrame
+        if self._model_manager:
+            self._model_manager.add_foliation(
+                foliation_name, foliation_data, folded_feature_name=folded_feature_name
+            )
+            self.logger(message=f"Added foliation '{foliation_name}' to the model.")
+        else:
+            raise RuntimeError("Model manager is not set.")

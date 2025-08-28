@@ -1,22 +1,28 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
+from .layer_selection_table import LayerSelectionTable
+from .splot import SPlotDialog
 from LoopStructural.modelling.features import StructuralFrame
-from LoopStructural.utils import normal_vector_to_strike_and_dip
+from LoopStructural.utils import normal_vector_to_strike_and_dip, plungeazimuth2vector
 
 
 class BaseFeatureDetailsPanel(QWidget):
-    def __init__(self, parent=None, *, feature=None):
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
         super().__init__(parent)
         self.feature = feature
+        self.model_manager = model_manager
+        self.data_manager = data_manager
         # Create a scroll area for horizontal scrolling
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -70,11 +76,10 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
 
-        self.items_table = QTableWidget()
         self.layer_table = LayerSelectionTable(
             data_manager=self.data_manager,
             feature_name_provider=lambda: self.feature.name,
-            name_validator=lambda: True,  # Always valid in this context
+            name_validator=lambda: (True, ''),  # Always valid in this context
         )
         # Form layout for better organization
         form_layout = QFormLayout()
@@ -83,10 +88,10 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout.addRow('Regularisation', self.regularisation_spin_box)
         form_layout.addRow('Contact points weight', self.cpw_spin_box)
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
-
         QgsCollapsibleGroupBox = QWidget()
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)
+        self.layout.addWidget(self.layer_table)
 
         # self.layout.addLayout(form_layout)
 
@@ -118,8 +123,9 @@ class BaseFeatureDetailsPanel(QWidget):
 
 
 class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
-    def __init__(self, parent=None, *, fault=None):
-        super().__init__(parent, feature=fault)
+
+    def __init__(self, parent=None, *, fault=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=fault, model_manager=model_manager, data_manager=data_manager)
         if fault is None:
             raise ValueError("Fault must be provided.")
         self.fault = fault
@@ -200,8 +206,160 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
 
 class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
-    def __init__(self, parent=None, *, feature=None):
-        super().__init__(parent, feature=feature)
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
+        if feature is None:
+            raise ValueError("Feature must be provided.")
+        self.feature = feature
+        form_layout = QFormLayout()
+        fold_frame_combobox = QComboBox()
+        fold_frame_combobox.addItems([""] + [f.name for f in self.model_manager.fold_frames])
+        fold_frame_combobox.currentTextChanged.connect(self.on_fold_frame_changed)
+        form_layout.addRow("Attach fold frame", fold_frame_combobox)
+
+        convert_to_frame_button = QPushButton("Convert to Structural Frame")
+        convert_to_frame_button.clicked.connect(
+            lambda: self.model_manager.convert_feature_to_structural_frame(self.feature.name)
+        )
+        form_layout.addRow(convert_to_frame_button)
+        QgsCollapsibleGroupBox = QWidget()
+        QgsCollapsibleGroupBox.setLayout(form_layout)
+        self.layout.addWidget(QgsCollapsibleGroupBox)
 
         # Remove redundant layout setting
+        self.setLayout(self.layout)
+
+    def on_fold_frame_changed(self, text):
+        self.model_manager.add_fold_to_feature(self.feature.name, fold_frame_name=text)
+
+
+class StructuralFrameFeatureDetailsPanel(BaseFeatureDetailsPanel):
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
+
+
+class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
+    def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
+        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
+        # Remove redundant layout setting
         # self.setLayout(self.layout)
+        form_layout = QFormLayout()
+        # remove_fold_frame_button = QPushButton("Remove Fold Frame")
+        # remove_fold_frame_button.clicked.connect(self.remove_fold_frame)
+        # form_layout.addRow(remove_fold_frame_button)
+
+        norm_length = QDoubleSpinBox()
+        norm_length.setRange(0, 100000)
+        norm_length.setValue(1)  # Set a default value
+        norm_length.valueChanged.connect(
+            lambda value: feature.builder.update_build_arguments(
+                {
+                    'fold_weights': {
+                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        'fold_norm': value,
+                    }
+                }
+            )
+        )
+        form_layout.addRow("Normal Length", norm_length)
+
+        norm_weight = QDoubleSpinBox()
+        norm_weight.setRange(0, 100000)
+        norm_weight.setValue(1)
+        norm_weight.valueChanged.connect(
+            lambda value: feature.builder.update_build_arguments(
+                {
+                    'fold_weights': {
+                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        'fold_normalisation': value,
+                    }
+                }
+            )
+        )
+        form_layout.addRow("Normal Weight", norm_weight)
+
+        fold_axis_weight = QDoubleSpinBox()
+        fold_axis_weight.setRange(0, 100000)
+        fold_axis_weight.setValue(1)
+        fold_axis_weight.valueChanged.connect(
+            lambda value: feature.builder.update_build_arguments(
+                {
+                    'fold_weights': {
+                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        'fold_axis_w': value,
+                    }
+                }
+            )
+        )
+        form_layout.addRow("Fold Axis Weight", fold_axis_weight)
+
+        fold_orientation_weight = QDoubleSpinBox()
+        fold_orientation_weight.setRange(0, 100000)
+        fold_orientation_weight.setValue(1)
+        fold_orientation_weight.valueChanged.connect(
+            lambda value: feature.builder.update_build_arguments(
+                {
+                    'fold_weights': {
+                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        'fold_orientation': value,
+                    }
+                }
+            )
+        )
+        form_layout.addRow("Fold Orientation Weight", fold_orientation_weight)
+
+        average_fold_axis_checkbox = QCheckBox("Average Fold Axis")
+        average_fold_axis_checkbox.setChecked(True)
+        average_fold_axis_checkbox.stateChanged.connect(
+            lambda state: feature.builder.update_build_arguments(
+                {'av_fold_axis': state != Qt.Checked}
+            )
+        )
+        average_fold_axis_checkbox.stateChanged.connect(
+            lambda state: fold_azimuth.setEnabled(state == Qt.Checked)
+        )
+        average_fold_axis_checkbox.stateChanged.connect(
+            lambda state: fold_plunge.setEnabled(state == Qt.Checked)
+        )
+        fold_plunge = QDoubleSpinBox()
+        fold_plunge.setRange(0, 90)
+        fold_plunge.setValue(0)
+        fold_azimuth = QDoubleSpinBox()
+        fold_azimuth.setRange(0, 360)
+        fold_azimuth.setValue(0)
+        fold_azimuth.setEnabled(False)
+        fold_plunge.setEnabled(False)
+        fold_plunge.valueChanged.connect(self.foldAxisFromPlungeAzimuth)
+        fold_azimuth.valueChanged.connect(self.foldAxisFromPlungeAzimuth)
+        form_layout.addRow(average_fold_axis_checkbox)
+        form_layout.addRow("Fold Plunge", fold_plunge)
+        form_layout.addRow("Fold Azimuth", fold_azimuth)
+        # splot_button = QPushButton("S-Plot")
+        # splot_button.clicked.connect(
+        #     lambda: self.open_splot_dialog()
+        # )
+        # form_layout.addRow(splot_button)
+        QgsCollapsibleGroupBox = QWidget()
+        QgsCollapsibleGroupBox.setLayout(form_layout)
+        self.layout.addWidget(QgsCollapsibleGroupBox)
+        # Remove redundant layout setting
+        self.setLayout(self.layout)
+    def open_splot_dialog(self):
+        dialog = SPlotDialog(self, data_manager=self.data_manager, model_manager=self.model_manager, feature_name=self.feature.name)
+        if dialog.exec_() == dialog.Accepted:
+            pass
+    def remove_fold_frame(self):
+        pass
+
+    def foldAxisFromPlungeAzimuth(self):
+        """Calculate the fold axis from plunge and azimuth."""
+        if self.feature:
+            plunge = (
+                self.layout().itemAt(0).widget().findChild(QDoubleSpinBox, "fold_plunge").value()
+            )
+            azimuth = (
+                self.layout().itemAt(0).widget().findChild(QDoubleSpinBox, "fold_azimuth").value()
+            )
+            vector = plungeazimuth2vector(plunge, azimuth)[0]
+            if plunge is not None and azimuth is not None:
+                self.feature.builder.update_build_arguments({'fold_axis': vector})

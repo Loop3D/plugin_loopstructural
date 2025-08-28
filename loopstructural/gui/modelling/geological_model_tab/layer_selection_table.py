@@ -93,7 +93,7 @@ class LayerSelectionTable(QWidget):
         
         # Restore rows from data
         feature_data = self.data_manager.feature_data[feature_name]
-        for layer_name, layer_data in feature_data.items():
+        for _layer_name, layer_data in feature_data.items():
             self._add_row_from_data(layer_data)
     
     def _add_row_from_data(self, layer_data):
