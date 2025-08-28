@@ -171,6 +171,7 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
         lower_field = self.parameterAsFields(parameters, self.INEQUALITY_LOWER_FIELD, context)
         
         extent = self.parameterAsExtent(parameters, self.EXTENT, context)
+        
         print(extent)
 
     def createInstance(self) -> QgsProcessingAlgorithm:
