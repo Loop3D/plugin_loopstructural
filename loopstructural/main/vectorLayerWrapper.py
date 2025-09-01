@@ -1,8 +1,6 @@
 import pandas as pd
 import geopandas as gpd
-from qgis.core import QgsRaster, QgsWkbTypes
-
-
+from qgis.core import QgsRaster, QgsWkbTypes, QgsProcessingFeatureSource, QgsFeatureSource
 def qgsLayerToGeoDataFrame(layer) -> gpd.GeoDataFrame:
     if layer is None:
         return None
@@ -18,7 +16,13 @@ def qgsLayerToGeoDataFrame(layer) -> gpd.GeoDataFrame:
         data['geometry'].append(geom)
         for f in fields:
             data[f.name()].append(feature[f.name()])
-    return gpd.GeoDataFrame(data, crs=layer.crs().authid())
+    crs = None
+    if type(layer) == QgsProcessingFeatureSource:
+        crs = layer.sourceCrs().authid() if layer.sourceCrs().isValid() else None
+    elif type(layer) == QgsFeatureSource:
+        crs = layer.crs().authid() if layer.crs().isValid() else None
+
+    return gpd.GeoDataFrame(data, crs=crs)
 
 
 def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:
