@@ -31,6 +31,7 @@ class ModellingDataManager:
         self.project = project
         self.project.readProject.connect(self.onLoadProject)
         self.project.writeProject.connect(self.onSaveProject)
+        self.project.cleared.connect(self.onNewProject)
         self._bounding_box = BoundingBox(
             origin=[
                 default_bounding_box['xmin'],
@@ -83,7 +84,8 @@ class ModellingDataManager:
 
             except json.JSONDecodeError as e:
                 self.logger(message=f"Error loading data manager: {e}", log_level=2)
-
+    def onNewProject(self):
+        self.update_from_dict({})
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
         if model_manager is None:
