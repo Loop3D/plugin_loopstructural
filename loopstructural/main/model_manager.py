@@ -357,6 +357,7 @@ class GeologicalModelManager:
     ):
         # for z
         dfs = []
+        kwargs={}
         for layer_data in data.values():
             if layer_data['type'] == 'Orientation':
                 df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
@@ -378,10 +379,10 @@ class GeologicalModelManager:
                 df['u'] = df[layer_data['upper_field']]
                 df['feature_name'] = name
                 dfs.append(df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']])
-
+                kwargs['solver']='admm'
             else:
                 raise ValueError(f"Unknown layer type: {layer_data['type']}")
-        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True))
+        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True),   **kwargs)
         # if folded_feature_name is not None:
         #     from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
 
