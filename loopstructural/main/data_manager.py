@@ -415,7 +415,10 @@ class ModellingDataManager:
         ):
             structural_orientations['layer'] = structural_orientations['layer'].name()
         if self.dem_layer is not None:
-            dem_layer_name = self.dem_layer.name()
+            try:
+                dem_layer_name = self.dem_layer.name()
+            except RuntimeError as e:
+                self.logger(message=f"Error getting DEM layer name: {e}", log_level=2)
 
         return {
             'bounding_box': self._bounding_box.to_dict(),
