@@ -40,6 +40,9 @@ class GeologicalModelTab(QWidget):
 
         self.featureList = QTreeWidget()
         self.featureList.setHeaderLabel("Geological Features")
+        # Enable right-click context menu on feature items
+        self.featureList.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.featureList.customContextMenuRequested.connect(self.show_feature_context_menu)
         side_panel = QVBoxLayout()
         side_panel.addWidget(self.featureList)
         add_feature_button = QPushButton("Add Feature")
@@ -149,3 +152,54 @@ class GeologicalModelTab(QWidget):
         splitter = self.layout().itemAt(1).widget()
         splitter.widget(1).deleteLater()  # Remove the existing widget
         splitter.addWidget(self.featureDetailsPanel)  # Add the new widget
+
+    def show_feature_context_menu(self, pos):
+        # Show context menu only for items
+        item = self.featureList.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete Feature")
+        action = menu.exec_(self.featureList.mapToGlobal(pos))
+        if action == delete_action:
+            self.delete_feature(item)
+
+    def delete_feature(self, item):
+        feature_name = item.text(0)
+        # Attempt to remove from the underlying model in a few ways
+        try:
+            # Try model's __delitem__ if supported
+            try:
+                del self.model_manager.model[feature_name]
+            except Exception:
+                # Fallback: remove object from features list and feature index if present
+                feature = self.model_manager.model.get_feature_by_name(feature_name)
+                if feature and hasattr(self.model_manager.model, 'features'):
+                    try:
+                        self.model_manager.model.features.remove(feature)
+                    except Exception:
+                        pass
+                if hasattr(self.model_manager.model, 'feature_name_index'):
+                    try:
+                        self.model_manager.model.feature_name_index.pop(feature_name, None)
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Failed to remove feature from model: {e}")
+
+        # Remove from the tree widget
+        try:
+            self.featureList.takeTopLevelItem(self.featureList.indexOfTopLevelItem(item))
+        except Exception:
+            # Fallback: just clear and refresh
+            pass
+
+        # Notify observers to refresh UI
+        try:
+            for obs in getattr(self.model_manager, 'observers', []):
+                try:
+                    obs()
+                except Exception:
+                    pass
+        except Exception:
+            pass
