@@ -37,7 +37,7 @@ from qgis.core import (
     QgsProcessingParameterNumber,
     QgsProcessingParameterDefinition,
 )
-
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 class CreateAndAddFoliationAlgorithm(QgsProcessingAlgorithm):
     """Load model from pickle, add foliation from supplied layers, save updated model."""
@@ -70,6 +70,7 @@ class CreateAndAddFoliationAlgorithm(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config: Optional[dict[str, Any]] = None) -> None:
         # input model pickle
+        opts = PlgOptionsManager.get_plg_settings()
         self.addParameter(
             QgsProcessingParameterFile(
                 self.MODEL_FILE_IN,
@@ -137,19 +138,19 @@ class CreateAndAddFoliationAlgorithm(QgsProcessingAlgorithm):
         # options
         
         # make numeric interpolator parameters advanced
-        param_ne = QgsProcessingParameterNumber(self.NELEMENTS, "nelements", type=QgsProcessingParameterNumber.Integer, optional=True)
+        param_ne = QgsProcessingParameterNumber(self.NELEMENTS, "nelements", type=QgsProcessingParameterNumber.Integer, optional=True, defaultValue=opts.interpolator_nelements)
         param_ne.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(param_ne)
 
-        param_npw = QgsProcessingParameterNumber(self.NPW, "npw", type=QgsProcessingParameterNumber.Integer, optional=True)
+        param_npw = QgsProcessingParameterNumber(self.NPW, "npw", type=QgsProcessingParameterNumber.Integer, optional=True, defaultValue=opts.interpolator_npw  )
         param_npw.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(param_npw)
 
-        param_cpw = QgsProcessingParameterNumber(self.CPW, "cpw", type=QgsProcessingParameterNumber.Integer, optional=True)
+        param_cpw = QgsProcessingParameterNumber(self.CPW, "cpw", type=QgsProcessingParameterNumber.Integer, optional=True,defaultValue=opts.interpolator_cpw )
         param_cpw.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(param_cpw)
 
-        param_reg = QgsProcessingParameterNumber(self.REGULARISATION, "regularisation", type=QgsProcessingParameterNumber.Double, optional=True)
+        param_reg = QgsProcessingParameterNumber(self.REGULARISATION, "regularisation", type=QgsProcessingParameterNumber.Double, optional=True, defaultValue=opts.interpolator_regularisation)
         param_reg.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(param_reg)
 
