@@ -16,6 +16,8 @@ from .algorithms.interpolation.interpolation_algorithm import (
 from .algorithms.modelling.create_bounding_box import CreateBoundingBoxAlgorithm
 from .algorithms.modelling.create_model import CreateModelAlgorithm
 from .algorithms.modelling.create_and_add_foliation import CreateAndAddFoliationAlgorithm
+from .algorithms.modelling.add_fault_topology import AddFaultTopologyAlgorithm
+from .algorithms.modelling.create_and_add_fault import CreateAndAddFaultAlgorithm
 # ############################################################################
 # ########## Classes ###############
 # ##################################
@@ -30,6 +32,8 @@ class LoopstructuralProvider(QgsProcessingProvider):
         self.addAlgorithm(CreateBoundingBoxAlgorithm())
         self.addAlgorithm(CreateModelAlgorithm())
         self.addAlgorithm(CreateAndAddFoliationAlgorithm())
+        self.addAlgorithm(CreateAndAddFaultAlgorithm())
+        self.addAlgorithm(AddFaultTopologyAlgorithm())
         pass
 
     def id(self) -> str:
