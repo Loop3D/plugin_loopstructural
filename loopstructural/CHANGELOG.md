@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.1.8](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.7...v0.1.8) (2025-08-26)
+
+
+### Bug Fixes
+
+* abstract data table into separate class ([3a253a6](https://github.com/Loop3D/plugin_loopstructural/commit/3a253a6b4b7f9f2cf401ba0a682be727fc1aadce))
+* add AddFaultDialog and AddFoldFrameDialog for fault and fold frame creation ([367c252](https://github.com/Loop3D/plugin_loopstructural/commit/367c252697fe80d8de388ba9446e8d1d94874e51))
+* add convert from feature to structural frame button ([7cfd1ad](https://github.com/Loop3D/plugin_loopstructural/commit/7cfd1ade0e74c6bacc0e8b527d05175081dec274))
+* add data table to feature details panel ([8948cde](https://github.com/Loop3D/plugin_loopstructural/commit/8948cded69bb1eae51882e7a7605b703ba29eaef))
+* add pyqtgraph ([67b06ba](https://github.com/Loop3D/plugin_loopstructural/commit/67b06ba3a5cd29f409b2c15b956f83f95c7bdddb))
+* add unconformity button ([7b78503](https://github.com/Loop3D/plugin_loopstructural/commit/7b7850366e5032a001b7231f6d445d5c1e4380de))
+* adding splot dialog ([a027910](https://github.com/Loop3D/plugin_loopstructural/commit/a0279101cdd44c522a419e07d19526ad46f2771b))
+* convert from structural frame to fold frame ([5c9dfe7](https://github.com/Loop3D/plugin_loopstructural/commit/5c9dfe74480962d68bc48e503a453ef8ba43e59c))
+* copy data to new feature name if name changes ([136a6a5](https://github.com/Loop3D/plugin_loopstructural/commit/136a6a5fef1bcb2d8e9122cb57d1a03d05185340))
+* dip direction now works ([a422032](https://github.com/Loop3D/plugin_loopstructural/commit/a42203287b0443e93d4b68432c0fba98c740d50f))
+* don't try and add id to widget ([4286e07](https://github.com/Loop3D/plugin_loopstructural/commit/4286e07c10fc95075a68c2b4c00e4ab762b779c9))
+* ensure geoh5py try catch actually has import in the block ([4c71c6c](https://github.com/Loop3D/plugin_loopstructural/commit/4c71c6c9b36d117c81017047417b89269e145bb9))
+* integrate layer selection table into add foliation dialog ([0bcc4da](https://github.com/Loop3D/plugin_loopstructural/commit/0bcc4dacb1e6ebb1882dd2370f0b2ca52ecca8cf))
+* linting ([7d8d47a](https://github.com/Loop3D/plugin_loopstructural/commit/7d8d47a621373cf54a5ef36f22868ba62eab1e29))
+* move model_setup to own submodule. Change from add fold frame to just foliation ([ee7e8cc](https://github.com/Loop3D/plugin_loopstructural/commit/ee7e8ccb2a976c7bb724e18e7f306cac4480c3ec))
+* pass pitch to fault model ([d32d962](https://github.com/Loop3D/plugin_loopstructural/commit/d32d96225af1f08103279bee4b22395110c37dcf))
+* remove layer name from delete button ([422bc14](https://github.com/Loop3D/plugin_loopstructural/commit/422bc1476f84916e55382aefe579194344f4a1aa))
+* replace items table with layer selection table in base feature details panel ([c4b649c](https://github.com/Loop3D/plugin_loopstructural/commit/c4b649c76a48855f4c371146ffa59edeab30ecb3))
+* upgrade LS ([5016afb](https://github.com/Loop3D/plugin_loopstructural/commit/5016afbde1a63ca997aa7085d6fa05731280cac0))
+* use data arg, not specifc name ([a6d70ec](https://github.com/Loop3D/plugin_loopstructural/commit/a6d70ec0a2d912f3c2e6363f40d71cdf1f9a6594))
+
 ## [0.1.7](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.6...v0.1.7) (2025-07-30)
 
 
