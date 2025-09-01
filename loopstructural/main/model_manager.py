@@ -11,57 +11,10 @@ from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
 from LoopStructural.modelling.features import FeatureType, StructuralFrame
 from LoopStructural.modelling.features.fold import FoldFrame
-from loopstructural.toolbelt.preferences import PlgSettingsStructure
+from loopstructural.toolbelt.preferences import PlgOptionsManager, PlgSettingsStructure
+from loopstructural.main.utils import process_gdf_for_faults
+from loopstructural.main.samplers import AllSampler
 
-
-class AllSampler:
-    """This is a simple sampler that just returns all the points, or all of the vertices
-    of a line. It will also copy the elevation from the DEM or the elevation set in the data manager.
-    """
-
-    def __call__(self, line: gpd.GeoDataFrame, dem: Callable, use_z: bool) -> pd.DataFrame:
-        """Sample the line and return a DataFrame with X, Y, Z coordinates and attributes."""
-        points = []
-        feature_id = 0
-        if line is None:
-            return pd.DataFrame(points, columns=['X', 'Y', 'Z', 'feature_id'])
-        for geom in line.geometry:
-            attributes = line.iloc[feature_id].to_dict()
-            attributes.pop('geometry', None)  # Remove geometry from attributes
-            if geom.geom_type == 'LineString':
-                coords = list(geom.coords)
-                for coord in coords:
-                    x, y = coord[0], coord[1]
-                    # Use Z from geometry if available, otherwise use DEM
-                    if use_z and len(coord) > 2:
-                        z = coord[2]
-                    else:
-                        z = dem(x, y)
-                    points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
-            elif geom.geom_type == 'MultiLineString':
-                for l in geom.geoms:
-                    coords = list(l.coords)
-                    for coord in coords:
-                        x, y = coord[0], coord[1]
-                        # Use Z from geometry if available, otherwise use DEM
-                        if use_z and len(coord) > 2:
-                            z = coord[2]
-                        else:
-                            z = dem(x, y)
-                        points.append(
-                            {'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes}
-                        )
-            elif geom.geom_type == 'Point':
-                x, y = geom.x, geom.y
-                # Use Z from geometry if available, otherwise use DEM
-                if use_z and hasattr(geom, 'z'):
-                    z = geom.z
-                else:
-                    z = dem(x, y)
-                points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
-            feature_id += 1
-        df = pd.DataFrame(points)
-        return df
 
 
 class GeologicalModelManager:
@@ -123,24 +76,16 @@ class GeologicalModelManager:
         """
         # sample fault trace
         self.faults.clear()  # Clear existing faults
-        fault_points = sampler(fault_trace, self.dem_function, use_z_coordinate)
-        cols = ['X', 'Y', 'Z']
-        if fault_name_field is not None and fault_name_field in fault_points.columns:
-            fault_points['fault_name'] = fault_points[fault_name_field].astype(str)
-        else:
-            fault_points['fault_name'] = fault_points['feature_id'].astype(str)
-        if fault_dip_field is not None and fault_dip_field in fault_points.columns:
-            fault_points['dip'] = fault_points[fault_dip_field]
-            cols.append('dip')
-        if (
-            fault_displacement_field is not None
-            and fault_displacement_field in fault_points.columns
-        ):
-            fault_points['displacement'] = fault_points[fault_displacement_field]
-            cols.append('displacement')
-        if fault_pitch_field is not None and fault_pitch_field in fault_points.columns:
-            fault_points['pitch'] = fault_points[fault_pitch_field]
-            cols.append('pitch')
+        fault_points, cols = process_gdf_for_faults(
+            fault_trace=fault_trace,
+            sampler=sampler,
+            dem_function=self.dem_function,
+            use_z_coordinate=use_z_coordinate,
+            fault_name_field=fault_name_field,
+            fault_dip_field=fault_dip_field,
+            fault_displacement_field=fault_displacement_field,
+            fault_pitch_field=fault_pitch_field,
+        )
         existing_faults = set(self.fault_topology.faults)
         for fault_name in fault_points['fault_name'].unique():
             self.faults[fault_name]['data'] = fault_points.loc[
@@ -260,14 +205,15 @@ class GeologicalModelManager:
                 print(f"No data found for group {groupname}, skipping.")
                 continue
             data = pd.concat(data, ignore_index=True)
+            opts = PlgOptionsManager.get_plg_settings()
             foliation = self.model.create_and_add_foliation(
                 groupname,
                 data=data,
                 force_constrained=True,
-                nelements=PlgSettingsStructure.interpolator_nelements,
-                npw=PlgSettingsStructure.interpolator_npw,
-                cpw=PlgSettingsStructure.interpolator_cpw,
-                regularisation=PlgSettingsStructure.interpolator_regularisation,
+                nelements=opts.interpolator_nelements,
+                npw=opts.interpolator_npw,
+                cpw=opts.interpolator_cpw,
+                regularisation=opts.interpolator_regularisation,
             )
             self.model.add_unconformity(foliation, 0)
         self.model.stratigraphic_column = self.stratigraphic_column
@@ -296,16 +242,17 @@ class GeologicalModelManager:
                 else:
                     pitch = 0
 
+                opts = PlgOptionsManager.get_plg_settings()
                 self.model.create_and_add_fault(
                     fault_name,
                     displacement=displacement,
                     fault_dip=dip,
                     fault_pitch=pitch,
                     data=data,
-                    nelements=PlgSettingsStructure.interpolator_nelements,
-                    npw=PlgSettingsStructure.interpolator_npw,
-                    cpw=PlgSettingsStructure.interpolator_cpw,
-                    regularisation=PlgSettingsStructure.interpolator_regularisation,
+                    nelements=opts.interpolator_nelements,
+                    npw=opts.interpolator_npw,
+                    cpw=opts.interpolator_cpw,
+                    regularisation=opts.interpolator_regularisation,
                 )
         for f in self.fault_topology.faults:
             for f2 in self.fault_topology.faults:
