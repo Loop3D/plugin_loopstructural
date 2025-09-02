@@ -85,6 +85,7 @@ class ModellingDataManager:
             except json.JSONDecodeError as e:
                 self.logger(message=f"Error loading data manager: {e}", log_level=2)
     def onNewProject(self):
+        self.logger(message="New project created, clearing data...", log_level=3)
         self.update_from_dict({})
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
@@ -187,7 +188,7 @@ class ModellingDataManager:
     def set_use_dem(self, use_dem):
         self.use_dem = use_dem
         self._model_manager.set_dem_function(self.dem_function)
-
+        
     def set_basal_contacts(self, basal_contacts, unitname_field=None, use_z_coordinate=False):
         """Set the basal contacts for the model."""
         self._basal_contacts = {
@@ -465,6 +466,7 @@ class ModellingDataManager:
             self._structural_orientations = data['structural_orientations']
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+            print([o.name for o in self._stratigraphic_column.order])
             self.stratigraphic_column_callback()
 
     def update_from_dict(self, data):
@@ -539,6 +541,8 @@ class ModellingDataManager:
 
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
+        print([o.name for o in self._stratigraphic_column.order])
+
 
     def find_layer_by_name(self, layer_name):
         """Find a layer by name in the project."""
