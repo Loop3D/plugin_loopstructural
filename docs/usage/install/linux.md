@@ -27,7 +27,7 @@
    ```
 2. Use `pip` to install the required dependencies for the plugin. Navigate to the directory containing the `requirements` files and run:
    ```bash
-   pip install LoopStructural pyvista pyvistaqt meshio geoh5py
+   pip install -e requirements.txt
    ```
 
 ### Step 3: Install the Plugin via QGIS Plugin Manager

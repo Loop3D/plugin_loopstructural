@@ -20,7 +20,7 @@
    ```
 2. Use `pip` to install the required dependencies for the plugin. Navigate to the directory containing the `requirements` files and run:
    ```bash
-   pip install -r requirements/development.txt
+   pip install -r requirements.txt
    ```
 
 ### Step 3: Install the Plugin via QGIS Plugin Manager
