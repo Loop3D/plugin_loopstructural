@@ -3,3 +3,4 @@ pyvista
 LoopStructural==1.6.21
 pyqtgraph
 loopsolver
+geopandas
