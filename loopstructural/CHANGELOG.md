@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.9](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.8...v0.1.9) (2025-09-03)
+
+
+### Bug Fixes
+
+* add delete feature option ([a194636](https://github.com/Loop3D/plugin_loopstructural/commit/a194636eb3885d1213b9548f2c01d749d37ad72f))
+* add logging for when project is cleared ([80f6762](https://github.com/Loop3D/plugin_loopstructural/commit/80f67625d47003e958a5aea59efed926af4f16d4))
+* add loopsolver for inequalities ([5f6ebee](https://github.com/Loop3D/plugin_loopstructural/commit/5f6ebee505da75568b2980647f873d9bc54a5e30))
+* catch dem missing error ([14fcc9e](https://github.com/Loop3D/plugin_loopstructural/commit/14fcc9e9c5c04ce3ea30d7c3e5034355771f3cd9))
+* remove feature selector from foliation dialog ([d0f3502](https://github.com/Loop3D/plugin_loopstructural/commit/d0f35022dc2283bc8b03654531549e3006199871))
+* reset plugin when new project created ([5a3d33c](https://github.com/Loop3D/plugin_loopstructural/commit/5a3d33cc0eab3c35f1097e34931f07d878b4a12d))
+* set dem on load ([128f1da](https://github.com/Loop3D/plugin_loopstructural/commit/128f1da65a7a2d20e4fbdc9b1be0332336c40977))
+* upgrade ls ([83850ee](https://github.com/Loop3D/plugin_loopstructural/commit/83850eee8817e16f1bd54193ec8939752b7463e6))
+
 ## [0.1.8](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.7...v0.1.8) (2025-08-26)
 
 
