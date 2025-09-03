@@ -1,4 +1,3 @@
-import geoh5py
 import pyvista as pv
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
@@ -106,6 +105,7 @@ class ObjectListWidget(QWidget):
         # Determine available formats based on object type and dependencies
         formats = []
         try:
+            import geoh5py  
             has_geoh5py = True
         except ImportError:
             has_geoh5py = False
