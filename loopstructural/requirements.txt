@@ -1,5 +1,5 @@
 pyvistaqt
 pyvista
-LoopStructural==1.6.20
+LoopStructural==1.6.21
 pyqtgraph
 loopsolver
