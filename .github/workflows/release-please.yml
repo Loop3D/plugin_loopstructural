@@ -38,5 +38,5 @@ jobs:
           curl -X POST \
             -H "Authorization: token ${{ secrets.GH_PAT }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/Loop3d/${{ env.PACKAGE_NAME }}/actions/workflows/release.yml/dispatches \
+            https://api.github.com/repos/Loop3d/${{ env.PACKAGE_NAME }}/actions/workflows/releaser.yml/dispatches \
             -d "{\"ref\":\"${{ steps.tag.outputs.tag }}\"}"
