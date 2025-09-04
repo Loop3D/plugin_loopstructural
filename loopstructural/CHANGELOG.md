@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.9...v0.1.10) (2025-09-04)
+
+
+### Bug Fixes
+
+* add geopandas ([62a8124](https://github.com/Loop3D/plugin_loopstructural/commit/62a8124c06a083e3748706c588016aceb7bc8861))
+
 ## [0.1.9](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.8...v0.1.9) (2025-09-03)
 
 
