@@ -1,4 +1,5 @@
-from PyQt5.QtCore import Qt
+import numpy as np
+from PyQt5.QtCore import Qt, QVariant
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,9 +14,11 @@ from PyQt5.QtWidgets import (
 
 from .layer_selection_table import LayerSelectionTable
 from .splot import SPlotDialog
+from .bounding_box_widget import BoundingBoxWidget
 from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip, plungeazimuth2vector
-
+from LoopStructural import getLogger
+logger = getLogger(__name__)
 
 class BaseFeatureDetailsPanel(QWidget):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
@@ -42,6 +45,7 @@ class BaseFeatureDetailsPanel(QWidget):
         # Set the main layout
         self.setLayout(mainLayout)
 
+        
         ## define interpolator parameters
         # Regularisation spin box
         self.regularisation_spin_box = QDoubleSpinBox()
@@ -50,20 +54,20 @@ class BaseFeatureDetailsPanel(QWidget):
             feature.builder.build_arguments.get('regularisation', 1.0)
         )
         self.regularisation_spin_box.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments({'regularisation': value})
+            lambda value: self.feature.builder.update_build_arguments({'regularisation': value})
         )
         self.cpw_spin_box = QDoubleSpinBox()
         self.cpw_spin_box.setRange(0, 100)
         self.cpw_spin_box.setValue(feature.builder.build_arguments.get('cpw', 1.0))
         self.cpw_spin_box.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments({'cpw': value})
+            lambda value: self.feature.builder.update_build_arguments({'cpw': value})
         )
 
         self.npw_spin_box = QDoubleSpinBox()
         self.npw_spin_box.setRange(0, 100)
         self.npw_spin_box.setValue(feature.builder.build_arguments.get('npw', 1.0))
         self.npw_spin_box.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments({'npw': value})
+            lambda value: self.feature.builder.update_build_arguments({'npw': value})
         )
         self.interpolator_type_label = QLabel("Interpolator Type:")
         self.interpolator_type_combo = QComboBox()
@@ -92,8 +96,176 @@ class BaseFeatureDetailsPanel(QWidget):
         QgsCollapsibleGroupBox.setLayout(form_layout)
         self.layout.addWidget(QgsCollapsibleGroupBox)
         self.layout.addWidget(self.layer_table)
+        self.addMidBlock()
+        self.addExportBlock()
+    def addMidBlock(self):
+        """Base mid block is intentionally empty now — bounding-box controls
+        were moved into the export/evaluation section so they appear alongside
+        export controls. Subclasses should override this to add feature-specific
+        mid-panel controls.
+        """
+        return
 
-        # self.layout.addLayout(form_layout)
+    def addExportBlock(self):
+        # Export/Evaluation blocks container
+        self.export_eval_container = QWidget()
+        self.export_eval_layout = QVBoxLayout(self.export_eval_container)
+        self.export_eval_layout.setContentsMargins(0, 0, 0, 0)
+        self.export_eval_layout.setSpacing(6)
+
+        # --- Bounding box controls (moved here into dedicated widget) ---
+        bb_widget = BoundingBoxWidget(parent=self, model_manager=self.model_manager, data_manager=self.data_manager)
+        # keep reference so export handlers can use it
+        self.bounding_box_widget = bb_widget
+        self.export_eval_layout.addWidget(bb_widget)
+
+        # --- Per-feature export controls (for this panel's feature) ---
+        try:
+            from PyQt5.QtWidgets import QFormLayout, QHBoxLayout
+            from PyQt5.QtWidgets import QGroupBox
+            from qgis.core import QgsVectorLayer, QgsFeature, QgsFields, QgsField, QgsProject, QgsGeometry, QgsPointXYZ
+        except Exception:
+            # imports may fail outside QGIS environment; we'll handle at runtime
+            pass
+
+        export_widget = QWidget()
+        export_layout = QFormLayout(export_widget)
+
+        # Scalar selector (support scalar and gradient)
+        self.scalar_field_combo = QComboBox()
+        self.scalar_field_combo.addItems(["scalar", "gradient"])
+        export_layout.addRow("Scalar:", self.scalar_field_combo)
+
+        # Evaluate target: bounding-box centres or project point layer
+        self.evaluate_target_combo = QComboBox()
+        self.evaluate_target_combo.addItems(["Bounding box cell centres", "Project point layer"])
+        export_layout.addRow("Evaluate on:", self.evaluate_target_combo)
+
+        # Project layer selector (populated with point vector layers from project)
+        self.project_layer_combo = QComboBox()
+        self.project_layer_combo.setEnabled(False)
+        export_layout.addRow("Project point layer:", self.project_layer_combo)
+
+        # Connect evaluate target change to enable/disable project layer combo
+        def _on_evaluate_target_changed(index):
+            use_project = (index == 1)
+            self.project_layer_combo.setEnabled(use_project)
+            if use_project:
+                try:
+                    self.populate_project_point_layers()
+                except Exception:
+                    pass
+
+        self.evaluate_target_combo.currentIndexChanged.connect(_on_evaluate_target_changed)
+
+        
+
+        
+
+        
+
+        # Export button
+        self.export_points_button = QPushButton("Export to QGIS points")
+        export_layout.addRow(self.export_points_button)
+        self.export_points_button.clicked.connect(self._export_scalar_points)
+
+        self.export_eval_layout.addWidget(export_widget)
+
+        # Dictionary to hold per-feature export/eval blocks for later population
+        self.export_blocks = {}
+
+        # Create a placeholder block for each feature known to the model_manager.
+        # These blocks are intentionally minimal now (only a disabled label) and
+        # will be populated with export/evaluate controls later.
+        if self.model_manager is not None:
+            for feat in self.model_manager.features(): 
+                block = QWidget()
+                block.setObjectName(f"export_block_{getattr(feat, 'name', 'feature')}")
+                block_layout = QVBoxLayout(block)
+                block_layout.setContentsMargins(0, 0, 0, 0)
+                # Placeholder label — disabled until controls are added
+                lbl = QLabel(getattr(feat, 'name', ''))
+                lbl.setEnabled(False)
+                block_layout.addWidget(lbl)
+                self.export_eval_layout.addWidget(block)
+                self.export_blocks[getattr(feat, 'name', f"feature_{len(self.export_blocks)}")] = block
+
+        self.layout.addWidget(self.export_eval_container)
+
+    def populate_project_point_layers(self):
+        """Populate self.project_layer_combo with point vector layers from the QGIS project.
+
+        Guarded so the module can be imported outside QGIS.
+        """
+        try:
+            from qgis.core import QgsProject, QgsWkbTypes, QgsMapLayer
+        except Exception:
+            return
+
+        self.project_layer_combo.clear()
+        for lyr in QgsProject.instance().mapLayers().values():
+            try:
+                if lyr.type() == QgsMapLayer.VectorLayer and lyr.geometryType() == QgsWkbTypes.PointGeometry:
+                    self.project_layer_combo.addItem(lyr.name(), lyr.id())
+            except Exception:
+                continue
+
+    def _on_bounding_box_updated(self, bounding_box):
+        """Callback to update UI widgets when bounding box object changes externally.
+
+        Blocks spinbox signals to avoid feedback loops, updates nelements, nsteps,
+        and then restores signals.
+        """
+        # Collect spinboxes if they exist on this instance
+        spinboxes = []
+        for name in ('bb_nelements_spinbox', 'bb_nsteps_x', 'bb_nsteps_y', 'bb_nsteps_z'):
+            sb = getattr(self, name, None)
+            if sb is not None:
+                spinboxes.append(sb)
+
+        # Block signals
+        for sb in spinboxes:
+            try:
+                sb.blockSignals(True)
+            except Exception:
+                pass
+
+        try:
+            if getattr(bounding_box, 'nelements', None) is not None and hasattr(self, 'bb_nelements_spinbox'):
+                try:
+                    self.bb_nelements_spinbox.setValue(int(getattr(bounding_box, 'nelements')))
+                except Exception:
+                    try:
+                        self.bb_nelements_spinbox.setValue(getattr(bounding_box, 'nelements'))
+                    except Exception:
+                        logger.debug('Could not set nelements spinbox from bounding_box', exc_info=True)
+
+            if getattr(bounding_box, 'nsteps', None) is not None:
+                try:
+                    nsteps = list(bounding_box.nsteps)
+                except Exception:
+                    try:
+                        nsteps = [int(bounding_box.nsteps[0]), int(bounding_box.nsteps[1]), int(bounding_box.nsteps[2])]
+                    except Exception:
+                        nsteps = None
+                if nsteps is not None:
+                    try:
+                        if hasattr(self, 'bb_nsteps_x'):
+                            self.bb_nsteps_x.setValue(int(nsteps[0]))
+                        if hasattr(self, 'bb_nsteps_y'):
+                            self.bb_nsteps_y.setValue(int(nsteps[1]))
+                        if hasattr(self, 'bb_nsteps_z'):
+                            self.bb_nsteps_z.setValue(int(nsteps[2]))
+                    except Exception:
+                        logger.debug('Could not set nsteps spinboxes from bounding_box', exc_info=True)
+
+        finally:
+            # Unblock signals
+            for sb in spinboxes:
+                try:
+                    sb.blockSignals(False)
+                except Exception:
+                    pass
 
     def updateNelements(self, value):
         """Update the number of elements in the feature's interpolator."""
@@ -120,7 +292,191 @@ class BaseFeatureDetailsPanel(QWidget):
             elif feature.interpolator is not None:
                 return feature.interpolator.n_elements
         return 1000
+    def _export_scalar_points(self):
+        """Gather points (bounding-box centres or project point layer), evaluate feature values
+        using the model_manager and add the resulting GeoDataFrame as a memory layer to the
+        QGIS project. Imports and QGIS calls are guarded so the module can be imported
+        outside of QGIS.
+        """
+        # determine scalar type
+        print('HERE')
+        logger.info('Exporting scalar points')
+        scalar_type = self.scalar_field_combo.currentText() if hasattr(self, 'scalar_field_combo') else 'scalar'
 
+        # gather points
+        pts = None
+        attributes_df = None
+        crs = self.data_manager.project.crs().authid()
+        try:
+            # QGIS imports (guarded)
+            from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsPoint, QgsFields, QgsField
+            from qgis.PyQt.QtCore import QVariant
+        except Exception as e:
+            # Not running inside QGIS — nothing to do
+            logger.info('Not running inside QGIS, cannot export points')
+            print(e)
+            return
+
+        # Evaluate on bounding box grid
+        if self.evaluate_target_combo.currentIndex() == 0:
+            # use bounding-box resolution or custom nsteps
+            logger.info('Using bounding box cell centres for evaluation')
+            bb = None
+            try:
+                bb = getattr(self.model_manager.model, 'bounding_box', None)
+            except Exception:
+                bb = None
+
+            
+
+            
+            pts = self.model_manager.model.bounding_box.cell_centres()
+            # no extra attributes for grid
+            attributes_df = None
+            logger.info(f'Got {len(pts)} points from bounding box cell centres')
+        else:
+            # Evaluate on an existing project point layer
+            layer_id = None
+            try:
+                layer_id = self.project_layer_combo.currentData()
+            except Exception:
+                layer_id = None
+            if layer_id is None:
+                return
+            layer = QgsProject.instance().mapLayer(layer_id)
+            if layer is None:
+                return
+            # build points array and attributes
+            pts_list = []
+            attrs = []
+            fields = [f.name() for f in layer.fields()]
+            for feat in layer.getFeatures():
+                try:
+                    geom = feat.geometry()
+                    if geom is None or geom.isEmpty():
+                        continue
+                    # handle point geometries
+                    if geom.type() == 0:  # QgsWkbTypes.PointGeometry -> numeric value 0
+                        try:
+                            p = geom.asPoint()
+                            x, y = p.x(), p.y()
+                            # some QgsPoint has z attribute
+                            try:
+                                z = p.z()
+                            except Exception:
+                                z = self.model_manager.dem_function(x, y) if hasattr(self.model_manager, 'dem_function') else 0
+                        except Exception:
+                            # fallback to centroid
+                            try:
+                                c = geom.centroid().asPoint()
+                                x, y = c.x(), c.y()
+                                z = self.model_manager.dem_function(x, y) if hasattr(self.model_manager, 'dem_function') else 0
+                            except Exception:
+                                continue
+                        pts_list.append((x, y, z))
+                        # collect attributes
+                        row = {k: feat[k] for k in fields}
+                        attrs.append(row)
+                    else:
+                        # skip non-point geometries
+                        continue
+                except Exception:
+                    continue
+            if len(pts_list) == 0:
+                return
+            import pandas as _pd
+            pts = _pd.DataFrame(pts_list).values
+            try:
+                attributes_df = _pd.DataFrame(attrs)
+            except Exception:
+                attributes_df = None
+            try:
+                crs = layer.crs().authid()
+            except Exception:
+                crs = None
+
+        # call model_manager to produce GeoDataFrame
+        try:
+            logger.info('Exporting feature values to GeoDataFrame')
+            gdf = self.model_manager.export_feature_values_to_geodataframe(
+                self.feature.name,
+                pts,
+                scalar_type=scalar_type,
+                attributes=attributes_df,
+                crs=crs,
+            )
+        except Exception as e:
+            logger.debug('Failed to export feature values', exc_info=True)
+            return
+
+        # convert returned GeoDataFrame to a QGIS memory layer and add to project
+        if gdf is None or len(gdf) == 0:
+            return
+
+        # create memory layer
+        # derive CRS string if available
+        layer_uri = 'Point'
+        if hasattr(gdf, 'crs') and gdf.crs is not None:
+            try:
+                crs_str = gdf.crs.to_string()
+                if crs_str:
+                    layer_uri = f"Point?crs={crs_str}"
+            except Exception:
+                pass
+        mem_layer = QgsVectorLayer(layer_uri, f"model_{self.feature.name}", 'memory')
+        prov = mem_layer.dataProvider()
+
+        # add fields
+        cols = [c for c in gdf.columns if c != 'geometry']
+        qfields = []
+        for c in cols:
+            sample = gdf[c].dropna()
+            qtype = QVariant.String
+            if not sample.empty:
+                v = sample.iloc[0]
+                if isinstance(v, (int,)):
+                    qtype = QVariant.Int
+                elif isinstance(v, (float,)):
+                    qtype = QVariant.Double
+                else:
+                    qtype = QVariant.String
+            prov.addAttributes([QgsField(c, qtype)])
+            qfields.append(c)
+        mem_layer.updateFields()
+
+        # add features
+        feats = []
+        for _, row in gdf.reset_index(drop=True).iterrows():
+            f = QgsFeature()
+            # set attributes in provider order
+            attr_vals = [row.get(c) for c in qfields]
+            try:
+                f.setAttributes(attr_vals)
+            except Exception:
+                pass
+            # geometry
+            try:
+                geom = row.get('geometry')
+                if geom is not None:
+                    # try to extract x,y,z from shapely Point
+                    try:
+                        x, y = geom.x, geom.y
+                        z = geom.z if hasattr(geom, 'z') else None
+                        if z is None:
+                            qgsp = QgsPoint(x, y, 0)
+                        else:
+                            qgsp = QgsPoint(x, y, z)
+                        f.setGeometry(qgsp)
+                    except Exception:
+                        # fallback: skip geometry
+                        pass
+            except Exception:
+                pass
+            feats.append(f)
+        if feats:
+            prov.addFeatures(feats)
+            mem_layer.updateExtents()
+            QgsProject.instance().addMapLayer(mem_layer)
 
 class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
@@ -211,6 +567,7 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
         if feature is None:
             raise ValueError("Feature must be provided.")
         self.feature = feature
+    def addMidBlock(self):
         form_layout = QFormLayout()
         fold_frame_combobox = QComboBox()
         fold_frame_combobox.addItems([""] + [f.name for f in self.model_manager.fold_frames])
@@ -229,6 +586,7 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
         # Remove redundant layout setting
         self.setLayout(self.layout)
 
+
     def on_fold_frame_changed(self, text):
         self.model_manager.add_fold_to_feature(self.feature.name, fold_frame_name=text)
 
@@ -241,6 +599,7 @@ class StructuralFrameFeatureDetailsPanel(BaseFeatureDetailsPanel):
 class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
         super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
+    def addMidBlock(self):    
         # Remove redundant layout setting
         # self.setLayout(self.layout)
         form_layout = QFormLayout()
@@ -252,10 +611,10 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         norm_length.setRange(0, 100000)
         norm_length.setValue(1)  # Set a default value
         norm_length.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments(
+            lambda value: self.feature.builder.update_build_arguments(
                 {
                     'fold_weights': {
-                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        **self.feature.builder.build_arguments.get('fold_weights', {}),
                         'fold_norm': value,
                     }
                 }
@@ -267,10 +626,10 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         norm_weight.setRange(0, 100000)
         norm_weight.setValue(1)
         norm_weight.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments(
+            lambda value: self.feature.builder.update_build_arguments(
                 {
                     'fold_weights': {
-                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        **self.feature.builder.build_arguments.get('fold_weights', {}),
                         'fold_normalisation': value,
                     }
                 }
@@ -282,10 +641,10 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         fold_axis_weight.setRange(0, 100000)
         fold_axis_weight.setValue(1)
         fold_axis_weight.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments(
+            lambda value: self.feature.builder.update_build_arguments(
                 {
                     'fold_weights': {
-                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        **self.feature.builder.build_arguments.get('fold_weights', {}),
                         'fold_axis_w': value,
                     }
                 }
@@ -297,10 +656,10 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         fold_orientation_weight.setRange(0, 100000)
         fold_orientation_weight.setValue(1)
         fold_orientation_weight.valueChanged.connect(
-            lambda value: feature.builder.update_build_arguments(
+            lambda value: self.feature.builder.update_build_arguments(
                 {
                     'fold_weights': {
-                        **feature.builder.build_arguments.get('fold_weights', {}),
+                        **self.feature.builder.build_arguments.get('fold_weights', {}),
                         'fold_orientation': value,
                     }
                 }
@@ -311,7 +670,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         average_fold_axis_checkbox = QCheckBox("Average Fold Axis")
         average_fold_axis_checkbox.setChecked(True)
         average_fold_axis_checkbox.stateChanged.connect(
-            lambda state: feature.builder.update_build_arguments(
+            lambda state: self.feature.builder.update_build_arguments(
                 {'av_fold_axis': state != Qt.Checked}
             )
         )
@@ -363,3 +722,5 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
             vector = plungeazimuth2vector(plunge, azimuth)[0]
             if plunge is not None and azimuth is not None:
                 self.feature.builder.update_build_arguments({'fold_axis': vector})
+
+    

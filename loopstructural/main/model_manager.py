@@ -426,3 +426,107 @@ class GeologicalModelManager:
     def fold_frames(self):
         """Return the fold frames in the model."""
         return [f for f in self.model.features if f.type == FeatureType.STRUCTURALFRAME]
+
+    def evaluate_feature_on_points(self, feature_name: str, points: np.ndarray, scalar_type: str = 'scalar') -> np.ndarray:
+        """Evaluate a model feature at the provided points.
+
+        :param feature_name: Name of the feature to evaluate.
+        :param points: Nx3 numpy array of points [x, y, z].
+        :param scalar_type: 'scalar' or 'gradient'.
+        :returns: numpy array of evaluated values. For 'scalar' an (N,) array is returned. For 'gradient' an (N,3) array is returned if supported.
+        """
+        if self.model is None:
+            raise RuntimeError('No model available for evaluation')
+        pts = np.asarray(points)
+        if pts.ndim != 2 or pts.shape[1] < 3:
+            raise ValueError('points must be an Nx3 array')
+
+        try:
+            if scalar_type == 'gradient':
+                # Prefer a dedicated gradient evaluation method if available
+                if hasattr(self.model, 'evaluate_feature_gradient'):
+                    vals = self.model.evaluate_feature_gradient(feature_name, pts)
+                else:
+                    # Some models may support a gradient flag on the value evaluator
+                    try:
+                        vals = self.model.evaluate_feature_value(feature_name, pts, gradient=True)
+                    except TypeError:
+                        # Not supported by the model
+                        raise RuntimeError('Model does not support gradient evaluation')
+            else:
+                vals = self.model.evaluate_feature_value(feature_name, pts)
+            return np.asarray(vals)
+        except Exception:
+            # Re-raise with context preserved for the caller/UI to handle
+            raise
+
+    def export_feature_values_to_geodataframe(
+        self,
+        feature_name: str,
+        points: np.ndarray,
+        scalar_type: str = 'scalar',
+        attributes: 'pd.DataFrame' = None,
+        crs: str | None = None,
+        value_field_name: str | None = None,
+    ) -> 'gpd.GeoDataFrame':
+        """Evaluate a feature on points and return a GeoDataFrame with results.
+
+        :param feature_name: Feature name to evaluate.
+        :param points: Nx3 array-like of points (x,y,z).
+        :param scalar_type: 'scalar' or 'gradient'.
+        :param attributes: Optional pandas DataFrame with attributes to attach (must have same length as points).
+        :param crs: Optional CRS for the returned GeoDataFrame (e.g. 'EPSG:4326'). If None, GeoDataFrame will be created without CRS.
+        :param value_field_name: Optional name for the value field; defaults to '{feature_name}_value' or '{feature_name}_gradient'.
+        :returns: GeoDataFrame with geometry and value columns (and any provided attributes).
+        """
+        import pandas as _pd
+        import geopandas as _gpd
+        try:
+            from shapely.geometry import Point as _Point
+        except Exception:
+            print("Shapely not available; geometry column will be omitted." )
+            _Point = None
+        if crs is None:
+            crs = self.project.
+        pts = np.asarray(points)
+        if pts.ndim != 2 or pts.shape[1] < 3:
+            raise ValueError('points must be an Nx3 array')
+
+        values = self.evaluate_feature_on_points(feature_name, pts, scalar_type=scalar_type)
+
+        # Build a DataFrame
+        df = _pd.DataFrame({'x': pts[:, 0], 'y': pts[:, 1], 'z': pts[:, 2]})
+
+        if scalar_type == 'gradient':
+            vals = np.asarray(values)
+            if vals.ndim == 2 and vals.shape[1] == 3:
+                df['gx'] = vals[:, 0]
+                df['gy'] = vals[:, 1]
+                df['gz'] = vals[:, 2]
+                # also provide magnitude
+                df[f'{feature_name}_gmag'] = np.linalg.norm(vals, axis=1)
+            else:
+                # Unexpected shape; attempt to flatten
+                df[f'{feature_name}_gradient'] = list(vals)
+        else:
+            df[value_field_name or f"{feature_name}_value"] = np.asarray(values)
+
+        # Attach attributes if provided
+        if attributes is not None:
+            try:
+                attributes = _pd.DataFrame(attributes).reset_index(drop=True)
+                df = _pd.concat([df.reset_index(drop=True), attributes.reset_index(drop=True)], axis=1)
+            except Exception:
+                # ignore attributes if they cannot be combined
+                pass
+
+        # Create geometry column
+        geoms = None
+        if _Point is not None:
+            geoms = [_Point(x, y, z) for x, y, z in pts]
+            gdf = _gpd.GeoDataFrame(df, geometry=geoms, crs=crs)
+        else:
+            # shapely not available; return a regular DataFrame inside a GeoDataFrame placeholder
+            gdf = _gpd.GeoDataFrame(df)
+
+        return gdf
