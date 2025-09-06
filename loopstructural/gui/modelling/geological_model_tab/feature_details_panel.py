@@ -299,7 +299,6 @@ class BaseFeatureDetailsPanel(QWidget):
         outside of QGIS.
         """
         # determine scalar type
-        print('HERE')
         logger.info('Exporting scalar points')
         scalar_type = self.scalar_field_combo.currentText() if hasattr(self, 'scalar_field_combo') else 'scalar'
 
@@ -668,31 +667,31 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         form_layout.addRow("Fold Orientation Weight", fold_orientation_weight)
 
         average_fold_axis_checkbox = QCheckBox("Average Fold Axis")
-        average_fold_axis_checkbox.setChecked(True)
+        average_fold_axis_checkbox.setChecked(False)
         average_fold_axis_checkbox.stateChanged.connect(
             lambda state: self.feature.builder.update_build_arguments(
                 {'av_fold_axis': state != Qt.Checked}
             )
         )
         average_fold_axis_checkbox.stateChanged.connect(
-            lambda state: fold_azimuth.setEnabled(state == Qt.Checked)
+            lambda state: self.fold_azimuth.setEnabled(state != Qt.Checked)
         )
         average_fold_axis_checkbox.stateChanged.connect(
-            lambda state: fold_plunge.setEnabled(state == Qt.Checked)
+            lambda state: self.fold_plunge.setEnabled(state != Qt.Checked)
         )
-        fold_plunge = QDoubleSpinBox()
-        fold_plunge.setRange(0, 90)
-        fold_plunge.setValue(0)
-        fold_azimuth = QDoubleSpinBox()
-        fold_azimuth.setRange(0, 360)
-        fold_azimuth.setValue(0)
-        fold_azimuth.setEnabled(False)
-        fold_plunge.setEnabled(False)
-        fold_plunge.valueChanged.connect(self.foldAxisFromPlungeAzimuth)
-        fold_azimuth.valueChanged.connect(self.foldAxisFromPlungeAzimuth)
+        self.fold_plunge = QDoubleSpinBox()
+        self.fold_plunge.setRange(0, 90)
+        self.fold_plunge.setValue(0)
+        self.fold_azimuth = QDoubleSpinBox()
+        self.fold_azimuth.setRange(0, 360)
+        self.fold_azimuth.setValue(0)
+        self.fold_azimuth.setEnabled(False)
+        self.fold_plunge.setEnabled(False)
+        self.fold_plunge.valueChanged.connect(self.foldAxisFromPlungeAzimuth)
+        self.fold_azimuth.valueChanged.connect(self.foldAxisFromPlungeAzimuth)
         form_layout.addRow(average_fold_axis_checkbox)
-        form_layout.addRow("Fold Plunge", fold_plunge)
-        form_layout.addRow("Fold Azimuth", fold_azimuth)
+        form_layout.addRow("Fold Plunge", self.fold_plunge)
+        form_layout.addRow("Fold Azimuth", self.fold_azimuth)
         # splot_button = QPushButton("S-Plot")
         # splot_button.clicked.connect(
         #     lambda: self.open_splot_dialog()
@@ -714,13 +713,12 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         """Calculate the fold axis from plunge and azimuth."""
         if self.feature:
             plunge = (
-                self.layout().itemAt(0).widget().findChild(QDoubleSpinBox, "fold_plunge").value()
+                self.fold_plunge.value()
             )
             azimuth = (
-                self.layout().itemAt(0).widget().findChild(QDoubleSpinBox, "fold_azimuth").value()
-            )
+                self.fold_azimuth.value())
             vector = plungeazimuth2vector(plunge, azimuth)[0]
             if plunge is not None and azimuth is not None:
-                self.feature.builder.update_build_arguments({'fold_axis': vector})
+                self.feature.builder.update_build_arguments({'fold_axis': vector.tolist()})
 
     
