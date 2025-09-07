@@ -60,7 +60,19 @@ class ObjectPropertiesWidget(QWidget):
         # Show Edges
         self.show_edges_checkbox = QCheckBox("Show Edges")
         self.show_edges_checkbox.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        # call set_show_edges when toggled
+        self.show_edges_checkbox.toggled.connect(self.set_show_edges)
         layout.addWidget(self.show_edges_checkbox)
+
+        # Line Width
+        layout.addWidget(QLabel("Line Width:"))
+        self.line_width_slider = QSlider(Qt.Horizontal)
+        # allow 0..20, interpreted as float line width
+        self.line_width_slider.setRange(0, 20)
+        self.line_width_slider.setValue(1)
+        self.line_width_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.line_width_slider.valueChanged.connect(lambda val: self.set_line_width(val))
+        layout.addWidget(self.line_width_slider)
 
         # Colormap Range
         range_layout = QHBoxLayout()
@@ -160,6 +172,110 @@ class ObjectPropertiesWidget(QWidget):
         except Exception:
             pass
 
+    def set_show_edges(self, show: bool):
+        """Enable or disable edge display for the current object.
+        Best-effort support for both pyvista actor wrappers and raw VTK actors.
+        """
+        if self.current_object_name is None or self.viewer is None:
+            return
+        try:
+            mesh_entry = self.viewer.meshes.get(self.current_object_name, {})
+            actor = mesh_entry.get('actor')
+            if actor is None:
+                return
+            # pyvista-style
+            if hasattr(actor, 'prop'):
+                try:
+                    actor.prop.edge_visibility = bool(show)
+                except Exception:
+                    pass
+                try:
+                    # some wrappers expose setter methods on prop
+                    actor.prop.SetEdgeVisibility(bool(show))
+                except Exception:
+                    pass
+            # raw VTK actor
+            elif hasattr(actor, 'GetProperty'):
+                try:
+                    prop = actor.GetProperty()
+                    if hasattr(prop, 'SetEdgeVisibility'):
+                        prop.SetEdgeVisibility(bool(show))
+                    else:
+                        # fall back to On/Off style methods
+                        if bool(show) and hasattr(prop, 'EdgeVisibilityOn'):
+                            prop.EdgeVisibilityOn()
+                        elif not bool(show) and hasattr(prop, 'EdgeVisibilityOff'):
+                            prop.EdgeVisibilityOff()
+                except Exception:
+                    pass
+            # update metadata
+            try:
+                kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+                kwargs['show_edges'] = bool(show)
+                mesh_entry['kwargs'] = kwargs
+                # persist back to viewer.meshes
+                if hasattr(self.viewer, 'meshes') and self.current_object_name in self.viewer.meshes:
+                    self.viewer.meshes[self.current_object_name] = mesh_entry
+            except Exception:
+                pass
+            # request render
+            plotter = getattr(self.viewer, 'plotter', None)
+            if plotter is not None and hasattr(plotter, 'render'):
+                try:
+                    plotter.render()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def set_line_width(self, value):
+        """Set the line width for edge rendering. Value is an integer slider value; interpreted as float width."""
+        try:
+            width = float(value)
+        except Exception:
+            return
+        if self.current_object_name is None or self.viewer is None:
+            return
+        try:
+            mesh_entry = self.viewer.meshes.get(self.current_object_name, {})
+            actor = mesh_entry.get('actor')
+            if actor is None:
+                return
+            if hasattr(actor, 'prop'):
+                try:
+                    actor.prop.line_width = width
+                except Exception:
+                    pass
+                try:
+                    actor.prop.SetLineWidth(width)
+                except Exception:
+                    pass
+            elif hasattr(actor, 'GetProperty'):
+                try:
+                    prop = actor.GetProperty()
+                    if hasattr(prop, 'SetLineWidth'):
+                        prop.SetLineWidth(width)
+                except Exception:
+                    pass
+            # update metadata
+            try:
+                kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+                kwargs['line_width'] = width
+                mesh_entry['kwargs'] = kwargs
+                if hasattr(self.viewer, 'meshes') and self.current_object_name in self.viewer.meshes:
+                    self.viewer.meshes[self.current_object_name] = mesh_entry
+            except Exception:
+                pass
+            # request render
+            plotter = getattr(self.viewer, 'plotter', None)
+            if plotter is not None and hasattr(plotter, 'render'):
+                try:
+                    plotter.render()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def setCurrentObject(self, object_name: str):
         self.current_object_name = object_name
         mesh_entry = self.viewer.meshes.get(object_name, None)
@@ -239,6 +355,50 @@ class ObjectPropertiesWidget(QWidget):
             if mapper is not None and hasattr(mapper, 'scalar_visibility'):
                 vis = bool(getattr(mapper, 'scalar_visibility'))
             self.scalar_bar_checkbox.setChecked(vis)
+        except Exception:
+            pass
+
+        # restore edge and line width from metadata or actor
+        try:
+            kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+            show_edges = kwargs.get('show_edges', None)
+            line_width = kwargs.get('line_width', None)
+            actor = mesh_entry.get('actor', None)
+            if show_edges is None and actor is not None:
+                try:
+                    prop = getattr(actor, 'prop', None)
+                    if prop is not None and hasattr(prop, 'edge_visibility'):
+                        show_edges = bool(getattr(prop, 'edge_visibility'))
+                    elif hasattr(actor, 'GetProperty'):
+                        p = actor.GetProperty()
+                        if hasattr(p, 'GetEdgeVisibility'):
+                            show_edges = bool(p.GetEdgeVisibility())
+                except Exception:
+                    show_edges = False
+            if line_width is None and actor is not None:
+                try:
+                    prop = getattr(actor, 'prop', None)
+                    if prop is not None and hasattr(prop, 'line_width'):
+                        line_width = float(getattr(prop, 'line_width'))
+                    elif hasattr(actor, 'GetProperty'):
+                        p = actor.GetProperty()
+                        if hasattr(p, 'GetLineWidth'):
+                            line_width = float(p.GetLineWidth())
+                except Exception:
+                    line_width = 1.0
+            if show_edges is None:
+                show_edges = False
+            if line_width is None:
+                line_width = 1.0
+            self.show_edges_checkbox.blockSignals(True)
+            self.show_edges_checkbox.setChecked(bool(show_edges))
+            self.show_edges_checkbox.blockSignals(False)
+            self.line_width_slider.blockSignals(True)
+            try:
+                self.line_width_slider.setValue(int(round(float(line_width))))
+            except Exception:
+                self.line_width_slider.setValue(1)
+            self.line_width_slider.blockSignals(False)
         except Exception:
             pass
 
