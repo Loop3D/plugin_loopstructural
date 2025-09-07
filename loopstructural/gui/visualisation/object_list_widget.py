@@ -245,10 +245,12 @@ class ObjectListWidget(QWidget):
 
         item_widget = self.treeWidget.itemWidget(selected_items[0], 0)
         object_label = item_widget.findChild(QLabel).text()
-        object = self.viewer.objects.get(object_label, None)
-        if object is None:
+        mesh_dict = self.viewer.meshes.get(object_label, None)
+        if mesh_dict is None:
             return
-
+        mesh = mesh_dict.get('mesh', None)
+        if mesh is None:
+            return
         # Determine available formats based on object type and dependencies
         formats = []
         try:
@@ -293,28 +295,28 @@ class ObjectListWidget(QWidget):
         try:
             if selected_format == "obj":
                 (
-                    object.save(file_path)
-                    if hasattr(object, "save")
-                    else pv.save_meshio(file_path, object)
+                    mesh.save(file_path)
+                    if hasattr(mesh, "save")
+                    else pv.save_meshio(file_path, mesh)
                 )
             elif selected_format == "vtk":
-                pv.save_meshio(file_path, object)
+                pv.save_meshio(file_path, mesh  )
             elif selected_format == "ply":
-                pv.save_meshio(file_path, object)
+                pv.save_meshio(file_path, mesh)
             elif selected_format == "vtp":
                 (
-                    object.save(file_path)
-                    if hasattr(object, "save")
-                    else pv.save_meshio(file_path, object)
+                    mesh.save(file_path)
+                    if hasattr(mesh, "save")
+                    else pv.save_meshio(file_path, mesh)
                 )
             elif selected_format == "geoh5":
                 with geoh5py.Geoh5(file_path, overwrite=True) as geoh5:
-                    if hasattr(object, "faces"):
+                    if hasattr(mesh, "faces"):
                         geoh5.add_surface(
-                            name=object_label, vertices=object.points, faces=object.faces
+                            name=object_label, vertices=mesh.points, faces=mesh.faces
                         )
                     else:
-                        geoh5.add_points(name=object_label, vertices=object.points)
+                        geoh5.add_points(name=object_label, vertices=mesh.points)
             print(f"Exported {object_label} to {file_path} as {selected_format}")
         except Exception as e:
             print(f"Failed to export object: {e}")
