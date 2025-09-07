@@ -30,7 +30,7 @@ class ObjectPropertiesWidget(QWidget):
         self.scalar_combo.currentTextChanged.connect(self._on_scalar_changed)
         layout.addWidget(self.scalar_combo)
 
-        # Color with Scalar checkbox (new)
+        # Color with Scalar checkbox
         self.color_with_scalar_checkbox = QCheckBox("Color with Scalar")
         self.color_with_scalar_checkbox.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.color_with_scalar_checkbox.toggled.connect(self._on_color_with_scalar_toggled)
@@ -108,73 +108,75 @@ class ObjectPropertiesWidget(QWidget):
         # Connect color button to color dialog
         self.color_button.clicked.connect(self.choose_color)
 
-        # Initialize UI state: default to not coloring by scalar until an object is selected
+        # Initialize UI state
         self.color_with_scalar_checkbox.setChecked(False)
-        # Ensure controls reflect the initial state
         self._on_color_with_scalar_toggled(False)
 
     def choose_color(self):
         color = QColorDialog.getColor()
-        if color.isValid():
-            self.color_button.setStyleSheet(f"background-color: {color.name()}")
-            try:
-                actor = self.viewer.meshes[self.current_object_name]['actor']
-                # pyvista/VTK actor property access may vary; try common attributes
-                if hasattr(actor, 'prop'):
+        if not color.isValid():
+            return
+        self.color_button.setStyleSheet(f"background-color: {color.name()}")
+        try:
+            if not self.current_object_name:
+                return
+            actor = self.viewer.meshes[self.current_object_name]['actor']
+            if hasattr(actor, 'prop'):
+                try:
                     actor.prop.color = (color.redF(), color.greenF(), color.blueF())
-                elif hasattr(actor, 'GetProperty'):
+                except Exception:
+                    pass
+            elif hasattr(actor, 'GetProperty'):
+                try:
                     prop = actor.GetProperty()
                     prop.SetColor(color.redF(), color.greenF(), color.blueF())
-                # store color in metadata if present
-                if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                    self.viewer.meshes[self.current_object_name].set('color', (color.redF(), color.greenF(), color.blueF()))
-            except Exception:
-                pass
+                except Exception:
+                    pass
+            # store color in metadata
+            if self.current_object_name in getattr(self.viewer, 'meshes', {}):
+                self.viewer.meshes[self.current_object_name]['color'] = (color.redF(), color.greenF(), color.blueF())
+        except Exception:
+            pass
 
     def set_opacity(self, value: float):
-        """Set the opacity of the current object.
-
-        :param value: Opacity value between 0.0 (transparent) and 1.0 (opaque)
-        """
         if self.current_object_name is None or self.viewer is None:
             return
         try:
             actor = self.viewer.meshes[self.current_object_name]['actor']
             if hasattr(actor, 'prop'):
-                actor.prop.opacity = value
+                try:
+                    actor.prop.opacity = value
+                except Exception:
+                    pass
             elif hasattr(actor, 'GetProperty'):
-                prop = actor.GetProperty()
-                prop.SetOpacity(value)
+                try:
+                    prop = actor.GetProperty()
+                    prop.SetOpacity(value)
+                except Exception:
+                    pass
             # store in metadata
             if self.current_object_name in getattr(self.viewer, 'meshes', {}):
                 self.viewer.meshes[self.current_object_name].set('kwargs', {**self.viewer.meshes[self.current_object_name].get('kwargs', {}), 'opacity': value})
         except Exception:
             pass
-   
 
     def setCurrentObject(self, object_name: str):
-        """Populate the properties widget for the given object.
-
-        :param object_name: name of the selected object
-        """
         self.current_object_name = object_name
-        # viewer.meshes stores a dict with keys 'mesh', 'actor', 'kwargs'
         mesh_entry = self.viewer.meshes.get(object_name, None)
         if mesh_entry is None:
             self.current_mesh = None
             self.title_label.setText(f"Object: {object_name} (not found)")
-            # clear histogram
             self._update_histogram(None)
             return
         self.current_mesh = mesh_entry.get('mesh', None)
         self.title_label.setText(f"Object: {object_name}")
 
-        # Default values
+        # reset small things
         self.scalar_bar_checkbox.setChecked(False)
         self.range_min.clear()
         self.range_max.clear()
 
-        # Populate scalar combo with available arrays
+        # populate scalar combo
         self.scalar_combo.blockSignals(True)
         self.scalar_combo.clear()
         self.scalar_combo.addItem("<none>")
@@ -184,53 +186,41 @@ class ObjectPropertiesWidget(QWidget):
             for k in sorted(pdata.keys()):
                 self.scalar_combo.addItem(k)
             for k in sorted(cdata.keys()):
-                # prefix cell_ to help user know where it comes from
                 self.scalar_combo.addItem(f"cell:{k}")
         except Exception:
             pass
 
-        # If kwargs indicate a previously-used scalar, select it
+        # restore previous scalar selection if available
         try:
             kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
             prev_scalars = kwargs.get('scalars')
             if prev_scalars:
-                # if scalar came from cell data, it may be stored as 'cell:NAME' or just NAME
                 sel_name = prev_scalars
-                # prefer 'cell:...' if that exists in the combo
                 if f"cell:{prev_scalars}" in [self.scalar_combo.itemText(i) for i in range(self.scalar_combo.count())]:
                     sel_name = f"cell:{prev_scalars}"
-                # set selection without emitting signals
                 idx = self.scalar_combo.findText(sel_name)
                 if idx >= 0:
                     self.scalar_combo.setCurrentIndex(idx)
             else:
-                # ensure default selection is <none>
                 idx = self.scalar_combo.findText("<none>")
                 if idx >= 0:
                     self.scalar_combo.setCurrentIndex(idx)
         except Exception:
             pass
-
         self.scalar_combo.blockSignals(False)
 
-        # Try to infer a scalar range from mesh data (point or cell data)
+        # infer scalar range for display
         try:
             if self.current_mesh is not None:
-                # Prefer point_data, fall back to cell_data
                 pdata = getattr(self.current_mesh, 'point_data', None) or {}
                 cdata = getattr(self.current_mesh, 'cell_data', None) or {}
-                first = None
                 vals = None
                 if len(pdata.keys()) > 0:
-                    first = next(iter(pdata.keys()))
-                    vals = pdata[first]
+                    vals = next(iter(pdata.values()))
                 elif len(cdata.keys()) > 0:
-                    first = next(iter(cdata.keys()))
-                    vals = cdata[first]
-
+                    vals = next(iter(cdata.values()))
                 if vals is not None:
                     try:
-                        # attempt numpy-like min/max or python min/max
                         mn = float(getattr(vals, 'min', lambda: min(vals))()) if hasattr(vals, 'min') else float(min(vals))
                         mx = float(getattr(vals, 'max', lambda: max(vals))()) if hasattr(vals, 'max') else float(max(vals))
                         self.range_min.setText(str(mn))
@@ -238,210 +228,32 @@ class ObjectPropertiesWidget(QWidget):
                     except Exception:
                         self.range_min.clear()
                         self.range_max.clear()
-
         except Exception:
-            # Keep defaults on error
             pass
 
-        # Try to detect scalar bar visibility via viewer/actor if provided
+        # detect scalar bar visibility
         try:
-            if self.viewer is not None and hasattr(self.viewer, 'mesh' or 'meshes') and object_name in getattr(self.viewer, 'meshes', {}):
-                actor = self.viewer.meshes[object_name].get('actor', None)
-                # some actor wrappers expose mapper.scalar_visibility or similar
-                mapper = getattr(actor, 'mapper', None)
-                vis = False
-                if mapper is not None and hasattr(mapper, 'scalar_visibility'):
-                    vis = bool(getattr(mapper, 'scalar_visibility'))
-                # update checkbox (best-effort)
-                self.scalar_bar_checkbox.setChecked(vis)
+            actor = mesh_entry.get('actor', None)
+            mapper = getattr(actor, 'mapper', None)
+            vis = False
+            if mapper is not None and hasattr(mapper, 'scalar_visibility'):
+                vis = bool(getattr(mapper, 'scalar_visibility'))
+            self.scalar_bar_checkbox.setChecked(vis)
         except Exception:
-            # ignore failures
             pass
 
-        # Determine initial 'color with scalar' state from stored kwargs if available
+        # determine initial color-with-scalar
         try:
             kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
-            # If scalars or cmap were provided when the mesh was added, default to coloring with scalar
             default_color_with_scalar = bool(kwargs.get('scalars') or kwargs.get('cmap'))
-            # set without emitting signal to avoid immediate re-add
             self.color_with_scalar_checkbox.blockSignals(True)
             self.color_with_scalar_checkbox.setChecked(default_color_with_scalar)
             self.color_with_scalar_checkbox.blockSignals(False)
-            # update controls to reflect this choice
             self._on_color_with_scalar_toggled(default_color_with_scalar)
         except Exception:
-            # ignore any failure and leave the previously set state
             pass
 
-        # Update histogram for the currently selected scalar (if any and if enabled)
-        try:
-            current_scalar = self.scalar_combo.currentText()
-            vals = self._get_scalar_values(current_scalar)
-            self._update_histogram(vals if self.color_with_scalar_checkbox.isChecked() else None)
-        except Exception:
-            self._update_histogram(None)
-
-    def choose_color(self):
-        color = QColorDialog.getColor()
-        if color.isValid():
-            self.color_button.setStyleSheet(f"background-color: {color.name()}")
-            try:
-                actor = self.viewer.meshes[self.current_object_name]['actor']
-                # pyvista/VTK actor property access may vary; try common attributes
-                if hasattr(actor, 'prop'):
-                    actor.prop.color = (color.redF(), color.greenF(), color.blueF())
-                elif hasattr(actor, 'GetProperty'):
-                    prop = actor.GetProperty()
-                    prop.SetColor(color.redF(), color.greenF(), color.blueF())
-                # store color in metadata if present
-                if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                    self.viewer.meshes[self.current_object_name].set('color', (color.redF(), color.greenF(), color.blueF()))
-            except Exception:
-                pass
-
-    def set_opacity(self, value: float):
-        """Set the opacity of the current object.
-
-        :param value: Opacity value between 0.0 (transparent) and 1.0 (opaque)
-        """
-        if self.current_object_name is None or self.viewer is None:
-            return
-        try:
-            actor = self.viewer.meshes[self.current_object_name]['actor']
-            if hasattr(actor, 'prop'):
-                actor.prop.opacity = value
-            elif hasattr(actor, 'GetProperty'):
-                prop = actor.GetProperty()
-                prop.SetOpacity(value)
-            # store in metadata
-            if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                self.viewer.meshes[self.current_object_name].set('kwargs', {**self.viewer.meshes[self.current_object_name].get('kwargs', {}), 'opacity': value})
-        except Exception:
-            pass
-   
-
-    def setCurrentObject(self, object_name: str):
-        """Populate the properties widget for the given object.
-
-        :param object_name: name of the selected object
-        """
-        self.current_object_name = object_name
-        # viewer.meshes stores a dict with keys 'mesh', 'actor', 'kwargs'
-        mesh_entry = self.viewer.meshes.get(object_name, None)
-        if mesh_entry is None:
-            self.current_mesh = None
-            self.title_label.setText(f"Object: {object_name} (not found)")
-            # clear histogram
-            self._update_histogram(None)
-            return
-        self.current_mesh = mesh_entry.get('mesh', None)
-        self.title_label.setText(f"Object: {object_name}")
-
-        # Default values
-        self.scalar_bar_checkbox.setChecked(False)
-        self.range_min.clear()
-        self.range_max.clear()
-
-        # Populate scalar combo with available arrays
-        self.scalar_combo.blockSignals(True)
-        self.scalar_combo.clear()
-        self.scalar_combo.addItem("<none>")
-        try:
-            pdata = getattr(self.current_mesh, 'point_data', None) or {}
-            cdata = getattr(self.current_mesh, 'cell_data', None) or {}
-            for k in sorted(pdata.keys()):
-                self.scalar_combo.addItem(k)
-            for k in sorted(cdata.keys()):
-                # prefix cell_ to help user know where it comes from
-                self.scalar_combo.addItem(f"cell:{k}")
-        except Exception:
-            pass
-
-        # If kwargs indicate a previously-used scalar, select it
-        try:
-            kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
-            prev_scalars = kwargs.get('scalars')
-            if prev_scalars:
-                # if scalar came from cell data, it may be stored as 'cell:NAME' or just NAME
-                sel_name = prev_scalars
-                # prefer 'cell:...' if that exists in the combo
-                if f"cell:{prev_scalars}" in [self.scalar_combo.itemText(i) for i in range(self.scalar_combo.count())]:
-                    sel_name = f"cell:{prev_scalars}"
-                # set selection without emitting signals
-                idx = self.scalar_combo.findText(sel_name)
-                if idx >= 0:
-                    self.scalar_combo.setCurrentIndex(idx)
-            else:
-                # ensure default selection is <none>
-                idx = self.scalar_combo.findText("<none>")
-                if idx >= 0:
-                    self.scalar_combo.setCurrentIndex(idx)
-        except Exception:
-            pass
-
-        self.scalar_combo.blockSignals(False)
-
-        # Try to infer a scalar range from mesh data (point or cell data)
-        try:
-            if self.current_mesh is not None:
-                # Prefer point_data, fall back to cell_data
-                pdata = getattr(self.current_mesh, 'point_data', None) or {}
-                cdata = getattr(self.current_mesh, 'cell_data', None) or {}
-                first = None
-                vals = None
-                if len(pdata.keys()) > 0:
-                    first = next(iter(pdata.keys()))
-                    vals = pdata[first]
-                elif len(cdata.keys()) > 0:
-                    first = next(iter(cdata.keys()))
-                    vals = cdata[first]
-
-                if vals is not None:
-                    try:
-                        # attempt numpy-like min/max or python min/max
-                        mn = float(getattr(vals, 'min', lambda: min(vals))()) if hasattr(vals, 'min') else float(min(vals))
-                        mx = float(getattr(vals, 'max', lambda: max(vals))()) if hasattr(vals, 'max') else float(max(vals))
-                        self.range_min.setText(str(mn))
-                        self.range_max.setText(str(mx))
-                    except Exception:
-                        self.range_min.clear()
-                        self.range_max.clear()
-
-        except Exception:
-            # Keep defaults on error
-            pass
-
-        # Try to detect scalar bar visibility via viewer/actor if provided
-        try:
-            if self.viewer is not None and hasattr(self.viewer, 'mesh' or 'meshes') and object_name in getattr(self.viewer, 'meshes', {}):
-                actor = self.viewer.meshes[object_name].get('actor', None)
-                # some actor wrappers expose mapper.scalar_visibility or similar
-                mapper = getattr(actor, 'mapper', None)
-                vis = False
-                if mapper is not None and hasattr(mapper, 'scalar_visibility'):
-                    vis = bool(getattr(mapper, 'scalar_visibility'))
-                # update checkbox (best-effort)
-                self.scalar_bar_checkbox.setChecked(vis)
-        except Exception:
-            # ignore failures
-            pass
-
-        # Determine initial 'color with scalar' state from stored kwargs if available
-        try:
-            kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
-            # If scalars or cmap were provided when the mesh was added, default to coloring with scalar
-            default_color_with_scalar = bool(kwargs.get('scalars') or kwargs.get('cmap'))
-            # set without emitting signal to avoid immediate re-add
-            self.color_with_scalar_checkbox.blockSignals(True)
-            self.color_with_scalar_checkbox.setChecked(default_color_with_scalar)
-            self.color_with_scalar_checkbox.blockSignals(False)
-            # update controls to reflect this choice
-            self._on_color_with_scalar_toggled(default_color_with_scalar)
-        except Exception:
-            # ignore any failure and leave the previously set state
-            pass
-
-        # Update histogram for the currently selected scalar (if any and if enabled)
+        # update histogram display
         try:
             current_scalar = self.scalar_combo.currentText()
             vals = self._get_scalar_values(current_scalar)
@@ -450,29 +262,38 @@ class ObjectPropertiesWidget(QWidget):
             self._update_histogram(None)
 
     def _on_scalar_changed(self, scalar_name: str):
-        """Handler when the user selects a different active scalar.
-
-        Approach: remove the existing actor/object and re-add it passing the
-        chosen scalar name to the viewer. This keeps the viewer in control of
-        actor creation and colormap handling.
-        """
-        # update histogram preview first (don't require re-add to preview)
+        # update histogram preview immediately
         try:
             vals = self._get_scalar_values(scalar_name)
-            self._update_histogram(vals)
+            self._update_histogram(vals if self.color_with_scalar_checkbox.isChecked() else None)
         except Exception:
             self._update_histogram(None)
 
-        if not self.current_object_name or self.viewer is None:
+        # if not coloring by scalar, only update metadata
+        if not self.color_with_scalar_checkbox.isChecked():
+            try:
+                if self.current_object_name in getattr(self.viewer, 'meshes', {}):
+                    self.viewer.meshes[self.current_object_name].set('kwargs', {**self.viewer.meshes[self.current_object_name].get('kwargs', {}), 'scalars': None})
+            except Exception:
+                pass
             return
 
+        # try in-place update
+        try:
+            self._apply_scalar_to_actor(self.current_object_name, scalar_name)
+            return
+        except Exception:
+            pass
+
+        # fallback to remove/add
+        if not self.current_object_name or self.viewer is None:
+            return
         mesh_entry = self.viewer.meshes.get(self.current_object_name, None)
         if mesh_entry is None:
             return
         mesh = mesh_entry.get('mesh')
         old_kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
 
-        # Determine scalars parameter and whether it's point or cell data
         scalars = None
         if scalar_name and scalar_name != "<none>":
             if scalar_name.startswith('cell:'):
@@ -480,7 +301,6 @@ class ObjectPropertiesWidget(QWidget):
             else:
                 scalars = scalar_name
 
-        # Determine cmap and clim from widgets
         cmap = self.colormap_combo.currentText() or None
         clim = None
         try:
@@ -492,20 +312,15 @@ class ObjectPropertiesWidget(QWidget):
         opacity = old_kwargs.get('opacity', None)
         show_scalar_bar = self.scalar_bar_checkbox.isChecked()
 
-        # Remove existing object and re-add with new scalars
         try:
-            # preserve name: remove_object removes metadata so re-adding keeps same name
             self.viewer.remove_object(self.current_object_name)
         except Exception:
-            # if remove fails, continue and try to add anyway (may create duplicate names)
             pass
 
         try:
             self.viewer.add_mesh_object(mesh, name=self.current_object_name, scalars=scalars, cmap=cmap, clim=clim, opacity=opacity, show_scalar_bar=show_scalar_bar)
-            # refresh local pointers
             self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
         except Exception:
-            # on failure, try to add without scalars
             try:
                 self.viewer.add_mesh_object(mesh, name=self.current_object_name)
                 self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
@@ -513,32 +328,50 @@ class ObjectPropertiesWidget(QWidget):
                 pass
 
     def _on_color_with_scalar_toggled(self, checked: bool):
-        """Enable/disable scalar/colormap controls vs solid color selector.
-
-        When checked: enable scalar selection, colormap and colormap range and scalar bar.
-        When unchecked: enable surface color chooser and disable scalar-related controls.
-        """
         try:
-            # scalar-related controls
             self.scalar_combo.setEnabled(checked)
             self.colormap_combo.setEnabled(checked)
             self.range_min.setEnabled(checked)
             self.range_max.setEnabled(checked)
             self.scalar_bar_checkbox.setEnabled(checked)
-            # color chooser is enabled only when not coloring by scalar
             self.color_button.setEnabled(not checked)
-            # histogram visibility follows scalar-mode
             self.hist_canvas.setVisible(checked)
+
+            if self.current_object_name and self.current_object_name in getattr(self.viewer, 'meshes', {}):
+                current_scalar = self.scalar_combo.currentText()
+                if checked:
+                    try:
+                        self._apply_scalar_to_actor(self.current_object_name, current_scalar)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        actor = self.viewer.meshes[self.current_object_name].get('actor')
+                        mapper = getattr(actor, 'mapper', None)
+                        if mapper is not None:
+                            try:
+                                if hasattr(mapper, 'scalar_visibility'):
+                                    mapper.scalar_visibility = False
+                            except Exception:
+                                pass
+                            try:
+                                if hasattr(mapper, 'ScalarVisibilityOff'):
+                                    mapper.ScalarVisibilityOff()
+                            except Exception:
+                                pass
+                        stored = self.viewer.meshes[self.current_object_name].get('kwargs', {})
+                        color = self.viewer.meshes[self.current_object_name].get('color') or stored.get('color')
+                        if color is not None and hasattr(actor, 'prop'):
+                            try:
+                                actor.prop.color = color
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
         except Exception:
             pass
 
-    # New helper methods for histogram
     def _get_scalar_values(self, scalar_name: str):
-        """Return a numpy array of scalar values for the current mesh and scalar_name.
-
-        scalar_name can be '<none>', 'name' (point data) or 'cell:name'.
-        Returns None if values cannot be retrieved.
-        """
         if not scalar_name or scalar_name == "<none>" or self.current_mesh is None:
             return None
         try:
@@ -560,13 +393,9 @@ class ObjectPropertiesWidget(QWidget):
             return None
 
     def _update_histogram(self, values):
-        """Draw the histogram of the provided scalar values. If values is None,
-        clear the axes and show a placeholder message.
-        """
         try:
             self.hist_ax.clear()
             if values is None:
-                # show placeholder
                 self.hist_ax.text(0.5, 0.5, 'No scalar selected', ha='center', va='center', transform=self.hist_ax.transAxes)
                 self.hist_ax.set_xticks([])
                 self.hist_ax.set_yticks([])
@@ -576,5 +405,115 @@ class ObjectPropertiesWidget(QWidget):
                 self.hist_ax.set_ylabel('Count')
             self.hist_canvas.draw_idle()
         except Exception:
-            # swallow plotting errors
+            pass
+
+    def _apply_scalar_to_actor(self, object_name: str, scalar_name: str):
+        if not object_name or self.viewer is None:
+            raise RuntimeError("No viewer or object specified")
+        mesh_entry = self.viewer.meshes.get(object_name)
+        if mesh_entry is None:
+            raise RuntimeError("Object not found in viewer.meshes")
+        mesh = mesh_entry.get('mesh')
+        actor = mesh_entry.get('actor')
+
+        # disable mapping if requested
+        if not scalar_name or scalar_name == "<none>":
+            mapper = getattr(actor, 'mapper', None)
+            if mapper is not None:
+                if hasattr(mapper, 'scalar_visibility'):
+                    mapper.scalar_visibility = False
+                if hasattr(mapper, 'ScalarVisibilityOff'):
+                    mapper.ScalarVisibilityOff()
+            mesh_entry.setdefault('kwargs', {})['scalars'] = None
+            return
+
+        # resolve scalar name
+        use_cell = False
+        scalars = scalar_name
+        if scalar_name.startswith('cell:'):
+            scalars = scalar_name.split(':', 1)[1]
+            use_cell = True
+
+        values = self._get_scalar_values(scalar_name)
+        if values is None:
+            raise RuntimeError('Failed to retrieve scalar values')
+
+        plotter = getattr(self.viewer, 'plotter', None)
+        applied = False
+        if plotter is not None and hasattr(plotter, 'update_scalars'):
+            try:
+                plotter.update_scalars(values, mesh=mesh, render=True, name=object_name)
+                applied = True
+            except Exception:
+                applied = False
+
+        if not applied:
+            mapper = getattr(actor, 'mapper', None)
+            if mapper is None:
+                raise RuntimeError('Actor has no mapper to update')
+            # try to select color array
+            try:
+                if hasattr(mapper, 'SelectColorArray'):
+                    mapper.SelectColorArray(scalars)
+            except Exception:
+                pass
+            try:
+                if hasattr(mapper, 'SetArrayName'):
+                    mapper.SetArrayName(scalars)
+            except Exception:
+                pass
+            try:
+                if hasattr(mapper, 'scalar_visibility'):
+                    mapper.scalar_visibility = True
+            except Exception:
+                pass
+            try:
+                if hasattr(mapper, 'ScalarVisibilityOn'):
+                    mapper.ScalarVisibilityOn()
+            except Exception:
+                pass
+            # set scalar range
+            try:
+                if self.range_min.text() and self.range_max.text():
+                    mn = float(self.range_min.text())
+                    mx = float(self.range_max.text())
+                    if hasattr(mapper, 'SetScalarRange'):
+                        mapper.SetScalarRange(mn, mx)
+                    elif hasattr(mapper, 'scalar_range'):
+                        mapper.scalar_range = (mn, mx)
+            except Exception:
+                pass
+
+        # best-effort to set colormap via plotter's actor/lookup table
+        try:
+            cmap = self.colormap_combo.currentText() or None
+            if cmap and hasattr(plotter, 'add_mesh'):
+                # Changing lookup-table programmatically is backend/version dependent; try to trigger a re-render
+                try:
+                    if hasattr(plotter, 'render'):
+                        plotter.render()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # update metadata
+        try:
+            kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+            kwargs['scalars'] = scalars
+            kwargs['cmap'] = self.colormap_combo.currentText() or None
+            if self.range_min.text() and self.range_max.text():
+                try:
+                    kwargs['clim'] = (float(self.range_min.text()), float(self.range_max.text()))
+                except Exception:
+                    kwargs['clim'] = None
+            mesh_entry['kwargs'] = kwargs
+        except Exception:
+            pass
+
+        # request render
+        try:
+            if plotter is not None and hasattr(plotter, 'render'):
+                plotter.render()
+        except Exception:
             pass
