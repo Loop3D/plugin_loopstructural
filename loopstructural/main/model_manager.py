@@ -1,3 +1,14 @@
+"""Geological model manager utilities used by the LoopStructural plugin.
+
+This module exposes the `GeologicalModelManager` which wraps a LoopStructural
+`GeologicalModel` and provides helpers to ingest GeoDataFrames, update
+stratigraphy and faults, evaluate features on point clouds or meshes, and
+export results to GeoDataFrames or VTK meshes.
+
+The goal of the manager is to isolate data transformation, sampling and
+interaction with the LoopStructural model from the GUI code.
+"""
+
 from collections import defaultdict
 from typing import Callable
 
@@ -162,6 +173,27 @@ class GeologicalModelManager:
         unit_name_field=None,
         use_z_coordinate=False,
     ):
+        """Ingest basal contact traces and populate internal stratigraphy.
+
+        Parameters
+        ----------
+        basal_contacts : geopandas.GeoDataFrame
+            GeoDataFrame containing basal contact geometries and attributes.
+        sampler : callable, optional
+            Callable used to sample geometries to point rows (default: AllSampler()).
+        unit_name_field : str or None
+            Field name in `basal_contacts` giving the stratigraphic unit name. If
+            None the function returns early.
+        use_z_coordinate : bool
+            If True, use Z values from geometries when available; otherwise use
+            the manager's DEM function.
+
+        Notes
+        -----
+        This method clears existing stratigraphy and replaces contact entries
+        keyed by unit name. It does not notify observers; callers should call
+        `update_model` or trigger observers as required.
+        """
         self.stratigraphy.clear()  # Clear existing stratigraphy
         unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
         if len(unit_points) == 0 or unit_points.empty:
@@ -345,6 +377,14 @@ class GeologicalModelManager:
             observer()
 
     def features(self):
+        """Return the list of features currently held by the internal model.
+
+        Returns
+        -------
+        list
+            List-like collection of feature objects contained in the wrapped
+            LoopStructural `GeologicalModel`.
+        """
         return self.model.features
 
     def add_foliation(
@@ -355,6 +395,31 @@ class GeologicalModelManager:
         sampler=AllSampler(),
         use_z_coordinate=False,
     ):
+        """Create and add a foliation feature from grouped input layers.
+
+        Parameters
+        ----------
+        name : str
+            Name for the new foliation feature.
+        data : dict
+            Mapping of layer identifiers to dicts describing each layer. Each
+            layer dict must include a 'type' key (one of 'Orientation',
+            'Formline', 'Value', 'Inequality') and the fields required by that
+            type (e.g. 'strike_field', 'dip_field', 'value_field', ...).
+        folded_feature_name : str or None
+            Optional name of a feature to which the foliation should be
+            associated/converted (currently unused in this helper).
+        sampler : callable, optional
+            Callable used to sample provided GeoDataFrames into plain pandas
+            rows (default: AllSampler()).
+        use_z_coordinate : bool
+            Whether to use Z coordinates from input geometries when present.
+
+        Raises
+        ------
+        ValueError
+            If a layer uses an unknown 'type' value.
+        """
         # for z
         dfs = []
         kwargs={}
@@ -391,7 +456,25 @@ class GeologicalModelManager:
         #     self.model[folded_feature_name] = folded_feature
         for observer in self.observers:
             observer()
+
     def add_unconformity(self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY):
+        """Add an unconformity (or onlap unconformity) to a named foliation.
+
+        Parameters
+        ----------
+        foliation_name : str
+            Name of an existing foliation feature in the model.
+        value : float
+            Value (level) at which the unconformity should be inserted.
+        type : FeatureType
+            Type of unconformity (default: FeatureType.UNCONFORMITY). Use
+            FeatureType.ONLAPUNCONFORMITY for onlap-type behaviour.
+
+        Raises
+        ------
+        ValueError
+            If the foliation named by `foliation_name` cannot be found in the model.
+        """
         foliation = self.model.get_feature_by_name(foliation_name)
         if foliation is None:
             raise ValueError(f"Foliation '{foliation_name}' not found in the model.")
@@ -401,6 +484,24 @@ class GeologicalModelManager:
             self.model.add_onlap_unconformity(foliation, value)
 
     def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
+        """Apply a FoldFrame to an existing feature, producing a folded feature.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the feature to fold.
+        fold_frame_name : str
+            Name of an existing fold frame feature in the model to use for
+            folding.
+        fold_weights : dict
+            Optional weights passed to the fold conversion; currently forwarded
+            to the converter implementation.
+
+        Raises
+        ------
+        ValueError
+            If either the fold frame or the target feature cannot be found.
+        """
 
         from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
 
@@ -416,6 +517,17 @@ class GeologicalModelManager:
         self.model[feature_name] = folded_feature
 
     def convert_feature_to_structural_frame(self, feature_name: str):
+        """Convert an interpolated feature into a StructuralFrame.
+
+        This helper constructs a StructuralFrameBuilder from the existing
+        feature's builder and replaces the feature in the model with the new
+        frame instance.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the feature to convert.
+        """
         from LoopStructural.modelling.features.builders import StructuralFrameBuilder
 
         builder = self.model.get_feature_by_name(feature_name).builder
@@ -531,6 +643,23 @@ class GeologicalModelManager:
         return gdf
 
     def export_feature_values_to_vtk_mesh(self,  name, mesh, scalar_type='scalar'):
+        """Evaluate a feature on a mesh's points and attach the values as a field.
+
+        Parameters
+        ----------
+        name : str
+            Feature name to evaluate.
+        mesh : pyvista.PolyData or similar
+            Mesh-like object exposing a `points` array and supporting item
+            assignment for point data (e.g. mesh[name] = values).
+        scalar_type : str
+            'scalar' or 'gradient' to control what is computed and attached.
+
+        Returns
+        -------
+        mesh
+            The same mesh instance with added/updated point data named `name`.
+        """
         pts = mesh.points
         values = self.evaluate_feature_on_points(name, pts, scalar_type=scalar_type)
         mesh[name] = values
