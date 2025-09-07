@@ -26,7 +26,6 @@ class ObjectPropertiesWidget(QWidget):
         layout.addWidget(QLabel("Active Scalar:"))
         self.scalar_combo = QComboBox()
         self.scalar_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.scalar_combo.addItem("<none>")
         self.scalar_combo.currentTextChanged.connect(self._on_scalar_changed)
         layout.addWidget(self.scalar_combo)
 
@@ -46,6 +45,8 @@ class ObjectPropertiesWidget(QWidget):
         self.colormap_combo = QComboBox()
         self.colormap_combo.addItems(["viridis", "plasma", "inferno", "magma", "greys"])
         self.colormap_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # apply colormap changes when user selects a different cmap
+        self.colormap_combo.currentTextChanged.connect(self._on_colormap_changed)
         layout.addWidget(self.colormap_combo)
 
         # Opacity
@@ -295,7 +296,7 @@ class ObjectPropertiesWidget(QWidget):
         # populate scalar combo
         self.scalar_combo.blockSignals(True)
         self.scalar_combo.clear()
-        self.scalar_combo.addItem("<none>")
+        
         try:
             pdata = getattr(self.current_mesh, 'point_data', None) or {}
             cdata = getattr(self.current_mesh, 'cell_data', None) or {}
@@ -531,6 +532,82 @@ class ObjectPropertiesWidget(QWidget):
         except Exception:
             pass
 
+    def _on_colormap_changed(self, cmap: str):
+        """Apply or persist selected colormap for the current object.
+        Best-effort: try in-place application via _apply_scalar_to_actor, otherwise remove and re-add the mesh with the new cmap."""
+        try:
+            if not self.current_object_name or self.viewer is None:
+                return
+
+            # persist cmap in metadata even when not coloring by scalar
+            try:
+                if self.current_object_name in getattr(self.viewer, 'meshes', {}):
+                    mesh_entry = self.viewer.meshes[self.current_object_name]
+                    kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+                    kwargs['cmap'] = cmap or None
+                    mesh_entry['kwargs'] = kwargs
+                    # write back
+                    if hasattr(self.viewer, 'meshes'):
+                        self.viewer.meshes[self.current_object_name] = mesh_entry
+            except Exception:
+                pass
+
+            # only need to change rendering if we're coloring by scalar
+            if not self.color_with_scalar_checkbox.isChecked():
+                return
+
+            scalar_name = self.scalar_combo.currentText()
+            if not scalar_name or scalar_name == "<none>":
+                return
+
+            # try in-place update first
+            try:
+                self._apply_scalar_to_actor(self.current_object_name, scalar_name)
+                return
+            except Exception:
+                pass
+
+            # fallback: remove and re-add mesh with new cmap
+            mesh_entry = self.viewer.meshes.get(self.current_object_name, None)
+            if mesh_entry is None:
+                return
+            mesh = mesh_entry.get('mesh')
+            old_kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+
+            scalars = None
+            if scalar_name and scalar_name != "<none>":
+                if scalar_name.startswith('cell:'):
+                    scalars = scalar_name.split(':', 1)[1]
+                else:
+                    scalars = scalar_name
+
+            clim = None
+            try:
+                if self.range_min.text() and self.range_max.text():
+                    clim = (float(self.range_min.text()), float(self.range_max.text()))
+            except Exception:
+                clim = None
+
+            opacity = old_kwargs.get('opacity', None)
+            show_scalar_bar = self.scalar_bar_checkbox.isChecked()
+
+            try:
+                self.viewer.remove_object(self.current_object_name)
+            except Exception:
+                pass
+
+            try:
+                self.viewer.add_mesh_object(mesh, name=self.current_object_name, scalars=scalars, cmap=cmap or None, clim=clim, opacity=opacity, show_scalar_bar=show_scalar_bar)
+                self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
+            except Exception:
+                try:
+                    self.viewer.add_mesh_object(mesh, name=self.current_object_name)
+                    self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def _get_scalar_values(self, scalar_name: str):
         if not scalar_name or scalar_name == "<none>" or self.current_mesh is None:
             return None
@@ -564,6 +641,165 @@ class ObjectPropertiesWidget(QWidget):
                 self.hist_ax.set_xlabel('Value')
                 self.hist_ax.set_ylabel('Count')
             self.hist_canvas.draw_idle()
+        except Exception:
+            pass
+
+    def _update_actor_mapper(self, mesh_entry, scalars, cmap, clim, values, actor, plotter):
+        """Centralized actor/mapper update:
+        - select/enable scalar array
+        - set scalar range
+        - build and assign a LUT from matplotlib cmap when possible
+        - persist kwargs and trigger render
+        """
+        try:
+            mapper = getattr(actor, 'mapper', None)
+            # if plotter can update scalars more directly, prefer that
+            if plotter is not None and hasattr(plotter, 'update_scalars') and values is not None:
+                try:
+                    plotter.update_scalars(values, mesh=mesh_entry.get('mesh'), render=False, name=self.current_object_name)
+                except Exception:
+                    pass
+
+            if mapper is None:
+                return
+
+            # select color array
+            try:
+                if scalars and hasattr(mapper, 'SelectColorArray'):
+                    try:
+                        mapper.SelectColorArray(scalars)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            try:
+                if scalars and hasattr(mapper, 'SetArrayName'):
+                    try:
+                        mapper.SetArrayName(scalars)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # enable scalar visibility
+            try:
+                if hasattr(mapper, 'scalar_visibility'):
+                    try:
+                        mapper.scalar_visibility = True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            try:
+                if hasattr(mapper, 'ScalarVisibilityOn'):
+                    try:
+                        mapper.ScalarVisibilityOn()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # set scalar range
+            try:
+                mn = mx = None
+                if clim:
+                    mn, mx = float(clim[0]), float(clim[1])
+                else:
+                    try:
+                        import numpy as _np
+                        arr = _np.asarray(values) if values is not None else None
+                        if arr is not None and arr.size > 0:
+                            mn = float(_np.nanmin(arr))
+                            mx = float(_np.nanmax(arr))
+                    except Exception:
+                        pass
+                if mn is not None and mx is not None:
+                    try:
+                        if hasattr(mapper, 'SetScalarRange'):
+                            mapper.SetScalarRange(mn, mx)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # build and assign LUT from matplotlib cmap
+            try:
+                if cmap:
+                    vtkLookupTable = None
+                    try:
+                        from vtk import vtkLookupTable as _vtkLookupTable  # type: ignore
+                        vtkLookupTable = _vtkLookupTable
+                    except Exception:
+                        try:
+                            from vtkmodules.vtkCommonCore import vtkLookupTable as _vtkLookupTable  # type: ignore
+                            vtkLookupTable = _vtkLookupTable
+                        except Exception:
+                            vtkLookupTable = None
+                    if vtkLookupTable is not None:
+                        lut = vtkLookupTable()
+                        lut.SetNumberOfTableValues(256)
+                        lut.Build()
+                        try:
+                            import matplotlib.cm as mcm
+                            cm = mcm.get_cmap(cmap)
+                            for i in range(256):
+                                r, g, b, a = cm(i / 255.0)
+                                try:
+                                    lut.SetTableValue(i, float(r), float(g), float(b), float(a))
+                                except Exception:
+                                    try:
+                                        lut.SetTableValue(i, r, g, b, a)
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+
+                        # set LUT range if we know clim
+                        try:
+                            if clim is not None and len(clim) == 2:
+                                try:
+                                    lut.SetRange(float(clim[0]), float(clim[1]))
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
+                        # assign to mapper
+                        try:
+                            if hasattr(mapper, 'SetLookupTable'):
+                                try:
+                                    mapper.SetLookupTable(lut)
+                                except Exception:
+                                    pass
+                            if hasattr(mapper, 'SetUseLookupTableScalarRange'):
+                                try:
+                                    mapper.SetUseLookupTableScalarRange(True)
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # persist kwargs
+            try:
+                kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
+                kwargs['scalars'] = scalars
+                kwargs['cmap'] = cmap or None
+                if clim is not None:
+                    kwargs['clim'] = (float(clim[0]), float(clim[1]))
+                mesh_entry['kwargs'] = kwargs
+                if hasattr(self.viewer, 'meshes') and self.current_object_name in self.viewer.meshes:
+                    self.viewer.meshes[self.current_object_name] = mesh_entry
+            except Exception:
+                pass
+
+            # request render
+            try:
+                if plotter is not None and hasattr(plotter, 'render'):
+                    plotter.render()
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -607,73 +843,17 @@ class ObjectPropertiesWidget(QWidget):
             except Exception:
                 applied = False
 
+        # If we didn't use plotter.update_scalars, use the centralized mapper update helper
         if not applied:
-            mapper = getattr(actor, 'mapper', None)
-            if mapper is None:
-                raise RuntimeError('Actor has no mapper to update')
-            # try to select color array
             try:
-                if hasattr(mapper, 'SelectColorArray'):
-                    mapper.SelectColorArray(scalars)
-            except Exception:
-                pass
-            try:
-                if hasattr(mapper, 'SetArrayName'):
-                    mapper.SetArrayName(scalars)
-            except Exception:
-                pass
-            try:
-                if hasattr(mapper, 'scalar_visibility'):
-                    mapper.scalar_visibility = True
-            except Exception:
-                pass
-            try:
-                if hasattr(mapper, 'ScalarVisibilityOn'):
-                    mapper.ScalarVisibilityOn()
-            except Exception:
-                pass
-            # set scalar range
-            try:
-                if self.range_min.text() and self.range_max.text():
-                    mn = float(self.range_min.text())
-                    mx = float(self.range_max.text())
-                    if hasattr(mapper, 'SetScalarRange'):
-                        mapper.SetScalarRange(mn, mx)
-                    elif hasattr(mapper, 'scalar_range'):
-                        mapper.scalar_range = (mn, mx)
-            except Exception:
-                pass
-
-        # best-effort to set colormap via plotter's actor/lookup table
-        try:
-            cmap = self.colormap_combo.currentText() or None
-            if cmap and hasattr(plotter, 'add_mesh'):
-                # Changing lookup-table programmatically is backend/version dependent; try to trigger a re-render
+                cmap = self.colormap_combo.currentText() or None
+                clim = None
                 try:
-                    if hasattr(plotter, 'render'):
-                        plotter.render()
+                    if self.range_min.text() and self.range_max.text():
+                        clim = (float(self.range_min.text()), float(self.range_max.text()))
                 except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # update metadata
-        try:
-            kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
-            kwargs['scalars'] = scalars
-            kwargs['cmap'] = self.colormap_combo.currentText() or None
-            if self.range_min.text() and self.range_max.text():
-                try:
-                    kwargs['clim'] = (float(self.range_min.text()), float(self.range_max.text()))
-                except Exception:
-                    kwargs['clim'] = None
-            mesh_entry['kwargs'] = kwargs
-        except Exception:
-            pass
-
-        # request render
-        try:
-            if plotter is not None and hasattr(plotter, 'render'):
-                plotter.render()
-        except Exception:
-            pass
+                    clim = None
+                self._update_actor_mapper(mesh_entry, scalars, cmap, clim, values, actor, plotter)
+                return
+            except Exception:
+                pass
