@@ -529,3 +529,9 @@ class GeologicalModelManager:
             gdf = _gpd.GeoDataFrame(df)
 
         return gdf
+
+    def export_feature_values_to_vtk_mesh(self,  name, mesh, scalar_type='scalar'):
+        pts = mesh.points
+        values = self.evaluate_feature_on_points(name, pts, scalar_type=scalar_type)
+        mesh[name] = values
+        return mesh

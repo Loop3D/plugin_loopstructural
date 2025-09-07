@@ -11,7 +11,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
+from qgis.gui import QgsMapLayerComboBox
+from qgis.utils import plugins
 from .layer_selection_table import LayerSelectionTable
 from .splot import SPlotDialog
 from .bounding_box_widget import BoundingBoxWidget
@@ -19,10 +20,11 @@ from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip, plungeazimuth2vector
 from LoopStructural import getLogger
 logger = getLogger(__name__)
-
 class BaseFeatureDetailsPanel(QWidget):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
         super().__init__(parent)
+        self.plugin = plugins.get('loopstructural')
+
         self.feature = feature
         self.model_manager = model_manager
         self.data_manager = data_manager
@@ -138,24 +140,46 @@ class BaseFeatureDetailsPanel(QWidget):
 
         # Evaluate target: bounding-box centres or project point layer
         self.evaluate_target_combo = QComboBox()
-        self.evaluate_target_combo.addItems(["Bounding box cell centres", "Project point layer"])
+        self.evaluate_target_combo.addItems(["Bounding box cell centres", "Project point layer","Viewer Object"])
         export_layout.addRow("Evaluate on:", self.evaluate_target_combo)
 
         # Project layer selector (populated with point vector layers from project)
-        self.project_layer_combo = QComboBox()
+        self.project_layer_combo = QgsMapLayerComboBox()
         self.project_layer_combo.setEnabled(False)
+        # self.project_layer_combo.setFilters(QgsMapLayerComboBox.PointLayer)
+        self.project_layer_combo.setVisible(False)  # initially hidden
+        self.meshObjectCombo = QComboBox()
         export_layout.addRow("Project point layer:", self.project_layer_combo)
-
+        export_layout.addRow("Viewer object:", self.meshObjectCombo)
+        # hide the labels for these rows initially (keep layout spacing until used)
+        lbl = export_layout.labelForField(self.project_layer_combo)
+        if lbl is not None:
+            lbl.setVisible(False)
+        lbl = export_layout.labelForField(self.meshObjectCombo)
+        if lbl is not None:
+            lbl.setVisible(False)
         # Connect evaluate target change to enable/disable project layer combo
         def _on_evaluate_target_changed(index):
             use_project = (index == 1)
+            use_vtk = (index == 2)
+            self.project_layer_combo.setVisible(use_project)
             self.project_layer_combo.setEnabled(use_project)
-            if use_project:
-                try:
-                    self.populate_project_point_layers()
-                except Exception:
-                    pass
-
+            self.meshObjectCombo.setVisible(use_vtk)
+            self.meshObjectCombo.setEnabled(use_vtk)
+            # also hide/show the labels associated with those fields
+            lbl = export_layout.labelForField(self.project_layer_combo)
+            if lbl is not None:
+                lbl.setVisible(use_project)
+            lbl = export_layout.labelForField(self.meshObjectCombo)
+            if lbl is not None:
+                lbl.setVisible(use_vtk)
+            if use_vtk:
+                # populate with pyvista objects from viewer
+                self.meshObjectCombo.clear()
+                if self.plugin.loop_widget.visualisation_widget.plotter is not None:
+                    viewer = self.plugin.loop_widget.visualisation_widget.plotter
+                    mesh_names = list(viewer.meshes.keys())
+                    self.meshObjectCombo.addItems(mesh_names)
         self.evaluate_target_combo.currentIndexChanged.connect(_on_evaluate_target_changed)
 
         
@@ -192,23 +216,7 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.layout.addWidget(self.export_eval_container)
 
-    def populate_project_point_layers(self):
-        """Populate self.project_layer_combo with point vector layers from the QGIS project.
-
-        Guarded so the module can be imported outside QGIS.
-        """
-        try:
-            from qgis.core import QgsProject, QgsWkbTypes, QgsMapLayer
-        except Exception:
-            return
-
-        self.project_layer_combo.clear()
-        for lyr in QgsProject.instance().mapLayers().values():
-            try:
-                if lyr.type() == QgsMapLayer.VectorLayer and lyr.geometryType() == QgsWkbTypes.PointGeometry:
-                    self.project_layer_combo.addItem(lyr.name(), lyr.id())
-            except Exception:
-                continue
+    
 
     def _on_bounding_box_updated(self, bounding_box):
         """Callback to update UI widgets when bounding box object changes externally.
@@ -333,7 +341,7 @@ class BaseFeatureDetailsPanel(QWidget):
             # no extra attributes for grid
             attributes_df = None
             logger.info(f'Got {len(pts)} points from bounding box cell centres')
-        else:
+        elif self.evaluate_target_combo.currentIndex() == 1:
             # Evaluate on an existing project point layer
             layer_id = None
             try:
@@ -393,7 +401,23 @@ class BaseFeatureDetailsPanel(QWidget):
                 crs = layer.crs().authid()
             except Exception:
                 crs = None
+        elif self.evaluate_target_combo.currentIndex() == 2:
+            # Evaluate on an object from the viewer
+            # These are all pyvista objects and we want to add 
+            # the scalar as a new field to the objects
 
+            viewer = self.plugin.loop_widget.visualisation_widget.plotter
+            if viewer is None:
+                return
+            mesh = self.meshObjectCombo.currentText()
+            if not mesh:
+                return
+            vtk_mesh = viewer.meshes[mesh]['mesh']
+            self.model_manager.export_feature_values_to_vtk_mesh(
+                self.feature.name,
+                vtk_mesh,
+                scalar_type=scalar_type
+            )
         # call model_manager to produce GeoDataFrame
         try:
             logger.info('Exporting feature values to GeoDataFrame')
@@ -721,4 +745,4 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
             if plunge is not None and azimuth is not None:
                 self.feature.builder.update_build_arguments({'fold_axis': vector.tolist()})
 
-    
+
