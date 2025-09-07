@@ -55,10 +55,12 @@ class LoopPyVistaQTPlotter(QtInteractor):
         #         pass
 
         # Decide rendering mode: color (solid) if color provided else scalar mapping
+        scalars = scalars if scalars is not None else mesh.active_scalars_name
         use_scalar = color is None and scalars is not None
 
         # Build add_mesh kwargs
         add_kwargs: Dict[str, Any] = {}
+        
         if use_scalar:
             add_kwargs['scalars'] = scalars
             add_kwargs['cmap'] = cmap
