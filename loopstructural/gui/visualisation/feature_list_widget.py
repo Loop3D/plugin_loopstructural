@@ -92,19 +92,19 @@ class FeatureListWidget(QWidget):
 
     def add_scalar_field(self, feature_name):
         scalar_field = self.model_manager.model[feature_name].scalar_field()
-        self.viewer.add_mesh(scalar_field.vtk(), name=f'{feature_name}_scalar_field')
+        self.viewer.add_mesh_object(scalar_field.vtk(), name=f'{feature_name}_scalar_field')
         print(f"Adding scalar field to feature: {feature_name}")
 
     def add_surface(self, feature_name):
         surfaces = self.model_manager.model[feature_name].surfaces()
         for surface in surfaces:
-            self.viewer.add_mesh(surface.vtk(), name=f'{feature_name}_surface')
+            self.viewer.add_mesh_object(surface.vtk(), name=f'{feature_name}_surface')
         print(f"Adding surface to feature: {feature_name}")
 
     def add_vector_field(self, feature_name):
         vector_field = self.model_manager.model[feature_name].vector_field()
         scale = self._get_vector_scale()
-        self.viewer.add_mesh(vector_field.vtk(scale=scale), name=f'{feature_name}_vector_field')
+        self.viewer.add_mesh_object(vector_field.vtk(scale=scale), name=f'{feature_name}_vector_field')
         print(f"Adding vector field to feature: {feature_name}")
 
     def add_data(self, feature_name):
@@ -113,11 +113,11 @@ class FeatureListWidget(QWidget):
             if issubclass(type(d), VectorPoints):
                 scale = self._get_vector_scale()
                 # tolerance is None means all points are shown
-                self.viewer.add_mesh(
+                self.viewer.add_mesh_object(
                     d.vtk(scale=scale, tolerance=None), name=f'{feature_name}_{d.name}_points'
                 )
             else:
-                self.viewer.add_mesh(d.vtk(), name=f'{feature_name}_{d.name}')
+                self.viewer.add_mesh_object(d.vtk(), name=f'{feature_name}_{d.name}')
         print(f"Adding data to feature: {feature_name}")
 
     def add_model_bounding_box(self):
@@ -125,7 +125,7 @@ class FeatureListWidget(QWidget):
             print("Model manager is not set.")
             return
         bb = self.model_manager.model.bounding_box.vtk().outline()
-        self.viewer.add_mesh(bb, name='model_bounding_box')
+        self.viewer.add_mesh_object(bb, name='model_bounding_box')
         # Logic for adding model bounding box
         print("Adding model bounding box...")
 
@@ -135,7 +135,7 @@ class FeatureListWidget(QWidget):
             return
         fault_surfaces = self.model_manager.model.get_fault_surfaces()
         for surface in fault_surfaces:
-            self.viewer.add_mesh(surface.vtk(), name=f'fault_surface_{surface.name}')
+            self.viewer.add_mesh_object(surface.vtk(), name=f'fault_surface_{surface.name}')
         print("Adding fault surfaces...")
 
     def add_stratigraphic_surfaces(self):
@@ -144,5 +144,5 @@ class FeatureListWidget(QWidget):
             return
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
         for surface in stratigraphic_surfaces:
-            self.viewer.add_mesh(surface.vtk(), name=surface.name)
+            self.viewer.add_mesh_object(surface.vtk(), name=surface.name)
         print("Adding stratigraphic surfaces...")
