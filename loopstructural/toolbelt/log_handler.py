@@ -38,55 +38,38 @@ class PlgLogger(logging.Handler):
         # parent
         parent_location: QWidget = None,
     ):
-        """Send messages to QGIS messages windows and to the user as a message bar. \
-        Plugin name is used as title. If debug mode is disabled, only warnings (1) and \
-        errors (2) or with push are sent.
+        """Send messages to QGIS messages windows and to the user as a message bar.
 
-        :param message: message to display
-        :type message: str
-        :param application: name of the application sending the message. \
-        Defaults to __about__.__title__
-        :type application: str, optional
-        :param log_level: message level. Possible values: 0 (info), 1 (warning), \
-        2 (critical), 3 (success), 4 (none - grey). Defaults to 0 (info)
-        :type log_level: int, optional
-        :param push: also display the message in the QGIS message bar in addition to \
-        the log, defaults to False
-        :type push: bool, optional
-        :param duration: duration of the message in seconds. If not set, the \
-        duration is calculated from the log level: `(log_level + 1) * 3`. seconds. \
-        If set to 0, then the message must be manually dismissed by the user. \
-        Defaults to None.
-        :type duration: int, optional
-        :param button: display a button in the message bar. Defaults to False.
-        :type button: bool, optional
-        :param button_text: text label of the button. Defaults to None.
-        :type button_text: str, optional
-        :param button_connect: function to be called when the button is pressed. \
-        If not set, a simple dialog (QgsMessageOutput) is used to dislay the message. \
-        Defaults to None.
-        :type button_connect: Callable, optional
-        :param parent_location: parent location widget. \
-        If not set, QGIS canvas message bar is used to push message, \
-        otherwise if a QgsMessageBar is available in parent_location it is used instead. \
-        Defaults to None.
-        :type parent_location: Widget, optional
+        Plugin name is used as title. If debug mode is disabled, only warnings
+        and errors (or messages with `push=True`) are shown.
 
-        :Example:
+        Parameters
+        ----------
+        message : str
+            Message to display.
+        application : str, optional
+            Name of the application sending the message. Defaults to plugin title.
+        log_level : int, optional
+            Message level. Possible values: 0 (info), 1 (warning), 2 (critical),
+            3 (success), 4 (none/grey). Defaults to 0 (info).
+        push : bool, optional
+            If True, also display the message in the QGIS message bar.
+        duration : int or None, optional
+            Duration in seconds for the message. If None, a duration is computed
+            from the log level. If 0 the message must be dismissed manually.
+        button : bool, optional
+            Display a button in the message bar (defaults to False).
+        button_text : str or None, optional
+            Text label for the optional button.
+        button_connect : Callable or None, optional
+            Callable invoked when the optional button is pressed.
+        parent_location : QWidget or None, optional
+            Parent widget in which to search for a `QgsMessageBar`. If not
+            provided, the QGIS main message bar is used.
 
-        .. code-block:: python
-
-            log(message="Plugin loaded - INFO", log_level=0, push=False)
-            log(message="Plugin loaded - WARNING", log_level=1, push=1, duration=5)
-            log(message="Plugin loaded - ERROR", log_level=2, push=1, duration=0)
-            log(
-                message="Plugin loaded - SUCCESS",
-                log_level=3,
-                push=1,
-                duration=10,
-                button=True
-            )
-            log(message="Plugin loaded - TEST", log_level=4, push=0)
+        Returns
+        -------
+        None
         """
         # if not debug mode and not push, let's ignore INFO, SUCCESS and TEST
         debug_mode = plg_prefs_hdlr.PlgOptionsManager.get_plg_settings().debug_mode

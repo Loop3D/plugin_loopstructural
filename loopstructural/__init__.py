@@ -15,8 +15,15 @@
 def classFactory(iface):
     """Load the plugin class.
 
-    :param iface: A QGIS interface instance.
-    :type iface: QgsInterface
+    Parameters
+    ----------
+    iface : QgsInterface
+        A QGIS interface instance provided by QGIS when loading plugins.
+
+    Returns
+    -------
+    LoopstructuralPlugin
+        An instance of the plugin class initialized with `iface`.
     """
     from .plugin_main import LoopstructuralPlugin
 

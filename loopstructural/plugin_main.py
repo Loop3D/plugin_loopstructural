@@ -46,9 +46,11 @@ class LoopstructuralPlugin:
     def __init__(self, iface: QgisInterface):
         """Constructor.
 
-        :param iface: An interface instance that will be passed to this class which \
-        provides the hook by which you can manipulate the QGIS application at run time.
-        :type iface: QgsInterface
+        Parameters
+        ----------
+        iface : QgisInterface
+            An interface instance provided by QGIS which allows the plugin to
+            manipulate the QGIS application at run time.
         """
         self.iface = iface
         self.log = PlgLogger().log
@@ -168,13 +170,17 @@ class LoopstructuralPlugin:
         self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
 
     def tr(self, message: str) -> str:
-        """Get the translation for a string using Qt translation API.
+        """Translate a string using Qt translation API.
 
-        :param message: string to be translated.
-        :type message: str
+        Parameters
+        ----------
+        message : str
+            String to be translated.
 
-        :returns: Translated version of message.
-        :rtype: str
+        Returns
+        -------
+        str
+            Translated version of the input string.
         """
         return QCoreApplication.translate(self.__class__.__name__, message)
 
