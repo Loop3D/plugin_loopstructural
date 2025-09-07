@@ -31,6 +31,9 @@ class ObjectListWidget(QWidget):
         self.viewer.objectAdded.connect(self.update_object_list)
         self.treeWidget.installEventFilter(self)
         self.treeWidget.itemSelectionChanged.connect(self.on_object_selected)
+        self.treeWidget.itemDoubleClicked.connect(self.onDoubleClick)
+    def onDoubleClick(self, item, column):
+        self.viewer.reset_camera()
     def on_object_selected(self):
         selected_items = self.treeWidget.selectedItems()
         if not selected_items:
@@ -300,7 +303,7 @@ class ObjectListWidget(QWidget):
                     else pv.save_meshio(file_path, mesh)
                 )
             elif selected_format == "vtk":
-                pv.save_meshio(file_path, mesh  )
+                mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh)
             elif selected_format == "ply":
                 pv.save_meshio(file_path, mesh)
             elif selected_format == "vtp":
@@ -365,9 +368,6 @@ class ObjectListWidget(QWidget):
 
         try:
             mesh = pv.read(file_path)
-            if not isinstance(mesh, pv.PolyData):
-                raise ValueError("The file does not contain a valid mesh.")
-
             # Add the mesh to the viewer
             if self.viewer and hasattr(self.viewer, 'add_mesh'):
                 self.viewer.add_mesh_object(mesh, name=file_name)
