@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.11](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.10...v0.1.11) (2025-09-08)
+
+
+### Bug Fixes
+
+* use python 3.9 compatible typehint ([f52b729](https://github.com/Loop3D/plugin_loopstructural/commit/f52b7292e054d8deacc2934e33be4d831785d512))
+* use python 3.9 compatible typehint ([e3c6b48](https://github.com/Loop3D/plugin_loopstructural/commit/e3c6b48e58363a34ece61d2c27e26defc34839af))
+
 ## [0.1.10](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.9...v0.1.10) (2025-09-08)
 
 
