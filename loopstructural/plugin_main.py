@@ -43,8 +43,14 @@ from loopstructural.toolbelt import PlgLogger
 
 
 class LoopstructuralPlugin:
+    """QGIS plugin entrypoint for LoopStructural.
+
+    This class initializes plugin resources, UI elements and data/model managers
+    required for LoopStructural integration with QGIS.
+    """
+
     def __init__(self, iface: QgisInterface):
-        """Constructor.
+        """Initialize the plugin.
 
         Parameters
         ----------
@@ -73,6 +79,12 @@ class LoopstructuralPlugin:
         self.data_manager.set_model_manager(self.model_manager)
 
     def injectLogHandler(self):
+        """Install LoopStructural logging handler that forwards logs to the plugin logger.
+
+        This configures LoopStructural's logging to use the plugin's
+        PlgLoggerHandler so log records are captured and forwarded to the
+        plugin's logging infrastructure.
+        """
         import logging
 
         import LoopStructural
@@ -185,7 +197,7 @@ class LoopstructuralPlugin:
         return QCoreApplication.translate(self.__class__.__name__, message)
 
     def unload(self):
-        """Cleans up when plugin is disabled/uninstalled."""
+        """Clean up when plugin is disabled or uninstalled."""
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
@@ -203,9 +215,12 @@ class LoopstructuralPlugin:
         del self.toolbar
 
     def run(self):
-        """Main process.
+        """Run main process.
 
-        :raises Exception: if there is no item in the feed
+        Raises
+        ------
+        Exception
+            If there is no item in the feed.
         """
         try:
             self.log(

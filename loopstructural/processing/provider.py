@@ -1,7 +1,6 @@
 #! python3
 
-"""Processing provider module.
-"""
+"""Processing provider for LoopStructural plugin."""
 
 # PyQGIS
 from qgis.core import QgsProcessingProvider
@@ -20,11 +19,11 @@ class LoopstructuralProvider(QgsProcessingProvider):
     """Processing provider class."""
 
     def loadAlgorithms(self):
-        """Loads all algorithms belonging to this provider."""
+        """Load all algorithms belonging to this provider."""
         pass
 
     def id(self) -> str:
-        """Unique provider id.
+        """Return unique provider id.
 
         Returns
         -------
@@ -35,7 +34,7 @@ class LoopstructuralProvider(QgsProcessingProvider):
         return "loopstructural"
 
     def name(self) -> str:
-        """Provider name used in the GUI.
+        """Return provider name used in the GUI.
 
         Returns
         -------
@@ -45,7 +44,7 @@ class LoopstructuralProvider(QgsProcessingProvider):
         return __title__
 
     def longName(self) -> str:
-        """Longer provider name (may include version information).
+        """Return longer provider name (may include version information).
 
         Returns
         -------
@@ -55,7 +54,7 @@ class LoopstructuralProvider(QgsProcessingProvider):
         return self.tr("{} - Tools".format(__title__))
 
     def icon(self) -> QIcon:
-        """Icon used for the provider inside the Processing toolbox menu.
+        """Return icon used for the provider inside the Processing toolbox menu.
 
         Returns
         -------
@@ -81,7 +80,7 @@ class LoopstructuralProvider(QgsProcessingProvider):
         return QCoreApplication.translate(self.__class__.__name__, message)
 
     def versionInfo(self) -> str:
-        """Provider version information.
+        """Return provider version information.
 
         Returns
         -------

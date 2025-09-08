@@ -127,17 +127,23 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 class PlgOptionsFactory(QgsOptionsWidgetFactory):
     """Factory for options widget."""
 
-    def __init__(self):
-        """Constructor."""
+    def __init__(self, *args, **kwargs):
+        """Initialize the options factory.
+
+        Parameters
+        ----------
+        *args, **kwargs
+            Forwarded to base factory initializer.
+        """
         super().__init__()
 
-    def icon(self) -> QIcon:
-        """Returns plugin icon used as tab icon in QGIS options.
+    def icon(self):
+        """Return the icon used for the options page.
 
         Returns
         -------
         QIcon
-            Plugin icon instance.
+            Icon for the options page.
         """
         return QIcon(str(__icon_path__))
 

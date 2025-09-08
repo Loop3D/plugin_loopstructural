@@ -1,6 +1,10 @@
 #! python3
 
-"""Plugin settings."""
+"""Preferences manager helpers for the plugin.
+
+This module exposes `PlgOptionsManager` which centralises access to plugin
+settings used across the UI and background services.
+"""
 
 # standard
 from dataclasses import asdict, dataclass, fields
@@ -32,6 +36,12 @@ class PlgSettingsStructure:
 
 
 class PlgOptionsManager:
+    """Manager for accessing and updating plugin configuration values.
+
+    Provides convenience helpers around QGIS settings storage used by the
+    plugin to persist user preferences such as debug mode and UI options.
+    """
+
     @staticmethod
     def get_plg_settings() -> PlgSettingsStructure:
         """Load and return plugin settings as a PlgSettingsStructure instance.

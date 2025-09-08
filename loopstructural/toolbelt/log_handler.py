@@ -1,4 +1,10 @@
-#! python3
+#!/usr/bin/env python3
+"""Logging helpers that forward Python logging into QGIS messaging systems.
+
+This module provides a convenience `PlgLogger` for emitting user-facing
+messages to the QGIS message log and message bar, and `PlgLoggerHandler` that
+bridges Python's `logging` into the plugin's logging facilities.
+"""
 
 # standard library
 import logging
@@ -132,21 +138,24 @@ class PlgLogger(logging.Handler):
 
 
 class PlgLoggerHandler(logging.Handler):
-    """
-    Standard logging.Handler that forwards logs to PlgLogger.log().
+    """Handler that forwards Python log records to the plugin logger.
+
+    The handler calls the provided `plg_logger_class.log()` static method to
+    forward formatted log messages to QGIS messaging systems.
     """
 
     def __init__(self, plg_logger_class, level=logging.NOTSET, push=False, duration=None):
-        """
+        """Initialize the log handler.
+
         Parameters
         ----------
         plg_logger_class : class
-            Class providing a static `log()` method (like your PlgLogger).
-        level : int
-            The logging level to handle.
-        push : bool
+            Class providing a static `log()` method (like PlgLogger).
+        level : int, optional
+            The logging level to handle. Defaults to logging.NOTSET.
+        push : bool, optional
             Whether to push messages to the QGIS message bar.
-        duration : int
+        duration : int, optional
             Optional fixed duration for messages.
         """
         super().__init__(level)
@@ -155,6 +164,11 @@ class PlgLoggerHandler(logging.Handler):
         self.duration = duration
 
     def emit(self, record):
+        """Emit a logging record by forwarding it to the plugin logger.
+
+        This formats the record, maps the Python logging level to QGIS levels
+        and calls `plg_logger_class.log()` with the resulting message.
+        """
         try:
             msg = self.format(record)
             qgis_level = self._map_log_level(record.levelno)

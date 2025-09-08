@@ -1,5 +1,10 @@
 #! python3
 
+"""LoopStructural QGIS plugin package.
+
+Utilities and metadata for the LoopStructural QGIS plugin.
+"""
+
 # ----------------------------------------------------------
 # Copyright (C) 2015 Martin Dobias
 # ----------------------------------------------------------
