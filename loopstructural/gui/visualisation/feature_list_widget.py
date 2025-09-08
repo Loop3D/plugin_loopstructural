@@ -93,23 +93,21 @@ class FeatureListWidget(QWidget):
     def add_scalar_field(self, feature_name):
         scalar_field = self.model_manager.model[feature_name].scalar_field()
         self.viewer.add_mesh_object(scalar_field.vtk(), name=f'{feature_name}_scalar_field')
-        print(f"Adding scalar field to feature: {feature_name}")
 
     def add_surface(self, feature_name):
         surfaces = self.model_manager.model[feature_name].surfaces()
         for surface in surfaces:
             self.viewer.add_mesh_object(surface.vtk(), name=f'{feature_name}_surface')
-        print(f"Adding surface to feature: {feature_name}")
 
     def add_vector_field(self, feature_name):
         vector_field = self.model_manager.model[feature_name].vector_field()
         scale = self._get_vector_scale()
         self.viewer.add_mesh_object(vector_field.vtk(scale=scale), name=f'{feature_name}_vector_field')
-        print(f"Adding vector field to feature: {feature_name}")
 
     def add_data(self, feature_name):
         data = self.model_manager.model[feature_name].get_data()
         for d in data:
+            d.locations = self.model_manager.model.rescale(d.locations)
             if issubclass(type(d), VectorPoints):
                 scale = self._get_vector_scale()
                 # tolerance is None means all points are shown
