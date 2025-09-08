@@ -10,7 +10,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qgis.gui import QgsMapLayerComboBox
+from qgis.gui import QgsMapLayerComboBox, QgsCollapsibleGroupBox
+
 from qgis.utils import plugins
 from .layer_selection_table import LayerSelectionTable
 from .splot import SPlotDialog
@@ -81,11 +82,15 @@ class BaseFeatureDetailsPanel(QWidget):
 
         self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
 
+        table_group_box = QgsCollapsibleGroupBox('Data Layers')
         self.layer_table = LayerSelectionTable(
             data_manager=self.data_manager,
             feature_name_provider=lambda: self.feature.name,
             name_validator=lambda: (True, ''),  # Always valid in this context
         )
+        table_layout = QVBoxLayout()
+        table_layout.addWidget(self.layer_table)
+        table_group_box.setLayout(table_layout)
         # Form layout for better organization
         form_layout = QFormLayout()
         form_layout.addRow(self.interpolator_type_label, self.interpolator_type_combo)
@@ -93,10 +98,10 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout.addRow('Regularisation', self.regularisation_spin_box)
         form_layout.addRow('Contact points weight', self.cpw_spin_box)
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
-        QgsCollapsibleGroupBox = QWidget()
-        QgsCollapsibleGroupBox.setLayout(form_layout)
-        self.layout.addWidget(QgsCollapsibleGroupBox)
-        self.layout.addWidget(self.layer_table)
+        group_box = QgsCollapsibleGroupBox('Interpolator Settings')
+        group_box.setLayout(form_layout)
+        self.layout.addWidget(group_box)
+        self.layout.addWidget(table_group_box)
         self.addMidBlock()
         self.addExportBlock()
     def addMidBlock(self):
@@ -127,7 +132,7 @@ class BaseFeatureDetailsPanel(QWidget):
             # imports may fail outside QGIS environment; we'll handle at runtime
             pass
 
-        export_widget = QWidget()
+        export_widget = QgsCollapsibleGroupBox('Export Feature')
         export_layout = QFormLayout(export_widget)
 
         # Scalar selector (support scalar and gradient)
@@ -204,10 +209,6 @@ class BaseFeatureDetailsPanel(QWidget):
                 block.setObjectName(f"export_block_{getattr(feat, 'name', 'feature')}")
                 block_layout = QVBoxLayout(block)
                 block_layout.setContentsMargins(0, 0, 0, 0)
-                # Placeholder label — disabled until controls are added
-                lbl = QLabel(getattr(feat, 'name', ''))
-                lbl.setEnabled(False)
-                block_layout.addWidget(lbl)
                 self.export_eval_layout.addWidget(block)
                 self.export_blocks[getattr(feat, 'name', f"feature_{len(self.export_blocks)}")] = block
 
@@ -594,9 +595,9 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
             lambda: self.model_manager.convert_feature_to_structural_frame(self.feature.name)
         )
         form_layout.addRow(convert_to_frame_button)
-        QgsCollapsibleGroupBox = QWidget()
-        QgsCollapsibleGroupBox.setLayout(form_layout)
-        self.layout.addWidget(QgsCollapsibleGroupBox)
+        group_box = QgsCollapsibleGroupBox('Fold Settings')
+        group_box.setLayout(form_layout)
+        self.layout.addWidget(group_box)
 
         # Remove redundant layout setting
         self.setLayout(self.layout)
@@ -713,9 +714,9 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         #     lambda: self.open_splot_dialog()
         # )
         # form_layout.addRow(splot_button)
-        QgsCollapsibleGroupBox = QWidget()
-        QgsCollapsibleGroupBox.setLayout(form_layout)
-        self.layout.addWidget(QgsCollapsibleGroupBox)
+        group_box = QgsCollapsibleGroupBox()
+        group_box.setLayout(form_layout)
+        self.layout.addWidget(group_box)
         # Remove redundant layout setting
         self.setLayout(self.layout)
     def open_splot_dialog(self):
