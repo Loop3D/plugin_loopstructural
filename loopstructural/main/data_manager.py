@@ -587,7 +587,7 @@ class ModellingDataManager:
             )  # Convert QgsVectorLayer to GeoDataFrame
         if self._model_manager:
             self._model_manager.add_foliation(
-                foliation_name, foliation_data, folded_feature_name=folded_feature_name
+                foliation_name, foliation_data, folded_feature_name=folded_feature_name,use_z_coordinate=True
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
         else:
