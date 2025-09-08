@@ -345,6 +345,7 @@ class ObjectListWidget(QWidget):
 
         addFeatureAction = menu.addAction("Surface from model")
         loadFeatureAction = menu.addAction("Load from file")
+        addQgsLayerAction = menu.addAction("Add from QGIS layer")
 
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec_(buttonPosition)
@@ -353,10 +354,122 @@ class ObjectListWidget(QWidget):
             self.add_feature_from_geological_model()
         elif action == loadFeatureAction:
             self.load_feature_from_file()
-
+        elif action == addQgsLayerAction:
+            self.add_object_from_qgis_layer()
     def add_feature_from_geological_model(self):
         # Logic to add a feature from the geological model
         print("Adding feature from geological model")
+    def add_object_from_qgis_layer(self):
+        """Show a dialog to pick a QGIS point vector layer, convert it to a VTK/PyVista
+        point cloud and copy numeric attributes as point scalars.
+        """
+        # Local imports so the module can still be imported when QGIS GUI isn't available
+        try:
+            from qgis.gui import QgsMapLayerComboBox
+            from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
+        except Exception as e:
+            print("QGIS GUI components are not available:", e)
+            return
+
+        try:
+            from loopstructural.main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+        except Exception as e:
+            print("Could not import qgsLayerToGeoDataFrame:", e)
+            return
+        from loopstructural.main.model_manager import AllSampler
+
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, QMessageBox
+        import numpy as np
+        import pandas as pd
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add from QGIS layer")
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel("Select point layer:"))
+        layer_combo = QgsMapLayerComboBox(dialog)
+        # Restrict to point layers only
+        layer_combo.setFilters(QgsMapLayerProxyModel.PointLayer)
+        layout.addWidget(layer_combo)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        layer = layer_combo.currentLayer()
+        if layer is None or not layer.isValid():
+            QMessageBox.warning(self, "Invalid layer", "No valid layer selected.")
+            return
+
+        # Basic geometry check - ensure the layer contains point geometry
+        try:
+            if layer.wkbType() != QgsWkbTypes.Point and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.PointGeometry:
+                # Some QGIS versions use different enums; allow via proxy filter primarily
+                # If the check fails, continue but warn
+                print("Selected layer does not appear to be a point layer. Proceeding anyway.")
+        except Exception:
+            # ignore strict checks - rely on conversion result
+            pass
+
+        # Convert layer to a DataFrame (no DTM)
+        gdf = qgsLayerToGeoDataFrame(layer)
+        sampler = AllSampler()
+        # sample the points from the gdf with no DTM and include Z if present
+        df = sampler(gdf,None,True)
+        if df is None or df.empty:
+            QMessageBox.warning(self, "No data", "Selected layer contains no points.")
+            return
+
+        # Ensure X,Y,Z columns present
+        if not set(["X", "Y", "Z"]).issubset(df.columns):
+            QMessageBox.warning(self, "Invalid data", "Layer conversion did not produce X/Y/Z columns.")
+            return
+
+        # Build points array
+        try:
+            pts = np.vstack([df["X"].to_numpy(), df["Y"].to_numpy(), df["Z"].to_numpy()]).T.astype(float)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to build point coordinates: {e}")
+            return
+
+        # Create PyVista point cloud / PolyData
+        try:
+            mesh = pv.PolyData(pts)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to create mesh: {e}")
+            return
+
+        # Add numeric attributes as point scalars
+        for col in df.columns:
+            if col in ("X", "Y", "Z"):
+                continue
+            try:
+                ser = pd.to_numeric(df[col], errors='coerce')
+                if ser.isnull().all():
+                    # no numeric values present
+                    continue
+                arr = ser.to_numpy().astype(float)
+                # Ensure length matches points
+                if len(arr) != mesh.n_points:
+                    # skip columns that don't match
+                    continue
+                mesh.point_data[col] = arr
+            except Exception:
+                # skip non-numeric or problematic fields
+                continue
+
+        # Add to viewer
+        if self.viewer and hasattr(self.viewer, 'add_mesh_object'):
+            try:
+                self.viewer.add_mesh_object(mesh, name=layer.name())
+            except Exception as e:
+                print("Failed to add mesh to viewer:", e)
+        else:
+            print("Error: Viewer is not initialized or does not support adding meshes.")
 
     def load_feature_from_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
