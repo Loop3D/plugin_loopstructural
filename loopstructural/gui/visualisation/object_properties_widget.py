@@ -824,11 +824,9 @@ class ObjectPropertiesWidget(QWidget):
             return
 
         # resolve scalar name
-        use_cell = False
         scalars = scalar_name
         if scalar_name.startswith('cell:'):
             scalars = scalar_name.split(':', 1)[1]
-            use_cell = True
 
         values = self._get_scalar_values(scalar_name)
         if values is None:

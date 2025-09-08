@@ -99,7 +99,7 @@ class ObjectListWidget(QWidget):
             # Fallback: set on mesh if possible
             if hasattr(m, 'visibility'):
                 try:
-                    setattr(m, 'visibility', checked)
+                    m.visibility = checked
                 except Exception:
                     pass
 
@@ -179,7 +179,7 @@ class ObjectListWidget(QWidget):
             # Fallback: set attribute on the instance if possible
             if inst is not None and hasattr(inst, 'visibility'):
                 try:
-                    setattr(inst, 'visibility', checked)
+                    inst.visibility = checked
                 except Exception:
                     pass
 

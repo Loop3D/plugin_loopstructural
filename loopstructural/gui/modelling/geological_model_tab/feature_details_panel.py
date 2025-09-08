@@ -1,5 +1,4 @@
-import numpy as np
-from PyQt5.QtCore import Qt, QVariant
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -123,9 +122,7 @@ class BaseFeatureDetailsPanel(QWidget):
 
         # --- Per-feature export controls (for this panel's feature) ---
         try:
-            from PyQt5.QtWidgets import QFormLayout, QHBoxLayout
-            from PyQt5.QtWidgets import QGroupBox
-            from qgis.core import QgsVectorLayer, QgsFeature, QgsFields, QgsField, QgsProject, QgsGeometry, QgsPointXYZ
+            from PyQt5.QtWidgets import QFormLayout
         except Exception:
             # imports may fail outside QGIS environment; we'll handle at runtime
             pass
@@ -316,7 +313,7 @@ class BaseFeatureDetailsPanel(QWidget):
         crs = self.data_manager.project.crs().authid()
         try:
             # QGIS imports (guarded)
-            from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsPoint, QgsFields, QgsField
+            from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsPoint, QgsField
             from qgis.PyQt.QtCore import QVariant
         except Exception as e:
             # Not running inside QGIS — nothing to do
@@ -328,12 +325,7 @@ class BaseFeatureDetailsPanel(QWidget):
         if self.evaluate_target_combo.currentIndex() == 0:
             # use bounding-box resolution or custom nsteps
             logger.info('Using bounding box cell centres for evaluation')
-            bb = None
-            try:
-                bb = getattr(self.model_manager.model, 'bounding_box', None)
-            except Exception:
-                bb = None
-
+            
             
 
             
@@ -428,7 +420,7 @@ class BaseFeatureDetailsPanel(QWidget):
                 attributes=attributes_df,
                 crs=crs,
             )
-        except Exception as e:
+        except Exception:
             logger.debug('Failed to export feature values', exc_info=True)
             return
 

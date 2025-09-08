@@ -1,9 +1,6 @@
-import re
-from collections import defaultdict
 from PyQt5.QtCore import pyqtSignal
 from pyvistaqt import QtInteractor
 from typing import Optional, Any, Dict, Tuple
-import pyvista as pv
 
 
 class LoopPyVistaQTPlotter(QtInteractor):
