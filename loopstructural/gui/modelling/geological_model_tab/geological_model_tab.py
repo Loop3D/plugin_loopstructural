@@ -171,6 +171,7 @@ class GeologicalModelTab(QWidget):
             # Try model's __delitem__ if supported
             try:
                 del self.model_manager.model[feature_name]
+                del self.data_manager.feature_data[feature_name]
             except Exception:
                 # Fallback: remove object from features list and feature index if present
                 feature = self.model_manager.model.get_feature_by_name(feature_name)

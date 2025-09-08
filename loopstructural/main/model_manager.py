@@ -1,3 +1,14 @@
+"""Geological model manager utilities used by the LoopStructural plugin.
+
+This module exposes the `GeologicalModelManager` which wraps a LoopStructural
+`GeologicalModel` and provides helpers to ingest GeoDataFrames, update
+stratigraphy and faults, evaluate features on point clouds or meshes, and
+export results to GeoDataFrames or VTK meshes.
+
+The goal of the manager is to isolate data transformation, sampling and
+interaction with the LoopStructural model from the GUI code.
+"""
+
 from collections import defaultdict
 from typing import Callable
 
@@ -52,13 +63,16 @@ class AllSampler:
                             {'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes}
                         )
             elif geom.geom_type == 'Point':
-                x, y = geom.x, geom.y
+
+                coords = list(geom.coords[0])
                 # Use Z from geometry if available, otherwise use DEM
-                if use_z and hasattr(geom, 'z'):
-                    z = geom.z
+                if use_z and len(coords) > 2:
+                    z = coords[2]
+                elif dem is not None:
+                    z = dem(coords[0], coords[1])
                 else:
-                    z = dem(x, y)
-                points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
+                    z = 0
+                points.append({'X': coords[0], 'Y': coords[1], 'Z': z, 'feature_id': feature_id, **attributes})
             feature_id += 1
         df = pd.DataFrame(points)
         return df
@@ -162,6 +176,27 @@ class GeologicalModelManager:
         unit_name_field=None,
         use_z_coordinate=False,
     ):
+        """Ingest basal contact traces and populate internal stratigraphy.
+
+        Parameters
+        ----------
+        basal_contacts : geopandas.GeoDataFrame
+            GeoDataFrame containing basal contact geometries and attributes.
+        sampler : callable, optional
+            Callable used to sample geometries to point rows (default: AllSampler()).
+        unit_name_field : str or None
+            Field name in `basal_contacts` giving the stratigraphic unit name. If
+            None the function returns early.
+        use_z_coordinate : bool
+            If True, use Z values from geometries when available; otherwise use
+            the manager's DEM function.
+
+        Notes
+        -----
+        This method clears existing stratigraphy and replaces contact entries
+        keyed by unit name. It does not notify observers; callers should call
+        `update_model` or trigger observers as required.
+        """
         self.stratigraphy.clear()  # Clear existing stratigraphy
         unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
         if len(unit_points) == 0 or unit_points.empty:
@@ -345,6 +380,14 @@ class GeologicalModelManager:
             observer()
 
     def features(self):
+        """Return the list of features currently held by the internal model.
+
+        Returns
+        -------
+        list
+            List-like collection of feature objects contained in the wrapped
+            LoopStructural `GeologicalModel`.
+        """
         return self.model.features
 
     def add_foliation(
@@ -355,6 +398,31 @@ class GeologicalModelManager:
         sampler=AllSampler(),
         use_z_coordinate=False,
     ):
+        """Create and add a foliation feature from grouped input layers.
+
+        Parameters
+        ----------
+        name : str
+            Name for the new foliation feature.
+        data : dict
+            Mapping of layer identifiers to dicts describing each layer. Each
+            layer dict must include a 'type' key (one of 'Orientation',
+            'Formline', 'Value', 'Inequality') and the fields required by that
+            type (e.g. 'strike_field', 'dip_field', 'value_field', ...).
+        folded_feature_name : str or None
+            Optional name of a feature to which the foliation should be
+            associated/converted (currently unused in this helper).
+        sampler : callable, optional
+            Callable used to sample provided GeoDataFrames into plain pandas
+            rows (default: AllSampler()).
+        use_z_coordinate : bool
+            Whether to use Z coordinates from input geometries when present.
+
+        Raises
+        ------
+        ValueError
+            If a layer uses an unknown 'type' value.
+        """
         # for z
         dfs = []
         kwargs={}
@@ -391,7 +459,25 @@ class GeologicalModelManager:
         #     self.model[folded_feature_name] = folded_feature
         for observer in self.observers:
             observer()
+
     def add_unconformity(self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY):
+        """Add an unconformity (or onlap unconformity) to a named foliation.
+
+        Parameters
+        ----------
+        foliation_name : str
+            Name of an existing foliation feature in the model.
+        value : float
+            Value (level) at which the unconformity should be inserted.
+        type : FeatureType
+            Type of unconformity (default: FeatureType.UNCONFORMITY). Use
+            FeatureType.ONLAPUNCONFORMITY for onlap-type behaviour.
+
+        Raises
+        ------
+        ValueError
+            If the foliation named by `foliation_name` cannot be found in the model.
+        """
         foliation = self.model.get_feature_by_name(foliation_name)
         if foliation is None:
             raise ValueError(f"Foliation '{foliation_name}' not found in the model.")
@@ -401,6 +487,24 @@ class GeologicalModelManager:
             self.model.add_onlap_unconformity(foliation, value)
 
     def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
+        """Apply a FoldFrame to an existing feature, producing a folded feature.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the feature to fold.
+        fold_frame_name : str
+            Name of an existing fold frame feature in the model to use for
+            folding.
+        fold_weights : dict
+            Optional weights passed to the fold conversion; currently forwarded
+            to the converter implementation.
+
+        Raises
+        ------
+        ValueError
+            If either the fold frame or the target feature cannot be found.
+        """
 
         from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
 
@@ -416,6 +520,17 @@ class GeologicalModelManager:
         self.model[feature_name] = folded_feature
 
     def convert_feature_to_structural_frame(self, feature_name: str):
+        """Convert an interpolated feature into a StructuralFrame.
+
+        This helper constructs a StructuralFrameBuilder from the existing
+        feature's builder and replaces the feature in the model with the new
+        frame instance.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the feature to convert.
+        """
         from LoopStructural.modelling.features.builders import StructuralFrameBuilder
 
         builder = self.model.get_feature_by_name(feature_name).builder
@@ -426,3 +541,129 @@ class GeologicalModelManager:
     def fold_frames(self):
         """Return the fold frames in the model."""
         return [f for f in self.model.features if f.type == FeatureType.STRUCTURALFRAME]
+
+    def evaluate_feature_on_points(self, feature_name: str, points: np.ndarray, scalar_type: str = 'scalar') -> np.ndarray:
+        """Evaluate a model feature at the provided points.
+
+        :param feature_name: Name of the feature to evaluate.
+        :param points: Nx3 numpy array of points [x, y, z].
+        :param scalar_type: 'scalar' or 'gradient'.
+        :returns: numpy array of evaluated values. For 'scalar' an (N,) array is returned. For 'gradient' an (N,3) array is returned if supported.
+        """
+        if self.model is None:
+            raise RuntimeError('No model available for evaluation')
+        pts = np.asarray(points)
+        if pts.ndim != 2 or pts.shape[1] < 3:
+            raise ValueError('points must be an Nx3 array')
+
+        try:
+            if scalar_type == 'gradient':
+                # Prefer a dedicated gradient evaluation method if available
+                if hasattr(self.model, 'evaluate_feature_gradient'):
+                    vals = self.model.evaluate_feature_gradient(feature_name, pts)
+                else:
+                    # Some models may support a gradient flag on the value evaluator
+                    try:
+                        vals = self.model.evaluate_feature_value(feature_name, pts, gradient=True)
+                    except TypeError:
+                        # Not supported by the model
+                        raise RuntimeError('Model does not support gradient evaluation')
+            else:
+                vals = self.model.evaluate_feature_value(feature_name, pts)
+            return np.asarray(vals)
+        except Exception:
+            # Re-raise with context preserved for the caller/UI to handle
+            raise
+
+    def export_feature_values_to_geodataframe(
+        self,
+        feature_name: str,
+        points: np.ndarray,
+        scalar_type: str = 'scalar',
+        attributes: 'pd.DataFrame' = None,
+        crs: str | None = None,
+        value_field_name: str | None = None,
+    ) -> 'gpd.GeoDataFrame':
+        """Evaluate a feature on points and return a GeoDataFrame with results.
+
+        :param feature_name: Feature name to evaluate.
+        :param points: Nx3 array-like of points (x,y,z).
+        :param scalar_type: 'scalar' or 'gradient'.
+        :param attributes: Optional pandas DataFrame with attributes to attach (must have same length as points).
+        :param crs: Optional CRS for the returned GeoDataFrame (e.g. 'EPSG:4326'). If None, GeoDataFrame will be created without CRS.
+        :param value_field_name: Optional name for the value field; defaults to '{feature_name}_value' or '{feature_name}_gradient'.
+        :returns: GeoDataFrame with geometry and value columns (and any provided attributes).
+        """
+        import pandas as _pd
+        import geopandas as _gpd
+        try:
+            from shapely.geometry import Point as _Point
+        except Exception:
+            print("Shapely not available; geometry column will be omitted." )
+            _Point = None
+        
+        pts = np.asarray(points)
+        if pts.ndim != 2 or pts.shape[1] < 3:
+            raise ValueError('points must be an Nx3 array')
+
+        values = self.evaluate_feature_on_points(feature_name, pts, scalar_type=scalar_type)
+
+        # Build a DataFrame
+        df = _pd.DataFrame({'x': pts[:, 0], 'y': pts[:, 1], 'z': pts[:, 2]})
+
+        if scalar_type == 'gradient':
+            vals = np.asarray(values)
+            if vals.ndim == 2 and vals.shape[1] == 3:
+                df['gx'] = vals[:, 0]
+                df['gy'] = vals[:, 1]
+                df['gz'] = vals[:, 2]
+                # also provide magnitude
+                df[f'{feature_name}_gmag'] = np.linalg.norm(vals, axis=1)
+            else:
+                # Unexpected shape; attempt to flatten
+                df[f'{feature_name}_gradient'] = list(vals)
+        else:
+            df[value_field_name or f"{feature_name}_value"] = np.asarray(values)
+
+        # Attach attributes if provided
+        if attributes is not None:
+            try:
+                attributes = _pd.DataFrame(attributes).reset_index(drop=True)
+                df = _pd.concat([df.reset_index(drop=True), attributes.reset_index(drop=True)], axis=1)
+            except Exception:
+                # ignore attributes if they cannot be combined
+                pass
+
+        # Create geometry column
+        geoms = None
+        if _Point is not None:
+            geoms = [_Point(x, y, z) for x, y, z in pts]
+            gdf = _gpd.GeoDataFrame(df, geometry=geoms, crs=crs)
+        else:
+            # shapely not available; return a regular DataFrame inside a GeoDataFrame placeholder
+            gdf = _gpd.GeoDataFrame(df)
+
+        return gdf
+
+    def export_feature_values_to_vtk_mesh(self,  name, mesh, scalar_type='scalar'):
+        """Evaluate a feature on a mesh's points and attach the values as a field.
+
+        Parameters
+        ----------
+        name : str
+            Feature name to evaluate.
+        mesh : pyvista.PolyData or similar
+            Mesh-like object exposing a `points` array and supporting item
+            assignment for point data (e.g. mesh[name] = values).
+        scalar_type : str
+            'scalar' or 'gradient' to control what is computed and attached.
+
+        Returns
+        -------
+        mesh
+            The same mesh instance with added/updated point data named `name`.
+        """
+        pts = mesh.points
+        values = self.evaluate_feature_on_points(name, pts, scalar_type=scalar_type)
+        mesh[name] = values
+        return mesh

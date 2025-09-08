@@ -466,7 +466,6 @@ class ModellingDataManager:
             self._structural_orientations = data['structural_orientations']
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
-            print([o.name for o in self._stratigraphic_column.order])
             self.stratigraphic_column_callback()
 
     def update_from_dict(self, data):
@@ -537,11 +536,10 @@ class ModellingDataManager:
         if 'stratigraphic_column' in data:
             self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
         else:
-            self._stratigraphic_column = StratigraphicColumn()
+            self._stratigraphic_column.clear()
 
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
-        print([o.name for o in self._stratigraphic_column.order])
 
 
     def find_layer_by_name(self, layer_name):
@@ -587,7 +585,7 @@ class ModellingDataManager:
             )  # Convert QgsVectorLayer to GeoDataFrame
         if self._model_manager:
             self._model_manager.add_foliation(
-                foliation_name, foliation_data, folded_feature_name=folded_feature_name
+                foliation_name, foliation_data, folded_feature_name=folded_feature_name,use_z_coordinate=True
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
         else:

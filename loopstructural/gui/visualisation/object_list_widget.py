@@ -15,36 +15,186 @@ from PyQt5.QtWidgets import (
 
 
 class ObjectListWidget(QWidget):
-    def __init__(self, parent=None, *, viewer=None):
+    def __init__(self, parent=None, *, viewer=None, properties_widget=None):
         super().__init__(parent)
         self.mainLayout = QVBoxLayout(self)
         self.treeWidget = QTreeWidget(self)
         self.treeWidget.setHeaderHidden(True)  # Hide the header
-        self.treeWidget.setSelectionMode(QTreeWidget.MultiSelection)  # Enable multi-selection
         self.mainLayout.addWidget(self.treeWidget)
         addButton = QPushButton("Add Object", self)
         addButton.setContextMenuPolicy(Qt.CustomContextMenu)
         addButton.clicked.connect(self.show_add_object_menu)
         self.mainLayout.addWidget(addButton)
-
+        self.properties_widget = properties_widget
         self.setLayout(self.mainLayout)
         self.viewer = viewer
         self.viewer.objectAdded.connect(self.update_object_list)
         self.treeWidget.installEventFilter(self)
+        self.treeWidget.itemSelectionChanged.connect(self.on_object_selected)
+        self.treeWidget.itemDoubleClicked.connect(self.onDoubleClick)
+    def onDoubleClick(self, item, column):
+        self.viewer.reset_camera()
+    def on_object_selected(self):
+        selected_items = self.treeWidget.selectedItems()
+        if not selected_items:
+            # if nothing selected keep the previous selection.
+            # Need to select a new object to change its properties
+            return 
 
+        # For simplicity, just handle the first selected item
+        item = selected_items[0]
+        item_widget = self.treeWidget.itemWidget(item, 0)
+        object_label = item_widget.findChild(QLabel).text()
+
+        if hasattr(self, 'properties_widget') and self.properties_widget:
+
+            self.properties_widget.setCurrentObject(object_label)
     def update_object_list(self, new_object):
+        """Rebuild the tree so top-level items are the entries in
+        `viewer.meshes`. Each mesh gets a visibility checkbox and child
+        items listing its point and cell data arrays.
+        """
+        if not self.viewer:
+            return
 
-        for object_name in self.viewer.actors:
-            # Check if object already exists in tree
-            exists = False
-            for i in range(self.treeWidget.topLevelItemCount()):
-                item = self.treeWidget.topLevelItem(i)
-                widget = self.treeWidget.itemWidget(item, 0)
-                if widget and widget.findChild(QLabel).text() == object_name:
-                    exists = True
-                    break
-            if not exists:
-                self.add_actor(object_name)
+        # Clear and rebuild the tree to reflect current meshes
+        self.treeWidget.clear()
+
+        meshes = getattr(self.viewer, 'meshes', {}) or {}
+        for mesh_name in sorted(meshes.keys()):
+            mesh = meshes[mesh_name]
+            self.add_mesh_item(mesh_name, mesh)
+
+    def add_mesh_item(self, mesh_name, mesh):
+        """Add a top-level tree item for a mesh and populate children for
+        point/cell data arrays.
+        """
+        top = QTreeWidgetItem(self.treeWidget)
+
+        # Determine initial visibility. Prefer viewer.actors entry if available.
+        initial_visibility = True
+        try:
+            if hasattr(self.viewer, 'actors') and mesh_name in getattr(self.viewer, 'actors', {}):
+                initial_visibility = bool(self.viewer.actors[mesh_name].visibility)
+            elif hasattr(mesh, 'visibility'):
+                initial_visibility = bool(getattr(mesh, 'visibility'))
+        except Exception:
+            initial_visibility = True
+
+        visibilityCheckbox = QCheckBox()
+        visibilityCheckbox.setChecked(initial_visibility)
+
+        # Connect checkbox: prefer viewer APIs, fallback to mesh attribute
+        def _on_vis(state, name=mesh_name, m=mesh):
+            checked = state == Qt.Checked
+            if hasattr(self.viewer, 'actors') and name in getattr(self.viewer, 'actors', {}):
+                self.set_object_visibility(name, checked)
+                return
+            if hasattr(self.viewer, 'set_object_visibility'):
+                try:
+                    self.viewer.set_object_visibility(name, checked)
+                    return
+                except Exception:
+                    pass
+            # Fallback: set on mesh if possible
+            if hasattr(m, 'visibility'):
+                try:
+                    m.visibility = checked
+                except Exception:
+                    pass
+
+        visibilityCheckbox.stateChanged.connect(_on_vis)
+
+        # Compose widget (checkbox + label)
+        itemWidget = QWidget()
+        itemLayout = QHBoxLayout(itemWidget)
+        itemLayout.setContentsMargins(0, 0, 0, 0)
+        itemLayout.addWidget(visibilityCheckbox)
+        itemLayout.addWidget(QLabel(mesh_name))
+        itemWidget.setLayout(itemLayout)
+
+        self.treeWidget.setItemWidget(top, 0, itemWidget)
+        top.setExpanded(False)
+
+        # Add children: Point Data and Cell Data groups
+        try:
+            point_data = getattr(mesh, 'point_data', None)
+            cell_data = getattr(mesh, 'cell_data', None)
+
+            if point_data is not None and len(point_data.keys()) > 0:
+                pd_group = QTreeWidgetItem(top)
+                pd_group.setText(0, 'Point Data')
+                for array_name in sorted(point_data.keys()):
+                    arr_item = QTreeWidgetItem(pd_group)
+                    # show name and length/type if available
+                    try:
+                        vals = point_data[array_name]
+                        meta = f" ({len(vals)})" if hasattr(vals, '__len__') else ''
+                    except Exception:
+                        meta = ''
+                    arr_item.setText(0, f"{array_name}{meta}")
+
+            if cell_data is not None and len(cell_data.keys()) > 0:
+                cd_group = QTreeWidgetItem(top)
+                cd_group.setText(0, 'Cell Data')
+                for array_name in sorted(cell_data.keys()):
+                    arr_item = QTreeWidgetItem(cd_group)
+                    try:
+                        vals = cell_data[array_name]
+                        meta = f" ({len(vals)})" if hasattr(vals, '__len__') else ''
+                    except Exception:
+                        meta = ''
+                    arr_item.setText(0, f"{array_name}{meta}")
+        except Exception:
+            # If mesh lacks expected attributes, silently continue
+            pass
+
+    def add_object_item(self, object_name, instance=None):
+        """Add a generic object entry to the tree. This mirrors add_actor but works
+        for objects/meshes that are not present in viewer.actors."""
+        objectItem = QTreeWidgetItem(self.treeWidget)
+
+        # Determine initial visibility
+        visibility = False
+        if instance is not None and hasattr(instance, 'visibility'):
+            visibility = bool(getattr(instance, 'visibility'))
+
+        visibilityCheckbox = QCheckBox()
+        visibilityCheckbox.setChecked(visibility)
+
+        # Connect checkbox to toggle visibility. Prefer using viewer APIs if available.
+        def _on_visibility_change(state, name=object_name, inst=instance):
+            checked = state == Qt.Checked
+            # If there's an actor for this name, delegate to set_object_visibility
+            if hasattr(self.viewer, 'actors') and name in getattr(self.viewer, 'actors', {}):
+                self.set_object_visibility(name, checked)
+                return
+            # If viewer exposes a generic setter use it
+            if hasattr(self.viewer, 'set_object_visibility'):
+                try:
+                    self.viewer.set_object_visibility(name, checked)
+                    return
+                except Exception:
+                    pass
+            # Fallback: set attribute on the instance if possible
+            if inst is not None and hasattr(inst, 'visibility'):
+                try:
+                    inst.visibility = checked
+                except Exception:
+                    pass
+
+        visibilityCheckbox.stateChanged.connect(_on_visibility_change)
+
+        # Create a widget to hold the checkbox and name on a single line
+        itemWidget = QWidget()
+        itemLayout = QHBoxLayout(itemWidget)
+        itemLayout.setContentsMargins(0, 0, 0, 0)
+        itemLayout.addWidget(visibilityCheckbox)
+        itemLayout.addWidget(QLabel(object_name))
+        itemWidget.setLayout(itemLayout)
+
+        self.treeWidget.setItemWidget(objectItem, 0, itemWidget)
+        objectItem.setExpanded(False)  # Initially collapsed
 
     def add_actor(self, actor_name):
         # Create a tree item for the object
@@ -98,10 +248,12 @@ class ObjectListWidget(QWidget):
 
         item_widget = self.treeWidget.itemWidget(selected_items[0], 0)
         object_label = item_widget.findChild(QLabel).text()
-        object = self.viewer.objects.get(object_label, None)
-        if object is None:
+        mesh_dict = self.viewer.meshes.get(object_label, None)
+        if mesh_dict is None:
             return
-
+        mesh = mesh_dict.get('mesh', None)
+        if mesh is None:
+            return
         # Determine available formats based on object type and dependencies
         formats = []
         try:
@@ -146,28 +298,28 @@ class ObjectListWidget(QWidget):
         try:
             if selected_format == "obj":
                 (
-                    object.save(file_path)
-                    if hasattr(object, "save")
-                    else pv.save_meshio(file_path, object)
+                    mesh.save(file_path)
+                    if hasattr(mesh, "save")
+                    else pv.save_meshio(file_path, mesh)
                 )
             elif selected_format == "vtk":
-                pv.save_meshio(file_path, object)
+                mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh)
             elif selected_format == "ply":
-                pv.save_meshio(file_path, object)
+                pv.save_meshio(file_path, mesh)
             elif selected_format == "vtp":
                 (
-                    object.save(file_path)
-                    if hasattr(object, "save")
-                    else pv.save_meshio(file_path, object)
+                    mesh.save(file_path)
+                    if hasattr(mesh, "save")
+                    else pv.save_meshio(file_path, mesh)
                 )
             elif selected_format == "geoh5":
                 with geoh5py.Geoh5(file_path, overwrite=True) as geoh5:
-                    if hasattr(object, "faces"):
+                    if hasattr(mesh, "faces"):
                         geoh5.add_surface(
-                            name=object_label, vertices=object.points, faces=object.faces
+                            name=object_label, vertices=mesh.points, faces=mesh.faces
                         )
                     else:
-                        geoh5.add_points(name=object_label, vertices=object.points)
+                        geoh5.add_points(name=object_label, vertices=mesh.points)
             print(f"Exported {object_label} to {file_path} as {selected_format}")
         except Exception as e:
             print(f"Failed to export object: {e}")
@@ -193,6 +345,7 @@ class ObjectListWidget(QWidget):
 
         addFeatureAction = menu.addAction("Surface from model")
         loadFeatureAction = menu.addAction("Load from file")
+        addQgsLayerAction = menu.addAction("Add from QGIS layer")
 
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec_(buttonPosition)
@@ -201,10 +354,122 @@ class ObjectListWidget(QWidget):
             self.add_feature_from_geological_model()
         elif action == loadFeatureAction:
             self.load_feature_from_file()
-
+        elif action == addQgsLayerAction:
+            self.add_object_from_qgis_layer()
     def add_feature_from_geological_model(self):
         # Logic to add a feature from the geological model
         print("Adding feature from geological model")
+    def add_object_from_qgis_layer(self):
+        """Show a dialog to pick a QGIS point vector layer, convert it to a VTK/PyVista
+        point cloud and copy numeric attributes as point scalars.
+        """
+        # Local imports so the module can still be imported when QGIS GUI isn't available
+        try:
+            from qgis.gui import QgsMapLayerComboBox
+            from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
+        except Exception as e:
+            print("QGIS GUI components are not available:", e)
+            return
+
+        try:
+            from loopstructural.main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+        except Exception as e:
+            print("Could not import qgsLayerToGeoDataFrame:", e)
+            return
+        from loopstructural.main.model_manager import AllSampler
+
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, QMessageBox
+        import numpy as np
+        import pandas as pd
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add from QGIS layer")
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel("Select point layer:"))
+        layer_combo = QgsMapLayerComboBox(dialog)
+        # Restrict to point layers only
+        layer_combo.setFilters(QgsMapLayerProxyModel.PointLayer)
+        layout.addWidget(layer_combo)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        layer = layer_combo.currentLayer()
+        if layer is None or not layer.isValid():
+            QMessageBox.warning(self, "Invalid layer", "No valid layer selected.")
+            return
+
+        # Basic geometry check - ensure the layer contains point geometry
+        try:
+            if layer.wkbType() != QgsWkbTypes.Point and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.PointGeometry:
+                # Some QGIS versions use different enums; allow via proxy filter primarily
+                # If the check fails, continue but warn
+                print("Selected layer does not appear to be a point layer. Proceeding anyway.")
+        except Exception:
+            # ignore strict checks - rely on conversion result
+            pass
+
+        # Convert layer to a DataFrame (no DTM)
+        gdf = qgsLayerToGeoDataFrame(layer)
+        sampler = AllSampler()
+        # sample the points from the gdf with no DTM and include Z if present
+        df = sampler(gdf,None,True)
+        if df is None or df.empty:
+            QMessageBox.warning(self, "No data", "Selected layer contains no points.")
+            return
+
+        # Ensure X,Y,Z columns present
+        if not {"X", "Y", "Z"}.issubset(df.columns):
+            QMessageBox.warning(self, "Invalid data", "Layer conversion did not produce X/Y/Z columns.")
+            return
+
+        # Build points array
+        try:
+            pts = np.vstack([df["X"].to_numpy(), df["Y"].to_numpy(), df["Z"].to_numpy()]).T.astype(float)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to build point coordinates: {e}")
+            return
+
+        # Create PyVista point cloud / PolyData
+        try:
+            mesh = pv.PolyData(pts)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to create mesh: {e}")
+            return
+
+        # Add numeric attributes as point scalars
+        for col in df.columns:
+            if col in ("X", "Y", "Z"):
+                continue
+            try:
+                ser = pd.to_numeric(df[col], errors='coerce')
+                if ser.isnull().all():
+                    # no numeric values present
+                    continue
+                arr = ser.to_numpy().astype(float)
+                # Ensure length matches points
+                if len(arr) != mesh.n_points:
+                    # skip columns that don't match
+                    continue
+                mesh.point_data[col] = arr
+            except Exception:
+                # skip non-numeric or problematic fields
+                continue
+
+        # Add to viewer
+        if self.viewer and hasattr(self.viewer, 'add_mesh_object'):
+            try:
+                self.viewer.add_mesh_object(mesh, name=layer.name())
+            except Exception as e:
+                print("Failed to add mesh to viewer:", e)
+        else:
+            print("Error: Viewer is not initialized or does not support adding meshes.")
 
     def load_feature_from_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -216,12 +481,9 @@ class ObjectListWidget(QWidget):
 
         try:
             mesh = pv.read(file_path)
-            if not isinstance(mesh, pv.PolyData):
-                raise ValueError("The file does not contain a valid mesh.")
-
             # Add the mesh to the viewer
             if self.viewer and hasattr(self.viewer, 'add_mesh'):
-                self.viewer.add_mesh(mesh, name=file_name)
+                self.viewer.add_mesh_object(mesh, name=file_name)
             else:
                 print("Error: Viewer is not initialized or does not support adding meshes.")
 
