@@ -425,7 +425,7 @@ class ObjectListWidget(QWidget):
             return
 
         # Ensure X,Y,Z columns present
-        if not set(["X", "Y", "Z"]).issubset(df.columns):
+        if not {"X", "Y", "Z"}.issubset(df.columns):
             QMessageBox.warning(self, "Invalid data", "Layer conversion did not produce X/Y/Z columns.")
             return
 
