@@ -10,7 +10,7 @@ interaction with the LoopStructural model from the GUI code.
 """
 
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Optional
 
 import geopandas as gpd
 import numpy as np
@@ -581,8 +581,8 @@ class GeologicalModelManager:
         points: np.ndarray,
         scalar_type: str = 'scalar',
         attributes: 'pd.DataFrame' = None,
-        crs: str | None = None,
-        value_field_name: str | None = None,
+        crs: Optional[str] = None,
+        value_field_name: Optional[str] = None,
     ) -> 'gpd.GeoDataFrame':
         """Evaluate a feature on points and return a GeoDataFrame with results.
 
