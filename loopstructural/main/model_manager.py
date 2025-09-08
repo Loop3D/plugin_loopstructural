@@ -63,13 +63,16 @@ class AllSampler:
                             {'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes}
                         )
             elif geom.geom_type == 'Point':
-                x, y = geom.x, geom.y
+
+                coords = list(geom.coords[0])
                 # Use Z from geometry if available, otherwise use DEM
-                if use_z and hasattr(geom, 'z'):
-                    z = geom.z
+                if use_z and len(coords) > 2:
+                    z = coords[2]
+                elif dem is not None:
+                    z = dem(coords[0], coords[1])
                 else:
-                    z = dem(x, y)
-                points.append({'X': x, 'Y': y, 'Z': z, 'feature_id': feature_id, **attributes})
+                    z = 0
+                points.append({'X': coords[0], 'Y': coords[1], 'Z': z, 'feature_id': feature_id, **attributes})
             feature_id += 1
         df = pd.DataFrame(points)
         return df

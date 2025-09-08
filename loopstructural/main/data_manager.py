@@ -466,7 +466,6 @@ class ModellingDataManager:
             self._structural_orientations = data['structural_orientations']
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
-            print([o.name for o in self._stratigraphic_column.order])
             self.stratigraphic_column_callback()
 
     def update_from_dict(self, data):
@@ -537,11 +536,10 @@ class ModellingDataManager:
         if 'stratigraphic_column' in data:
             self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
         else:
-            self._stratigraphic_column = StratigraphicColumn()
+            self._stratigraphic_column.clear()
 
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
-        print([o.name for o in self._stratigraphic_column.order])
 
 
     def find_layer_by_name(self, layer_name):
