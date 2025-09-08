@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.1.10](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.9...v0.1.10) (2025-09-08)
+
+
+### Bug Fixes
+
+* add edge visibility toggle and line width control in ObjectPropertiesWidget ([8bf43e1](https://github.com/Loop3D/plugin_loopstructural/commit/8bf43e1311d5c967c6113239d84fd36b34fd21b3))
+* add geopandas ([62a8124](https://github.com/Loop3D/plugin_loopstructural/commit/62a8124c06a083e3748706c588016aceb7bc8861))
+* add histogram for scalar value, allow selecting scalar, choose to colour with scalar or with solid colour ([ea0aefc](https://github.com/Loop3D/plugin_loopstructural/commit/ea0aefc6b67e200bb2e4e4f157a25624c161c392))
+* add layer from qgis to visualisation ([50cec1b](https://github.com/Loop3D/plugin_loopstructural/commit/50cec1bd9772499c5484f700d6bf8d569eb9a818))
+* adding export of scalar field value to qgis vector pointset ([037d50f](https://github.com/Loop3D/plugin_loopstructural/commit/037d50f980dfa18d818f4d42e829f6ac50b308dd))
+* allow all pv objects to be loaded ([742508e](https://github.com/Loop3D/plugin_loopstructural/commit/742508e63adabd9f9620595ded28a68ef8ee2c24))
+* apply colourmap change and refactored actor/mapper update into single function ([352f5b1](https://github.com/Loop3D/plugin_loopstructural/commit/352f5b1b2fc50e1f3717f58ea737bde2d9b40b07))
+* evalute feature onto vtk grid ([33b2967](https://github.com/Loop3D/plugin_loopstructural/commit/33b29670aa31d92bbfb8bd65cb2ec070522fd8dc))
+* lint ([efec3ab](https://github.com/Loop3D/plugin_loopstructural/commit/efec3ab55774dbd0bf41798457b2662162b636e8))
+* linting ([dc7d8f2](https://github.com/Loop3D/plugin_loopstructural/commit/dc7d8f24c2ec55a1de780cdb4f4bec9b8e7be9a6))
+* make fold plunge/azi attributes of panel for easy access ([ccc03b9](https://github.com/Loop3D/plugin_loopstructural/commit/ccc03b99238dbaf6968ca56957bb7052dd37a398))
+* put all feature options in QgsCollapsibleGroupBox ([08a50db](https://github.com/Loop3D/plugin_loopstructural/commit/08a50db9b8d37157462817779045e4be83993bf9))
+* remove feature data from data manager when its deleted ([3ce70a1](https://github.com/Loop3D/plugin_loopstructural/commit/3ce70a17bcf740c30c6e4001e4896e179cdce8ff))
+* remove print statements, rescale z for data to be in real coordinates ([29abb3e](https://github.com/Loop3D/plugin_loopstructural/commit/29abb3ebd11cd74e105a6440f52032fea88eb69b))
+* streamline color handling and scalar updates in ObjectPropertiesWidget ([165f25f](https://github.com/Loop3D/plugin_loopstructural/commit/165f25fcebf6a605bdb1fb89ce94ac8fa9b0e250))
+* update viewer to store meshes and a reference to actors. ([1dc4b2f](https://github.com/Loop3D/plugin_loopstructural/commit/1dc4b2f65fa3cdb3547feee743839fe16a7fa8ff))
+* updating stratigraphic column, need update loopstructural. ([2572749](https://github.com/Loop3D/plugin_loopstructural/commit/2572749f858158503292f1b7b5c520053ecf5788))
+* upgrade loopstructural requirement ([c905dda](https://github.com/Loop3D/plugin_loopstructural/commit/c905dda4448183fc0ad68bae7bfe5fac84635b02))
+* use active_scalars_name to prefile scalars kwarg ([8124f36](https://github.com/Loop3D/plugin_loopstructural/commit/8124f36adab8eff9aa596b529dfe7e3af94b7e9b))
+* use z coordinate if it exists for all manually added features ([5561ded](https://github.com/Loop3D/plugin_loopstructural/commit/5561ded0cc3772e16180c35c1d8275f17b7a09fe))
+* uses the meshes dictionary for export ([437817c](https://github.com/Loop3D/plugin_loopstructural/commit/437817c3415dafd02b11a5ca6c99f4fa9775881b))
+
 ## [0.1.9](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.8...v0.1.9) (2025-09-03)
 
 
