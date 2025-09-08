@@ -40,18 +40,19 @@ class StratigraphicUnitWidget(QWidget):
         self._name = str(value)
 
     def set_thickness(self, thickness: float):
-        """
-        Set the thickness of the stratigraphic unit.
-        :param thickness: The thickness value to set.
+        """Set the thickness of the stratigraphic unit.
+
+        Parameters
+        ----------
+        thickness : float
+            The thickness value to set.
         """
         self.thickness = thickness
         self.spinBoxThickness.setValue(thickness)
         self.validateFields()
 
     def onColourSelectClicked(self):
-        """
-        Open a color dialog to select a color for the stratigraphic unit.
-        """
+        """Open a color dialog to select a color for the stratigraphic unit."""
         from PyQt5.QtWidgets import QColorDialog
 
         color = QColorDialog.getColor()
@@ -60,19 +61,19 @@ class StratigraphicUnitWidget(QWidget):
         self.buttonColor.setStyleSheet(f"background-color: {self.colour};")
 
     def onThicknessChanged(self, thickness: float):
-        """
-        Update the thickness of the stratigraphic unit.
-        :param thickness: The new thickness value.
+        """Handle changes to the thickness spinbox.
+
+        Parameters
+        ----------
+        thickness : float
+            The new thickness value.
         """
         self.thickness = thickness
         self.validateFields()
         self.thicknessChanged.emit(thickness)
 
     def onNameChanged(self):
-        """
-        Update the name of the stratigraphic unit.
-        :param name: The new name value.
-        """
+        """Handle name edit completion and emit nameChanged if modified."""
         name = self.lineEditName.text().strip()
         if name != self.name:
             self.name = name
@@ -84,9 +85,7 @@ class StratigraphicUnitWidget(QWidget):
         self.deleteRequested.emit(self)
 
     def validateFields(self):
-        """
-        Validate the fields and update the widget's appearance.
-        """
+        """Validate the widget fields and update UI hints."""
         # Reset all styles first
         self.lineEditName.setStyleSheet("")
         self.spinBoxThickness.setStyleSheet("")
@@ -101,9 +100,12 @@ class StratigraphicUnitWidget(QWidget):
             self.spinBoxThickness.setToolTip("Thickness must be greater than zero.")
 
     def setData(self, data: Optional[dict] = None):
-        """
-        Set the data for the stratigraphic unit widget.
-        :param data: A dictionary containing 'name' and 'colour' keys.
+        """Set the data for the stratigraphic unit widget.
+
+        Parameters
+        ----------
+        data : dict or None
+            Dictionary containing 'name' and 'colour' keys. If None, defaults are used.
         """
         if data:
             self.name = str(data.get("name", ""))
@@ -119,9 +121,12 @@ class StratigraphicUnitWidget(QWidget):
         self.validateFields()
 
     def getData(self) -> dict:
-        """
-        Get the data from the stratigraphic unit widget.
-        :return: A dictionary containing 'name', 'colour', and 'thickness'.
+        """Return the widget data as a dictionary.
+
+        Returns
+        -------
+        dict
+            Dictionary containing 'uuid', 'name', 'colour', and 'thickness'.
         """
         return {
             "uuid": self.uuid,

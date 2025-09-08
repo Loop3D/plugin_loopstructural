@@ -22,15 +22,22 @@ def qgsLayerToGeoDataFrame(layer) -> gpd.GeoDataFrame:
 
 
 def qgsLayerToDataFrame(layer, dtm) -> pd.DataFrame:
-    """Convert a vector layer to a pandas DataFrame
-    samples the geometry using either points or the vertices of the lines
+    """Convert a vector layer to a pandas DataFrame by sampling geometries.
 
-    :param layer: _description_
-    :type layer: _type_
-    :param dtm: Digital Terrain Model to evaluate Z values
-    :type dtm: _type_ or None
-    :return: the dataframe object
-    :rtype: pd.DataFrame
+    Samples point geometries or the vertices of line geometries and optionally
+    queries a DTM for Z values.
+
+    Parameters
+    ----------
+    layer : QgsVectorLayer
+        Input QGIS vector layer to sample.
+    dtm : QgsRaster or None
+        Digital Terrain Model used to evaluate Z values for points (optional).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns `X`, `Y`, `Z` and one column per layer field.
     """
     if layer is None:
         return None

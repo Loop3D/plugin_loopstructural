@@ -29,9 +29,12 @@ class UnconformityWidget(QWidget):
         self.deleteRequested.emit(self)
 
     def setData(self, data: Optional[dict] = None):
-        """
-        Set the data for the unconformity widget.
-        :param data: A dictionary containing 'unconformity_type' key.
+        """Set the data for the unconformity widget.
+
+        Parameters
+        ----------
+        data : dict or None
+            Dictionary containing 'unconformity_type' key. If None, defaults are used.
         """
         if data:
             self.unconformity_type = data.get("unconformity_type", "")

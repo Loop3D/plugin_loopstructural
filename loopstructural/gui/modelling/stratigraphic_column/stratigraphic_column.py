@@ -14,10 +14,19 @@ from .stratigraphic_unit import StratigraphicUnitWidget
 
 
 class StratColumnWidget(QWidget):
-    """In control of building the stratigraphic column
+    """Widget that controls building the stratigraphic column.
 
-    :param QWidget: _description_
-    :type QWidget: _type_
+    Parameters
+    ----------
+    parent : QWidget, optional
+        Parent widget, by default None.
+    data_manager : object
+        Data manager instance used to manage the stratigraphic column. Must be provided.
+
+    Notes
+    -----
+    The widget updates its display based on the data_manager's stratigraphic column
+    and registers a callback via data_manager.set_stratigraphic_column_callback.
     """
 
     def __init__(self, parent=None, data_manager=None):
