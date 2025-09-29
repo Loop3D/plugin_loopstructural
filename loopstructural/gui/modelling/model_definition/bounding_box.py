@@ -24,9 +24,12 @@ class BoundingBoxWidget(QWidget):
         self.data_manager.set_bounding_box_update_callback(self.set_bounding_box)
 
     def set_bounding_box(self, bounding_box):
-        """
-        Set the bounding box values in the UI.
-        :param bounding_box: BoundingBox object with xmin, xmax, ymin, ymax, zmin, zmax attributes.
+        """Populate UI controls with values from a BoundingBox object.
+
+        Parameters
+        ----------
+        bounding_box : object
+            BoundingBox-like object with `origin` and `maximum` sequences of length 3.
         """
         self.originXSpinBox.setValue(bounding_box.origin[0])
         self.maxXSpinBox.setValue(bounding_box.maximum[0])
@@ -36,10 +39,7 @@ class BoundingBoxWidget(QWidget):
         self.maxZSpinBox.setValue(bounding_box.maximum[2])
 
     def useCurrentViewExtent(self):
-        """
-        Use the current view extent from the map canvas.
-        This method should be connected to a button or action in the UI.
-        """
+        """Set bounding box values from the current map canvas view extent."""
         if self.data_manager.map_canvas:
             extent = self.data_manager.map_canvas.extent()
             self.originXSpinBox.setValue(extent.xMinimum())
@@ -50,10 +50,7 @@ class BoundingBoxWidget(QWidget):
             self.maxZSpinBox.setValue(1000)
 
     def selectFromCurrentLayer(self):
-        """
-        Select the bounding box from the current layer.
-        This method should be connected to a button or action in the UI.
-        """
+        """Set bounding box values from the currently selected layer's 3D extent."""
         layer = self.data_manager.map_canvas.currentLayer()
         if layer:
             extent = layer.extent3D()

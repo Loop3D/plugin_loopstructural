@@ -106,14 +106,20 @@ class GeologicalModelManager:
     def update_bounding_box(self, bounding_box: BoundingBox):
         """Update the bounding box of the geological model.
 
-        :param bounding_box: The new bounding box.
-        :type bounding_box: BoundingBox
+        Parameters
+        ----------
+        bounding_box : BoundingBox
+            The new bounding box for the internal LoopStructural model.
         """
         self.model.bounding_box = bounding_box
 
     def set_dem_function(self, dem_function: Callable):
-        """Set the function to get the elevation at a point.
-        :param dem_function: A function that takes x and y coordinates and returns the elevation.
+        """Set the function used to obtain elevation (Z) values.
+
+        Parameters
+        ----------
+        dem_function : Callable
+            Callable taking (x, y) and returning an elevation (z).
         """
         self.dem_function = dem_function
 
@@ -129,11 +135,29 @@ class GeologicalModelManager:
         use_z_coordinate=False,
     ):
         """Add fault trace data to the geological model.
-        :param fault_trace: A GeoDataFrame containing the fault trace data.
-        :param fault_name_field: The field name for the fault name.
-        :param fault_dip_field: The field name for the fault dip.
-        :param fault_displacement_field: The field name for the fault displacement.
-        :param sampler: A callable that samples the fault trace and returns a DataFrame with X, Y, Z coordinates.
+
+        Parameters
+        ----------
+        fault_trace : geopandas.GeoDataFrame
+            GeoDataFrame containing the fault trace geometries and attributes.
+        fault_name_field : str or None
+            Field name in `fault_trace` indicating the fault identifier. If
+            not provided the sampler's `feature_id` is used.
+        fault_dip_field : str or None
+            Optional field name providing dip values for fault points.
+        fault_displacement_field : str or None
+            Optional field name providing displacement values for fault points.
+        fault_pitch_field : str or None
+            Optional field name providing fault pitch values.
+        sampler : callable, optional
+            Callable used to sample geometries to point rows (default: AllSampler()).
+        use_z_coordinate : bool
+            If True, use Z values from geometries when available; otherwise use
+            the manager's DEM function.
+
+        Returns
+        -------
+        None
         """
         # sample fault trace
         self.faults.clear()  # Clear existing faults
@@ -545,10 +569,20 @@ class GeologicalModelManager:
     def evaluate_feature_on_points(self, feature_name: str, points: np.ndarray, scalar_type: str = 'scalar') -> np.ndarray:
         """Evaluate a model feature at the provided points.
 
-        :param feature_name: Name of the feature to evaluate.
-        :param points: Nx3 numpy array of points [x, y, z].
-        :param scalar_type: 'scalar' or 'gradient'.
-        :returns: numpy array of evaluated values. For 'scalar' an (N,) array is returned. For 'gradient' an (N,3) array is returned if supported.
+        Parameters
+        ----------
+        feature_name : str
+            Name of the feature to evaluate.
+        points : array_like
+            An (N, 3) array-like of points [x, y, z] at which to evaluate.
+        scalar_type : {'scalar', 'gradient'}, optional
+            Whether to evaluate scalar values or gradients. Default is 'scalar'.
+
+        Returns
+        -------
+        numpy.ndarray
+            Evaluated values. For 'scalar' an (N,) array is returned. For
+            'gradient' an (N, 3) array is returned when supported by the model.
         """
         if self.model is None:
             raise RuntimeError('No model available for evaluation')
@@ -586,13 +620,26 @@ class GeologicalModelManager:
     ) -> 'gpd.GeoDataFrame':
         """Evaluate a feature on points and return a GeoDataFrame with results.
 
-        :param feature_name: Feature name to evaluate.
-        :param points: Nx3 array-like of points (x,y,z).
-        :param scalar_type: 'scalar' or 'gradient'.
-        :param attributes: Optional pandas DataFrame with attributes to attach (must have same length as points).
-        :param crs: Optional CRS for the returned GeoDataFrame (e.g. 'EPSG:4326'). If None, GeoDataFrame will be created without CRS.
-        :param value_field_name: Optional name for the value field; defaults to '{feature_name}_value' or '{feature_name}_gradient'.
-        :returns: GeoDataFrame with geometry and value columns (and any provided attributes).
+        Parameters
+        ----------
+        feature_name : str
+            Feature name to evaluate.
+        points : array_like
+            An (N, 3) array-like of points (x, y, z).
+        scalar_type : {'scalar', 'gradient'}, optional
+            Whether to compute scalar values or gradients.
+        attributes : pandas.DataFrame or None, optional
+            Optional attributes to attach (must have the same length as `points`).
+        crs : str or None, optional
+            Coordinate Reference System for the returned GeoDataFrame (e.g. 'EPSG:4326').
+        value_field_name : str or None, optional
+            Optional name for the value field; defaults to '<feature_name>_value' or '<feature_name>_gradient'.
+
+        Returns
+        -------
+        geopandas.GeoDataFrame
+            GeoDataFrame containing point geometries and computed value columns
+            (and any provided attributes).
         """
         import pandas as _pd
         import geopandas as _gpd

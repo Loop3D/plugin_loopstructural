@@ -10,10 +10,21 @@ from qgis.PyQt.QtCore import QVariant
 def callableToLayer(callable, layer, dtm, name: str):
     """Convert a feature to a raster and store it in QGIS as a temporary layer.
 
-    :param feature: The object that has an `evaluate_value` method for computing values.
-    :param dtm: Digital terrain model (if needed for processing).
-    :param bounding_box: Object with `origin`, `maximum`, `step_vector`, and `nsteps`.
-    :param crs: Coordinate reference system (QGIS CRS object).
+    Parameters
+    ----------
+    callable : callable
+        A callable that accepts an (N,3) numpy array of points and returns values.
+    layer : QgsVectorLayer
+        QGIS vector layer to update with computed values.
+    dtm : QgsRaster or None
+        Digital terrain model used to extract Z values for points (optional).
+    name : str
+        Name of the attribute/field to store the computed values.
+
+    Returns
+    -------
+    None
+        The function updates the provided `layer` in-place.
     """
     layer.startEditing()
     if name not in [field.name() for field in layer.fields()]:

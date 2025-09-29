@@ -43,12 +43,20 @@ from loopstructural.toolbelt import PlgLogger
 
 
 class LoopstructuralPlugin:
-    def __init__(self, iface: QgisInterface):
-        """Constructor.
+    """QGIS plugin entrypoint for LoopStructural.
 
-        :param iface: An interface instance that will be passed to this class which \
-        provides the hook by which you can manipulate the QGIS application at run time.
-        :type iface: QgsInterface
+    This class initializes plugin resources, UI elements and data/model managers
+    required for LoopStructural integration with QGIS.
+    """
+
+    def __init__(self, iface: QgisInterface):
+        """Initialize the plugin.
+
+        Parameters
+        ----------
+        iface : QgisInterface
+            An interface instance provided by QGIS which allows the plugin to
+            manipulate the QGIS application at run time.
         """
         self.iface = iface
         self.log = PlgLogger().log
@@ -71,6 +79,12 @@ class LoopstructuralPlugin:
         self.data_manager.set_model_manager(self.model_manager)
 
     def injectLogHandler(self):
+        """Install LoopStructural logging handler that forwards logs to the plugin logger.
+
+        This configures LoopStructural's logging to use the plugin's
+        PlgLoggerHandler so log records are captured and forwarded to the
+        plugin's logging infrastructure.
+        """
         import logging
 
         import LoopStructural
@@ -168,18 +182,22 @@ class LoopstructuralPlugin:
         self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
 
     def tr(self, message: str) -> str:
-        """Get the translation for a string using Qt translation API.
+        """Translate a string using Qt translation API.
 
-        :param message: string to be translated.
-        :type message: str
+        Parameters
+        ----------
+        message : str
+            String to be translated.
 
-        :returns: Translated version of message.
-        :rtype: str
+        Returns
+        -------
+        str
+            Translated version of the input string.
         """
         return QCoreApplication.translate(self.__class__.__name__, message)
 
     def unload(self):
-        """Cleans up when plugin is disabled/uninstalled."""
+        """Clean up when plugin is disabled or uninstalled."""
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
@@ -197,9 +215,12 @@ class LoopstructuralPlugin:
         del self.toolbar
 
     def run(self):
-        """Main process.
+        """Run main process.
 
-        :raises Exception: if there is no item in the feed
+        Raises
+        ------
+        Exception
+            If there is no item in the feed.
         """
         try:
             self.log(

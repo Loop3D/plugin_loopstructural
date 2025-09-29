@@ -33,14 +33,30 @@ class LoopPyVistaQTPlotter(QtInteractor):
         This wrapper stores metadata to allow robust re-adding and
         updating of visualization parameters.
 
-        :param mesh: a pyvista mesh-like object
-        :param name: unique name for the mesh
-        :param scalars: name of scalar array or scalar values to map
-        :param cmap: colormap name
-        :param clim: tuple (min, max) for colormap
-        :param opacity: float 0-1 for surface opacity
-        :param show_scalar_bar: whether to show scalar bar
-        :param color: tuple of 3 floats (r,g,b) in 0..1 for solid color; if provided, overrides scalars
+        Parameters
+        ----------
+        mesh : pyvista.PolyData or similar
+            Mesh-like object to add.
+        name : str
+            Unique name for the mesh.
+        scalars : Optional[Any]
+            Name of scalar array or scalar values to map (optional).
+        cmap : Optional[str]
+            Colormap name (optional).
+        clim : Optional[tuple(float, float)]
+            Color limits as (min, max) for the colormap (optional).
+        opacity : Optional[float]
+            Surface opacity in the range 0-1 (optional).
+        show_scalar_bar : bool
+            Whether to show a scalar bar for mapped scalars.
+        color : Optional[tuple(float, float, float)]
+            Solid color as (r, g, b) in 0..1; if provided, overrides scalars.
+        **kwargs : dict
+            Additional keyword arguments forwarded to the underlying pyvista add_mesh call.
+
+        Returns
+        -------
+        None
         """
         # Remove any previous entry with the same name (to keep metadata consistent)
         # if name in self.meshes:

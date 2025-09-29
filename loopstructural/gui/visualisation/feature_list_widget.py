@@ -57,10 +57,12 @@ class FeatureListWidget(QWidget):
         return scale
 
     def add_feature(self, feature):
-        """Add a feature to the feature list.
+        """Add a feature to the feature list widget.
 
-        :param feature: The feature to add.
-        :type feature: Feature
+        Parameters
+        ----------
+        feature : Feature
+            The feature object to add to the list.
         """
         featureItem = QTreeWidgetItem(self.treeWidget)
         featureItem.setText(0, feature.name)

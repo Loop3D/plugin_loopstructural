@@ -1,7 +1,8 @@
 #! python3
 
-"""Metadata about the package to easily retrieve informations about it.
-See: https://packaging.python.org/guides/single-sourcing-package-version/
+"""Package metadata.
+
+Contains package metadata constants used by the plugin (title, icon, etc.).
 """
 
 # ############################################################################
@@ -36,13 +37,17 @@ PLG_METADATA_FILE: Path = DIR_PLUGIN_ROOT.resolve() / "metadata.txt"
 # ########## Functions #############
 # ##################################
 def plugin_metadata_as_dict() -> dict:
-    """Read plugin metadata.txt and returns it as a Python dict.
+    """Read plugin metadata.txt and return it as a Python dict.
 
-    Raises:
-        IOError: if metadata.txt is not found
+    Raises
+    ------
+    IOError
+        If metadata.txt is not found.
 
-    Returns:
-        dict: dict of dicts.
+    Returns
+    -------
+    dict
+        Metadata sections as nested dictionaries.
 
     """
     config = ConfigParser()
