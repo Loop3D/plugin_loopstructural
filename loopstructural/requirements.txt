@@ -1,6 +1,0 @@
-pyvistaqt
-pyvista
-LoopStructural==1.6.22
-pyqtgraph
-loopsolver
-geopandas

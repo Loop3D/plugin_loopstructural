@@ -1,1 +1,0 @@
-from .stratigraphic_column import StratColumnWidget

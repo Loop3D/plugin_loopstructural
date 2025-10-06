@@ -1,1 +1,0 @@
-from .geological_model_tab import GeologicalModelTab
