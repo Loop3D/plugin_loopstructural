@@ -144,5 +144,5 @@ class FeatureListWidget(QWidget):
             return
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
         for surface in stratigraphic_surfaces:
-            self.viewer.add_mesh_object(surface.vtk(), name=surface.name)
+            self.viewer.add_mesh_object(surface.vtk(), name=surface.name,color=surface.colour)
         print("Adding stratigraphic surfaces...")
