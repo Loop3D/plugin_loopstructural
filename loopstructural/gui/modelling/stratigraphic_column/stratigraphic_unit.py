@@ -1,7 +1,7 @@
 import os
-import numpy as np
 from typing import Optional
 
+import numpy as np
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget
@@ -27,26 +27,28 @@ class StratigraphicUnitWidget(QWidget):
         self._name = name if name is not None else ""
         # Convert colour from RGB tuple or string to Qt-compatible hex string
         if colour is not None:
-            if (isinstance(colour, tuple) or isinstance(colour, list) or isinstance(colour, np.ndarray)) and len(colour) == 3:
+            if (
+                isinstance(colour, tuple)
+                or isinstance(colour, list)
+                or isinstance(colour, np.ndarray)
+            ) and len(colour) == 3:
                 # Convert (r, g, b) to "#RRGGBB"
                 if all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in colour):
                     rgb = [int(c * 255) for c in colour]
                 else:
                     rgb = [int(c) for c in colour]
-                self.colour = "#{:02x}{:02x}{:02x}".format(*rgb )
+                self.colour = "#{:02x}{:02x}{:02x}".format(*rgb)
             else:
                 self.colour = str(colour)
         else:
             self.colour = ""
         self.thickness = thickness  # Optional thickness attribute
-        print("color is", self.colour)
         # Add delete button
         self.buttonDelete.clicked.connect(self.request_delete)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
         self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
 
-        print(self.styleSheet())
     @property
     def name(self):
         return str(self._name)
@@ -74,7 +76,6 @@ class StratigraphicUnitWidget(QWidget):
         color = QColorDialog.getColor()
         if color.isValid():
             self.colour = color.name()
-            print("Selected colour:", self.colour)
             self.setStyleSheet(f"background-color: {self.colour};")
             self.colourChanged.emit(self.colour)
 
