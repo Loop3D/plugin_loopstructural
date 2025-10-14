@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 
+import numpy as np
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget
@@ -24,12 +25,29 @@ class StratigraphicUnitWidget(QWidget):
         uic.loadUi(os.path.join(os.path.dirname(__file__), "stratigraphic_unit.ui"), self)
         self.uuid = uuid
         self._name = name if name is not None else ""
-        self.colour = colour if colour is not None else ""
+        # Convert colour from RGB tuple or string to Qt-compatible hex string
+        if colour is not None:
+            if (
+                isinstance(colour, tuple)
+                or isinstance(colour, list)
+                or isinstance(colour, np.ndarray)
+            ) and len(colour) == 3:
+                # Convert (r, g, b) to "#RRGGBB"
+                if all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in colour):
+                    rgb = [int(c * 255) for c in colour]
+                else:
+                    rgb = [int(c) for c in colour]
+                self.colour = "#{:02x}{:02x}{:02x}".format(*rgb)
+            else:
+                self.colour = str(colour)
+        else:
+            self.colour = ""
         self.thickness = thickness  # Optional thickness attribute
         # Add delete button
         self.buttonDelete.clicked.connect(self.request_delete)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
+        self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
 
     @property
     def name(self):
@@ -58,7 +76,8 @@ class StratigraphicUnitWidget(QWidget):
         color = QColorDialog.getColor()
         if color.isValid():
             self.colour = color.name()
-        self.buttonColor.setStyleSheet(f"background-color: {self.colour};")
+            self.setStyleSheet(f"background-color: {self.colour};")
+            self.colourChanged.emit(self.colour)
 
     def onThicknessChanged(self, thickness: float):
         """Handle changes to the thickness spinbox.
@@ -83,6 +102,10 @@ class StratigraphicUnitWidget(QWidget):
     def request_delete(self):
 
         self.deleteRequested.emit(self)
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click event to open color selection dialog."""
+        self.onColourSelectClicked()
 
     def validateFields(self):
         """Validate the widget fields and update UI hints."""
@@ -111,11 +134,13 @@ class StratigraphicUnitWidget(QWidget):
             self.name = str(data.get("name", ""))
             self.colour = data.get("colour", "")
             self.lineEditName.setText(self.name)
+            self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
             # self.lineEditColour.setText(self.colour)
         else:
             self.name = ""
             self.colour = ""
             self.lineEditName.clear()
+            self.setStyleSheet("")
             # self.lineEditColour.clear()
 
         self.validateFields()
