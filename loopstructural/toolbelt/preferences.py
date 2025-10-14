@@ -33,6 +33,7 @@ class PlgSettingsStructure:
     interpolator_regularisation: float = 1.0
     interpolator_cpw: float = 1.0
     interpolator_npw: float = 1.0
+    separate_dock_widgets: bool = False
 
 
 class PlgOptionsManager:

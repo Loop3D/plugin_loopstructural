@@ -36,6 +36,11 @@ class TestPlgPreferences(unittest.TestCase):
         self.assertIsInstance(settings.version, str)
         self.assertEqual(settings.version, __version__)
 
+        # dock widgets setting
+        self.assertTrue(hasattr(settings, "separate_dock_widgets"))
+        self.assertIsInstance(settings.separate_dock_widgets, bool)
+        self.assertEqual(settings.separate_dock_widgets, False)
+
 
 # ############################################################################
 # ####### Stand-alone run ########

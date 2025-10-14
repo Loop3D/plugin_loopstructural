@@ -85,6 +85,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 
         # misc
         settings.debug_mode = self.opt_debug.isChecked()
+        settings.separate_dock_widgets = self.opt_separate_dock_widgets.isChecked()
         settings.interpolator_nelements = self.n_elements_spin_box.value()
         settings.interpolator_npw = self.npw_spin_box.value()
         settings.interpolator_cpw = self.cpw_spin_box.value()
@@ -106,6 +107,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 
         # global
         self.opt_debug.setChecked(settings.debug_mode)
+        self.opt_separate_dock_widgets.setChecked(settings.separate_dock_widgets)
         self.lbl_version_saved_value.setText(settings.version)
         # self.interpolator_type_combo.setCurrentText(settings.interpolator_type)
         self.n_elements_spin_box.setValue(settings.interpolator_nelements)
