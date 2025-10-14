@@ -127,9 +127,13 @@ class LoopstructuralPlugin:
             self.tr("LoopStructural Modelling"),
             self.iface.mainWindow(),
         )
+        self.action_visualisation = QAction(
+            QIcon(os.path.dirname(__file__) + "/3D_icon.png"),
+            self.tr("LoopStructural Visualisation"),
+            self.iface.mainWindow(),
+        )
 
         self.toolbar.addAction(self.action_modelling)
-
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
@@ -152,7 +156,7 @@ class LoopstructuralPlugin:
         ## --- dock widget
         # Get the setting for separate dock widgets
         settings = PlgOptionsManager.get_plg_settings()
-        
+
         if settings.separate_dock_widgets:
             # Create separate dock widgets for modelling and visualisation
             self.loop_widget = LoopWidget(
@@ -162,17 +166,22 @@ class LoopstructuralPlugin:
                 data_manager=self.data_manager,
                 model_manager=self.model_manager,
             )
-            
+            self.toolbar.addAction(self.action_visualisation)
+
             # Create modelling dock
-            self.modelling_dockwidget = QDockWidget(self.tr("Loop - Modelling"), self.iface.mainWindow())
+            self.modelling_dockwidget = QDockWidget(
+                self.tr("Loop - Modelling"), self.iface.mainWindow()
+            )
             self.modelling_dockwidget.setWidget(self.loop_widget.get_modelling_widget())
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
-            
+
             # Create visualisation dock
-            self.visualisation_dockwidget = QDockWidget(self.tr("Loop - Visualisation"), self.iface.mainWindow())
+            self.visualisation_dockwidget = QDockWidget(
+                self.tr("Loop - Visualisation"), self.iface.mainWindow()
+            )
             self.visualisation_dockwidget.setWidget(self.loop_widget.get_visualisation_widget())
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
-            
+
             # Tab them with other right docks if available
             right_docks = [
                 d
@@ -185,18 +194,24 @@ class LoopstructuralPlugin:
                         self.iface.mainWindow().tabifyDockWidget(dock, self.modelling_dockwidget)
                         self.modelling_dockwidget.raise_()
                         break
-            
+
             # Tab visualisation with modelling
-            self.iface.mainWindow().tabifyDockWidget(self.modelling_dockwidget, self.visualisation_dockwidget)
-            
+            self.iface.mainWindow().tabifyDockWidget(
+                self.modelling_dockwidget, self.visualisation_dockwidget
+            )
+
             self.modelling_dockwidget.show()
             self.visualisation_dockwidget.show()
             self.modelling_dockwidget.close()
             self.visualisation_dockwidget.close()
-            
+
             # Connect action to toggle modelling dock
-            self.action_modelling.triggered.connect(self.modelling_dockwidget.toggleViewAction().trigger)
-            
+            self.action_modelling.triggered.connect(
+                self.modelling_dockwidget.toggleViewAction().trigger
+            )
+            self.action_visualisation.triggered.connect(
+                self.visualisation_dockwidget.toggleViewAction().trigger
+            )
             # Store reference to main dock as None for unload compatibility
             self.loop_dockwidget = None
         else:
@@ -231,7 +246,7 @@ class LoopstructuralPlugin:
 
             # -- Connect actions
             self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
-            
+
             # Store references to separate docks as None for unload compatibility
             self.modelling_dockwidget = None
             self.visualisation_dockwidget = None
@@ -263,7 +278,7 @@ class LoopstructuralPlugin:
         if self.visualisation_dockwidget:
             self.iface.removeDockWidget(self.visualisation_dockwidget)
             del self.visualisation_dockwidget
-        
+
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
