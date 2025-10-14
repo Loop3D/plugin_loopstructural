@@ -51,3 +51,23 @@ class LoopWidget(QWidget):
         )
         tabWidget.addTab(self.modelling_widget, "Modelling")
         tabWidget.addTab(self.visualisation_widget, "Visualisation")
+
+    def get_modelling_widget(self):
+        """Return the modelling widget instance.
+
+        Returns
+        -------
+        ModellingWidget
+            The modelling widget.
+        """
+        return self.modelling_widget
+
+    def get_visualisation_widget(self):
+        """Return the visualisation widget instance.
+
+        Returns
+        -------
+        VisualisationWidget
+            The visualisation widget.
+        """
+        return self.visualisation_widget

@@ -35,7 +35,7 @@ from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
-from loopstructural.toolbelt import PlgLogger
+from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
 # ############################################################################
 # ########## Classes ###############
@@ -127,9 +127,13 @@ class LoopstructuralPlugin:
             self.tr("LoopStructural Modelling"),
             self.iface.mainWindow(),
         )
+        self.action_visualisation = QAction(
+            QIcon(os.path.dirname(__file__) + "/3D_icon.png"),
+            self.tr("LoopStructural Visualisation"),
+            self.iface.mainWindow(),
+        )
 
         self.toolbar.addAction(self.action_modelling)
-
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
@@ -150,36 +154,102 @@ class LoopstructuralPlugin:
         self.iface.pluginHelpMenu().addAction(self.action_help_plugin_menu_documentation)
 
         ## --- dock widget
-        self.loop_dockwidget = QDockWidget(self.tr("Loop"), self.iface.mainWindow())
-        self.loop_widget = LoopWidget(
-            self.iface.mainWindow(),
-            mapCanvas=self.iface.mapCanvas(),
-            logger=self.log,
-            data_manager=self.data_manager,
-            model_manager=self.model_manager,
-        )
+        # Get the setting for separate dock widgets
+        settings = PlgOptionsManager.get_plg_settings()
 
-        self.loop_dockwidget.setWidget(self.loop_widget)
-        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.loop_dockwidget)
-        right_docks = [
-            d
-            for d in self.iface.mainWindow().findChildren(QDockWidget)
-            if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
-        ]
-        # If there are other dock widgets, tab this one with the first one found
-        if right_docks:
-            for dock in right_docks:
-                if dock != self.loop_dockwidget:
-                    self.iface.mainWindow().tabifyDockWidget(dock, self.loop_dockwidget)
-                    # Optionally, bring your plugin tab to the front
-                    self.loop_dockwidget.raise_()
-                    break
-        self.loop_dockwidget.show()
+        if settings.separate_dock_widgets:
+            # Create separate dock widgets for modelling and visualisation
+            self.loop_widget = LoopWidget(
+                self.iface.mainWindow(),
+                mapCanvas=self.iface.mapCanvas(),
+                logger=self.log,
+                data_manager=self.data_manager,
+                model_manager=self.model_manager,
+            )
+            self.toolbar.addAction(self.action_visualisation)
 
-        self.loop_dockwidget.close()
+            # Create modelling dock
+            self.modelling_dockwidget = QDockWidget(
+                self.tr("Loop - Modelling"), self.iface.mainWindow()
+            )
+            self.modelling_dockwidget.setWidget(self.loop_widget.get_modelling_widget())
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
 
-        # -- Connect actions
-        self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
+            # Create visualisation dock
+            self.visualisation_dockwidget = QDockWidget(
+                self.tr("Loop - Visualisation"), self.iface.mainWindow()
+            )
+            self.visualisation_dockwidget.setWidget(self.loop_widget.get_visualisation_widget())
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
+
+            # Tab them with other right docks if available
+            right_docks = [
+                d
+                for d in self.iface.mainWindow().findChildren(QDockWidget)
+                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+            ]
+            if right_docks:
+                for dock in right_docks:
+                    if dock != self.modelling_dockwidget and dock != self.visualisation_dockwidget:
+                        self.iface.mainWindow().tabifyDockWidget(dock, self.modelling_dockwidget)
+                        self.modelling_dockwidget.raise_()
+                        break
+
+            # Tab visualisation with modelling
+            self.iface.mainWindow().tabifyDockWidget(
+                self.modelling_dockwidget, self.visualisation_dockwidget
+            )
+
+            self.modelling_dockwidget.show()
+            self.visualisation_dockwidget.show()
+            self.modelling_dockwidget.close()
+            self.visualisation_dockwidget.close()
+
+            # Connect action to toggle modelling dock
+            self.action_modelling.triggered.connect(
+                self.modelling_dockwidget.toggleViewAction().trigger
+            )
+            self.action_visualisation.triggered.connect(
+                self.visualisation_dockwidget.toggleViewAction().trigger
+            )
+            # Store reference to main dock as None for unload compatibility
+            self.loop_dockwidget = None
+        else:
+            # Create single dock widget with tabs (default behavior)
+            self.loop_dockwidget = QDockWidget(self.tr("Loop"), self.iface.mainWindow())
+            self.loop_widget = LoopWidget(
+                self.iface.mainWindow(),
+                mapCanvas=self.iface.mapCanvas(),
+                logger=self.log,
+                data_manager=self.data_manager,
+                model_manager=self.model_manager,
+            )
+
+            self.loop_dockwidget.setWidget(self.loop_widget)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.loop_dockwidget)
+            right_docks = [
+                d
+                for d in self.iface.mainWindow().findChildren(QDockWidget)
+                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+            ]
+            # If there are other dock widgets, tab this one with the first one found
+            if right_docks:
+                for dock in right_docks:
+                    if dock != self.loop_dockwidget:
+                        self.iface.mainWindow().tabifyDockWidget(dock, self.loop_dockwidget)
+                        # Optionally, bring your plugin tab to the front
+                        self.loop_dockwidget.raise_()
+                        break
+            self.loop_dockwidget.show()
+
+            self.loop_dockwidget.close()
+
+            # -- Connect actions
+            self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
+
+            # Store references to separate docks as None for unload compatibility
+            self.modelling_dockwidget = None
+            self.visualisation_dockwidget = None
 
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.
@@ -198,6 +268,17 @@ class LoopstructuralPlugin:
 
     def unload(self):
         """Clean up when plugin is disabled or uninstalled."""
+        # -- Clean up dock widgets
+        if self.loop_dockwidget:
+            self.iface.removeDockWidget(self.loop_dockwidget)
+            del self.loop_dockwidget
+        if self.modelling_dockwidget:
+            self.iface.removeDockWidget(self.modelling_dockwidget)
+            del self.modelling_dockwidget
+        if self.visualisation_dockwidget:
+            self.iface.removeDockWidget(self.visualisation_dockwidget)
+            del self.visualisation_dockwidget
+
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
