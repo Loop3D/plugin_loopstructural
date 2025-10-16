@@ -1,0 +1,28 @@
+[general]
+name=LoopStructural
+about=Implict 3D geological modelling in QGIS
+category=Vector
+hasProcessingProvider=False
+description=This plugin provides an interface to LoopStructural a 3D geological modelling library.
+icon=icon.png
+tags=geology,structural geology,3D geology,mining
+
+# credits and contact
+author=Lachlan GROSE
+email=lachlan.grose@monash.edu
+homepage=https://github.com/Loop3d/plugin_loopstructural/
+repository=https://github.com/Loop3d/plugin_loopstructural/
+tracker=https://github.com/Loop3d/plugin_loopstructural/issues/
+
+# experimental flag
+deprecated=False
+experimental=True
+qgisMinimumVersion=3.28
+qgisMaximumVersion=3.99
+
+# versioning
+version=0.1.0
+changelog=
+
+# python deps
+plugin_dependencies=qpip

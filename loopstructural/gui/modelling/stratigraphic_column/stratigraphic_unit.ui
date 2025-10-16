@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>StratigraphicUnitWidget</class>
+ <widget class="QWidget" name="StratigraphicUnitWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>756</width>
+    <height>62</height>
+   </rect>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="2">
+    <widget class="QDoubleSpinBox" name="spinBoxThickness">
+     <property name="suffix">
+      <string> m</string>
+     </property>
+     <property name="decimals">
+      <number>2</number>
+     </property>
+     <property name="minimum">
+      <double>0.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>10000.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QLineEdit" name="lineEditName"/>
+   </item>
+   <item row="0" column="1">
+    <widget class="QLabel" name="labelThickness">
+     <property name="text">
+      <string>Thickness:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="3">
+    <widget class="QPushButton" name="buttonDelete">
+     <property name="toolTip">
+      <string>Delete this unit</string>
+     </property>
+     <property name="text">
+      <string>🗑️</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
