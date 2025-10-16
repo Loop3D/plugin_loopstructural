@@ -9,10 +9,10 @@ bridges Python's `logging` into the plugin's logging facilities.
 # standard library
 import logging
 from functools import partial
-from typing import Callable
+from typing import Callable, Literal, Optional, Union
 
 # PyQGIS
-from qgis.core import QgsMessageLog, QgsMessageOutput
+from qgis.core import Qgis, QgsMessageLog, QgsMessageOutput
 from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtWidgets import QPushButton, QWidget
 from qgis.utils import iface

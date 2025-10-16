@@ -19,7 +19,6 @@ env:
 permissions:
   contents: write
 
-
 jobs:
   lint-py:
     name: Python 🐍

@@ -35,6 +35,9 @@ from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
+from loopstructural.processing import (
+    Map2LoopProvider,
+)
 from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
 # ############################################################################
@@ -137,6 +140,7 @@ class LoopstructuralPlugin:
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
+        self.initProcessing()
 
         # -- Help menu
 
@@ -266,6 +270,11 @@ class LoopstructuralPlugin:
         """
         return QCoreApplication.translate(self.__class__.__name__, message)
 
+    def initProcessing(self):
+        """Initialize the processing provider."""
+        self.provider = Map2LoopProvider()
+        QgsApplication.processingRegistry().addProvider(self.provider)
+
     def unload(self):
         """Clean up when plugin is disabled or uninstalled."""
         # -- Clean up dock widgets
@@ -285,6 +294,8 @@ class LoopstructuralPlugin:
         # self.iface.removeMenu(self.menu)
         # -- Clean up preferences panel in QGIS settings
         self.iface.unregisterOptionsWidgetFactory(self.options_factory)
+        # -- Unregister processing
+        QgsApplication.processingRegistry().removeProvider(self.provider)
 
         # remove from QGIS help/extensions menu
         if self.action_help_plugin_menu_documentation:

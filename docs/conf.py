@@ -1,7 +1,6 @@
 #!python3
 
-"""Configuration for project documentation using Sphinx.
-"""
+"""Configuration for project documentation using Sphinx."""
 
 # standard
 import sys
