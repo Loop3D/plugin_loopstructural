@@ -80,14 +80,12 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.load_settings()
 
     def apply(self):
-        """Called to permanently apply the settings shown in the options page (e.g. \
-        save them to QgsSettings objects). This is usually called when the options \
-        dialog is accepted.
-        """
+        """Apply settings from the form and persist them to QgsSettings."""
         settings = self.plg_settings.get_plg_settings()
 
         # misc
         settings.debug_mode = self.opt_debug.isChecked()
+        settings.separate_dock_widgets = self.opt_separate_dock_widgets.isChecked()
         settings.interpolator_nelements = self.n_elements_spin_box.value()
         settings.interpolator_npw = self.npw_spin_box.value()
         settings.interpolator_cpw = self.cpw_spin_box.value()
@@ -104,11 +102,12 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
             )
 
     def load_settings(self):
-        """Load options from QgsSettings into UI form."""
+        """Load options from QgsSettings into the UI form."""
         settings = self.plg_settings.get_plg_settings()
 
         # global
         self.opt_debug.setChecked(settings.debug_mode)
+        self.opt_separate_dock_widgets.setChecked(settings.separate_dock_widgets)
         self.lbl_version_saved_value.setText(settings.version)
         # self.interpolator_type_combo.setCurrentText(settings.interpolator_type)
         self.n_elements_spin_box.setValue(settings.interpolator_nelements)
@@ -117,7 +116,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.npw_spin_box.setValue(settings.interpolator_npw)
 
     def reset_settings(self):
-        """Reset settings to default values (set in preferences.py module)."""
+        """Reset settings in the UI and persisted settings to plugin defaults."""
         default_settings = PlgSettingsStructure()
 
         # dump default settings into QgsSettings
@@ -130,41 +129,57 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 class PlgOptionsFactory(QgsOptionsWidgetFactory):
     """Factory for options widget."""
 
-    def __init__(self):
-        """Constructor."""
+    def __init__(self, *args, **kwargs):
+        """Initialize the options factory.
+
+        Parameters
+        ----------
+        *args, **kwargs
+            Forwarded to base factory initializer.
+        """
         super().__init__()
 
-    def icon(self) -> QIcon:
-        """Returns plugin icon, used to as tab icon in QGIS options tab widget.
+    def icon(self):
+        """Return the icon used for the options page.
 
-        :return: _description_
-        :rtype: QIcon
+        Returns
+        -------
+        QIcon
+            Icon for the options page.
         """
         return QIcon(str(__icon_path__))
 
     def createWidget(self, parent) -> ConfigOptionsPage:
         """Create settings widget.
 
-        :param parent: Qt parent where to include the options page.
-        :type parent: QObject
+        Parameters
+        ----------
+        parent : QObject
+            Qt parent where to include the options page.
 
-        :return: options page for tab widget
-        :rtype: ConfigOptionsPage
+        Returns
+        -------
+        ConfigOptionsPage
+            Instantiated options page.
         """
         return ConfigOptionsPage(parent)
 
     def title(self) -> str:
-        """Returns plugin title, used to name the tab in QGIS options tab widget.
+        """Plugin title used to name options tab.
 
-        :return: plugin title from about module
-        :rtype: str
+        Returns
+        -------
+        str
+            Plugin title string.
         """
         return __title__
 
     def helpId(self) -> str:
-        """Returns plugin help URL.
+        """Plugin help URL.
 
-        :return: plugin homepage url from about module
-        :rtype: str
+        Returns
+        -------
+        str
+            URL of the plugin homepage.
         """
         return __uri_homepage__

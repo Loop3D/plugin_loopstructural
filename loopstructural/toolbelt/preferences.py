@@ -1,6 +1,10 @@
 #! python3
 
-"""Plugin settings."""
+"""Preferences manager helpers for the plugin.
+
+This module exposes `PlgOptionsManager` which centralises access to plugin
+settings used across the UI and background services.
+"""
 
 # standard
 from dataclasses import asdict, dataclass, fields
@@ -29,16 +33,26 @@ class PlgSettingsStructure:
     interpolator_regularisation: float = 1.0
     interpolator_cpw: float = 1.0
     interpolator_npw: float = 1.0
+    separate_dock_widgets: bool = False
 
 
 class PlgOptionsManager:
+    """Manager for accessing and updating plugin configuration values.
+
+    Provides convenience helpers around QGIS settings storage used by the
+    plugin to persist user preferences such as debug mode and UI options.
+    """
+
     @staticmethod
     def get_plg_settings() -> PlgSettingsStructure:
-        """Load and return plugin settings as a dictionary. \
+        """Load and return plugin settings as a PlgSettingsStructure instance.
+
         Useful to get user preferences across plugin logic.
 
-        :return: plugin settings
-        :rtype: PlgSettingsStructure
+        Returns
+        -------
+        PlgSettingsStructure
+            Plugin settings dataclass populated from QGIS settings.
         """
         # get dataclass fields definition
         settings_fields = fields(PlgSettingsStructure)
@@ -63,10 +77,21 @@ class PlgOptionsManager:
 
     @staticmethod
     def get_value_from_key(key: str, default=None, exp_type=None):
-        """Load and return plugin settings as a dictionary. \
-        Useful to get user preferences across plugin logic.
+        """Load a single plugin setting value by key.
 
-        :return: plugin settings value matching key
+        Parameters
+        ----------
+        key : str
+            Settings key to retrieve (must match a field on `PlgSettingsStructure`).
+        default : any, optional
+            Default value to return if the key is not set.
+        exp_type : type, optional
+            Expected type for the value retrieval.
+
+        Returns
+        -------
+        any
+            The stored setting value or None if an error occurs or the key is invalid.
         """
         if not hasattr(PlgSettingsStructure, key):
             log_hdlr.PlgLogger.log(
@@ -94,14 +119,19 @@ class PlgOptionsManager:
 
     @classmethod
     def set_value_from_key(cls, key: str, value) -> bool:
-        """Set plugin QSettings value using the key.
+        """Set a plugin setting value in QGIS settings.
 
-        :param key: QSettings key
-        :type key: str
-        :param value: value to set
-        :type value: depending on the settings
-        :return: operation status
-        :rtype: bool
+        Parameters
+        ----------
+        key : str
+            Settings key to set (must match a field on `PlgSettingsStructure`).
+        value : any
+            Value to store for the given key.
+
+        Returns
+        -------
+        bool
+            True if the operation succeeded, False otherwise.
         """
         if not hasattr(PlgSettingsStructure, key):
             log_hdlr.PlgLogger.log(
@@ -130,10 +160,16 @@ class PlgOptionsManager:
 
     @classmethod
     def save_from_object(cls, plugin_settings_obj: PlgSettingsStructure):
-        """Load and return plugin settings as a dictionary. \
-        Useful to get user preferences across plugin logic.
+        """Persist a settings dataclass to QGIS settings.
 
-        :return: plugin settings value matching key
+        Parameters
+        ----------
+        plugin_settings_obj : PlgSettingsStructure
+            Dataclass instance containing settings to save.
+
+        Returns
+        -------
+        None
         """
         settings = QgsSettings()
         settings.beginGroup(__title__)

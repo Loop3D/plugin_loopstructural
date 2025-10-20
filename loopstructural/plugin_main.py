@@ -35,20 +35,29 @@ from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
-from loopstructural.toolbelt import PlgLogger
 from loopstructural.processing.provider import LoopstructuralProvider 
+from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
+
 # ############################################################################
 # ########## Classes ###############
 # ##################################
 
 
 class LoopstructuralPlugin:
-    def __init__(self, iface: QgisInterface):
-        """Constructor.
+    """QGIS plugin entrypoint for LoopStructural.
 
-        :param iface: An interface instance that will be passed to this class which \
-        provides the hook by which you can manipulate the QGIS application at run time.
-        :type iface: QgsInterface
+    This class initializes plugin resources, UI elements and data/model managers
+    required for LoopStructural integration with QGIS.
+    """
+
+    def __init__(self, iface: QgisInterface):
+        """Initialize the plugin.
+
+        Parameters
+        ----------
+        iface : QgisInterface
+            An interface instance provided by QGIS which allows the plugin to
+            manipulate the QGIS application at run time.
         """
         self.iface = iface
         self.log = PlgLogger().log
@@ -70,6 +79,12 @@ class LoopstructuralPlugin:
         self.data_manager.set_model_manager(self.model_manager)
 
     def injectLogHandler(self):
+        """Install LoopStructural logging handler that forwards logs to the plugin logger.
+
+        This configures LoopStructural's logging to use the plugin's
+        PlgLoggerHandler so log records are captured and forwarded to the
+        plugin's logging infrastructure.
+        """
         import logging
 
         import LoopStructural
@@ -117,9 +132,13 @@ class LoopstructuralPlugin:
             self.tr("LoopStructural Modelling"),
             self.iface.mainWindow(),
         )
+        self.action_visualisation = QAction(
+            QIcon(os.path.dirname(__file__) + "/3D_icon.png"),
+            self.tr("LoopStructural Visualisation"),
+            self.iface.mainWindow(),
+        )
 
         self.toolbar.addAction(self.action_modelling)
-
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
@@ -140,50 +159,131 @@ class LoopstructuralPlugin:
         self.iface.pluginHelpMenu().addAction(self.action_help_plugin_menu_documentation)
 
         ## --- dock widget
-        self.loop_dockwidget = QDockWidget(self.tr("Loop"), self.iface.mainWindow())
-        self.loop_widget = LoopWidget(
-            self.iface.mainWindow(),
-            mapCanvas=self.iface.mapCanvas(),
-            logger=self.log,
-            data_manager=self.data_manager,
-            model_manager=self.model_manager,
-        )
+        # Get the setting for separate dock widgets
+        settings = PlgOptionsManager.get_plg_settings()
 
-        self.loop_dockwidget.setWidget(self.loop_widget)
-        self.iface.addDockWidget(Qt.RightDockWidgetArea, self.loop_dockwidget)
-        right_docks = [
-            d
-            for d in self.iface.mainWindow().findChildren(QDockWidget)
-            if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
-        ]
-        # If there are other dock widgets, tab this one with the first one found
-        if right_docks:
-            for dock in right_docks:
-                if dock != self.loop_dockwidget:
-                    self.iface.mainWindow().tabifyDockWidget(dock, self.loop_dockwidget)
-                    # Optionally, bring your plugin tab to the front
-                    self.loop_dockwidget.raise_()
-                    break
-        self.loop_dockwidget.show()
+        if settings.separate_dock_widgets:
+            # Create separate dock widgets for modelling and visualisation
+            self.loop_widget = LoopWidget(
+                self.iface.mainWindow(),
+                mapCanvas=self.iface.mapCanvas(),
+                logger=self.log,
+                data_manager=self.data_manager,
+                model_manager=self.model_manager,
+            )
+            self.toolbar.addAction(self.action_visualisation)
 
-        self.loop_dockwidget.close()
+            # Create modelling dock
+            self.modelling_dockwidget = QDockWidget(
+                self.tr("Loop - Modelling"), self.iface.mainWindow()
+            )
+            self.modelling_dockwidget.setWidget(self.loop_widget.get_modelling_widget())
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
 
-        # -- Connect actions
-        self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
+            # Create visualisation dock
+            self.visualisation_dockwidget = QDockWidget(
+                self.tr("Loop - Visualisation"), self.iface.mainWindow()
+            )
+            self.visualisation_dockwidget.setWidget(self.loop_widget.get_visualisation_widget())
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
+
+            # Tab them with other right docks if available
+            right_docks = [
+                d
+                for d in self.iface.mainWindow().findChildren(QDockWidget)
+                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+            ]
+            if right_docks:
+                for dock in right_docks:
+                    if dock != self.modelling_dockwidget and dock != self.visualisation_dockwidget:
+                        self.iface.mainWindow().tabifyDockWidget(dock, self.modelling_dockwidget)
+                        self.modelling_dockwidget.raise_()
+                        break
+
+            # Tab visualisation with modelling
+            self.iface.mainWindow().tabifyDockWidget(
+                self.modelling_dockwidget, self.visualisation_dockwidget
+            )
+
+            self.modelling_dockwidget.show()
+            self.visualisation_dockwidget.show()
+            self.modelling_dockwidget.close()
+            self.visualisation_dockwidget.close()
+
+            # Connect action to toggle modelling dock
+            self.action_modelling.triggered.connect(
+                self.modelling_dockwidget.toggleViewAction().trigger
+            )
+            self.action_visualisation.triggered.connect(
+                self.visualisation_dockwidget.toggleViewAction().trigger
+            )
+            # Store reference to main dock as None for unload compatibility
+            self.loop_dockwidget = None
+        else:
+            # Create single dock widget with tabs (default behavior)
+            self.loop_dockwidget = QDockWidget(self.tr("Loop"), self.iface.mainWindow())
+            self.loop_widget = LoopWidget(
+                self.iface.mainWindow(),
+                mapCanvas=self.iface.mapCanvas(),
+                logger=self.log,
+                data_manager=self.data_manager,
+                model_manager=self.model_manager,
+            )
+
+            self.loop_dockwidget.setWidget(self.loop_widget)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.loop_dockwidget)
+            right_docks = [
+                d
+                for d in self.iface.mainWindow().findChildren(QDockWidget)
+                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+            ]
+            # If there are other dock widgets, tab this one with the first one found
+            if right_docks:
+                for dock in right_docks:
+                    if dock != self.loop_dockwidget:
+                        self.iface.mainWindow().tabifyDockWidget(dock, self.loop_dockwidget)
+                        # Optionally, bring your plugin tab to the front
+                        self.loop_dockwidget.raise_()
+                        break
+            self.loop_dockwidget.show()
+
+            self.loop_dockwidget.close()
+
+            # -- Connect actions
+            self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
+
+            # Store references to separate docks as None for unload compatibility
+            self.modelling_dockwidget = None
+            self.visualisation_dockwidget = None
 
     def tr(self, message: str) -> str:
-        """Get the translation for a string using Qt translation API.
+        """Translate a string using Qt translation API.
 
-        :param message: string to be translated.
-        :type message: str
+        Parameters
+        ----------
+        message : str
+            String to be translated.
 
-        :returns: Translated version of message.
-        :rtype: str
+        Returns
+        -------
+        str
+            Translated version of the input string.
         """
         return QCoreApplication.translate(self.__class__.__name__, message)
 
     def unload(self):
-        """Cleans up when plugin is disabled/uninstalled."""
+        """Clean up when plugin is disabled or uninstalled."""
+        # -- Clean up dock widgets
+        if self.loop_dockwidget:
+            self.iface.removeDockWidget(self.loop_dockwidget)
+            del self.loop_dockwidget
+        if self.modelling_dockwidget:
+            self.iface.removeDockWidget(self.modelling_dockwidget)
+            del self.modelling_dockwidget
+        if self.visualisation_dockwidget:
+            self.iface.removeDockWidget(self.visualisation_dockwidget)
+            del self.visualisation_dockwidget
+
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
@@ -201,9 +301,12 @@ class LoopstructuralPlugin:
         del self.toolbar
 
     def run(self):
-        """Main process.
+        """Run main process.
 
-        :raises Exception: if there is no item in the feed
+        Raises
+        ------
+        Exception
+            If there is no item in the feed.
         """
         try:
             self.log(

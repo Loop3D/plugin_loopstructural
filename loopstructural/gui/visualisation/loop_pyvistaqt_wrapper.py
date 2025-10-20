@@ -1,7 +1,6 @@
-import re
-
 from PyQt5.QtCore import pyqtSignal
 from pyvistaqt import QtInteractor
+from typing import Optional, Any, Dict, Tuple
 
 
 class LoopPyVistaQTPlotter(QtInteractor):
@@ -11,6 +10,9 @@ class LoopPyVistaQTPlotter(QtInteractor):
         super().__init__(parent=parent)
         self.objects = {}
         self.add_axes()
+        # maps name -> dict(mesh=..., actor=..., kwargs={...})
+        self.meshes = {}
+        # maintain an internal pyvista plotter
 
     def increment_name(self, name):
         parts = name.split('_')
@@ -25,52 +27,113 @@ class LoopPyVistaQTPlotter(QtInteractor):
             name = '_'.join(parts)
         return name
 
-    def add_mesh(self, *args, **kwargs):
-        """Add a mesh to the plotter."""
-        if 'name' not in kwargs or not kwargs['name']:
-            name = 'unnnamed_object'
-            kwargs['name'] = name
-        kwargs['name'] = kwargs['name'].replace(' ', '_')
-        kwargs['name'] = re.sub(r'[^a-zA-Z0-9_$]', '_', kwargs['name'])
-        if kwargs['name'][0].isdigit():
-            kwargs['name'] = 'ls_' + kwargs['name']
-        if kwargs['name'][0] == '_':
-            kwargs['name'] = 'ls' + kwargs['name']
-        kwargs['name'] = self.increment_name(kwargs['name'])
-        if '__opacity' in kwargs['name']:
-            raise ValueError('Cannot use __opacity in name')
-        if '__visibility' in kwargs['name']:
-            raise ValueError('Cannot use __visibility in name')
-        if '__control_visibility' in kwargs['name']:
-            raise ValueError('Cannot use __control_visibility in name')
-        actor = super().add_mesh(*args, **kwargs)
-        self.objects[kwargs['name']] = args[0]
+    def add_mesh_object(self, mesh, name: str, *, scalars: Optional[Any] = None, cmap: Optional[str] = None, clim: Optional[Tuple[float, float]] = None, opacity: Optional[float] = None, show_scalar_bar: bool = False, color: Optional[Tuple[float, float, float]] = None, **kwargs) -> None:
+        """Add a mesh to the plotter.
+
+        This wrapper stores metadata to allow robust re-adding and
+        updating of visualization parameters.
+
+        Parameters
+        ----------
+        mesh : pyvista.PolyData or similar
+            Mesh-like object to add.
+        name : str
+            Unique name for the mesh.
+        scalars : Optional[Any]
+            Name of scalar array or scalar values to map (optional).
+        cmap : Optional[str]
+            Colormap name (optional).
+        clim : Optional[tuple(float, float)]
+            Color limits as (min, max) for the colormap (optional).
+        opacity : Optional[float]
+            Surface opacity in the range 0-1 (optional).
+        show_scalar_bar : bool
+            Whether to show a scalar bar for mapped scalars.
+        color : Optional[tuple(float, float, float)]
+            Solid color as (r, g, b) in 0..1; if provided, overrides scalars.
+        **kwargs : dict
+            Additional keyword arguments forwarded to the underlying pyvista add_mesh call.
+
+        Returns
+        -------
+        None
+        """
+        # Remove any previous entry with the same name (to keep metadata consistent)
+        # if name in self.meshes:
+        #     try:
+                
+        #         self.remove_object(name)
+        #     except Exception:
+        #         # ignore removal errors and proceed to add
+        #         pass
+
+        # Decide rendering mode: color (solid) if color provided else scalar mapping
+        scalars = scalars if scalars is not None else mesh.active_scalars_name
+        use_scalar = color is None and scalars is not None
+
+        # Build add_mesh kwargs
+        add_kwargs: Dict[str, Any] = {}
+        
+        if use_scalar:
+            add_kwargs['scalars'] = scalars
+            add_kwargs['cmap'] = cmap
+            if clim is not None:
+                add_kwargs['clim'] = clim
+            add_kwargs['show_scalar_bar'] = show_scalar_bar
+        else:
+            # solid color
+            if color is not None:
+                add_kwargs['color'] = color
+            # ensure scalar bar is disabled if color is used
+            add_kwargs['show_scalar_bar'] = False
+
+        if opacity is not None:
+            add_kwargs['opacity'] = opacity
+
+        # merge any extra kwargs (allow caller to override default choices)
+        add_kwargs.update(kwargs)
+
+        # attempt to add to the underlying pyvista plotter
+        actor = self.add_mesh(mesh, name=name, **add_kwargs)
+
+        # store the mesh, actor and kwargs for future re-adds
+        self.meshes[name] = {'mesh': mesh, 'actor': actor, 'kwargs': {**add_kwargs}}
         self.objectAdded.emit(self)
-        return actor
 
-    def remove_object(self, name):
-        """Remove an object by name."""
-        if name in self.actors:
-            self.remove_actor(self.actors[name])
-            self.update()
-        else:
-            raise ValueError(f"Object '{name}' not found in the plotter.")
+    def remove_object(self, name: str) -> None:
+        """Remove an object by name and clean up stored metadata.
 
-    def change_object_name(self, old_name, new_name):
-        """Change the name of an object."""
-        if old_name in self.actors:
-            if new_name in self.objects:
-                raise ValueError(f"Object '{new_name}' already exists.")
-            self.actors[new_name] = self.actors.pop(old_name)
-            self.actors[new_name].name = new_name
-        else:
-            raise ValueError(f"Object '{old_name}' not found in the plotter.")
+        This ensures names can be re-used and re-adding works predictably.
+        """
+        if name not in self.meshes:
+            return
+        entry = self.meshes[name]
+        actor = entry.get('actor', None)
+        try:
+            if actor is not None:
+                # pyvista.Plotter has remove_actor or remove_mesh depending on version
+                if hasattr(self, 'remove_actor'):
+                    try:
+                        self.remove_actor(actor)
+                    except Exception:
+                        # fallback to remove_mesh by name
+                        if hasattr(self, 'remove_mesh'):
+                            self.remove_mesh(name)
+                elif hasattr(self, 'remove_mesh'):
+                    self.remove_mesh(name)
+        except Exception:
+            # ignore errors during actor removal
+            pass
+        # finally delete metadata
+        try:
+            del self.meshes[name]
+        except Exception:
+            pass
 
-    def change_object_visibility(self, name, visibility):
+    def set_object_visibility(self, name: str, visibility):
         """Change the visibility of an object."""
-        if name in self.actors:
-            self.actors[name].visibility = visibility
-            self.actors[name].actor.visibility = visibility
+        if name in self.meshes:
+            self.meshes[name]['actor'].visibility = visibility
             self.update()
         else:
             raise ValueError(f"Object '{name}' not found in the plotter.")

@@ -14,10 +14,19 @@ from .stratigraphic_unit import StratigraphicUnitWidget
 
 
 class StratColumnWidget(QWidget):
-    """In control of building the stratigraphic column
+    """Widget that controls building the stratigraphic column.
 
-    :param QWidget: _description_
-    :type QWidget: _type_
+    Parameters
+    ----------
+    parent : QWidget, optional
+        Parent widget, by default None.
+    data_manager : object
+        Data manager instance used to manage the stratigraphic column. Must be provided.
+
+    Notes
+    -----
+    The widget updates its display based on the data_manager's stratigraphic column
+    and registers a callback via data_manager.set_stratigraphic_column_callback.
     """
 
     def __init__(self, parent=None, data_manager=None):
@@ -67,7 +76,7 @@ class StratColumnWidget(QWidget):
         """Update the widget display based on the data manager's stratigraphic column."""
         self.unitList.clear()
         if self.data_manager and self.data_manager._stratigraphic_column:
-            for unit in reversed(self.data_manager._stratigraphic_column.order):
+            for unit in self.data_manager._stratigraphic_column.order:
                 if unit.element_type == StratigraphicColumnElementType.UNIT:
                     self.add_unit(unit_data=unit.to_dict(), create_new=False)
                 elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
@@ -98,6 +107,7 @@ class StratColumnWidget(QWidget):
         for k in list(unit_data.keys()):
             if unit_data[k] is None:
                 unit_data.pop(k)
+        print(f"Adding unit with data: {unit_data}")
         unit_widget = StratigraphicUnitWidget(**unit_data)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         unit_widget.nameChanged.connect(
@@ -107,8 +117,11 @@ class StratColumnWidget(QWidget):
         unit_widget.thicknessChanged.connect(
             lambda: self.update_element(unit_widget)
         )  # Connect thickness change signal
-
+        
         unit_widget.set_thickness(unit_data.get('thickness', 0.0))  # Set initial thickness
+        unit_widget.colourChanged.connect(
+            lambda: self.update_element(unit_widget)
+        )  # Connect colour change signal
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)

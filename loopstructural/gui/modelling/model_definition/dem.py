@@ -19,9 +19,13 @@ class DEMWidget(QWidget):
 
     def set_dem_layer(self, layer):
         """Set the DEM layer in the combo box."""
-        # if layer:
-        #     self.demLayerQgsMapLayerComboBox.setLayer(layer)
-        pass
+        if layer:
+            self.demLayerQgsMapLayerComboBox.setLayer(layer)
+            self.useDEMCheckBox.setChecked(True)
+        else:
+            self.demLayerQgsMapLayerComboBox.setCurrentIndex(-1)
+            self.useDEMCheckBox.setChecked(False)
+        
 
     def onUseDEMClicked(self):
         if self.useDEMCheckBox.isChecked():

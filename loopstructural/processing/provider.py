@@ -1,7 +1,6 @@
 #! python3
 
-"""Processing provider module.
-"""
+"""Processing provider for LoopStructural plugin."""
 
 # PyQGIS
 from qgis.core import QgsProcessingProvider
@@ -37,60 +36,68 @@ class LoopstructuralProvider(QgsProcessingProvider):
         pass
 
     def id(self) -> str:
-        """Unique provider id, used for identifying it. This string should be unique, \
-        short, character only string, eg "qgis" or "gdal". \
-        This string should not be localised.
+        """Return unique provider id.
 
-        :return: provider ID
-        :rtype: str
+        Returns
+        -------
+        str
+            Provider ID string used for identifying the provider (must be short and
+            non-localised).
         """
         return "loopstructural"
 
     def name(self) -> str:
-        """Returns the provider name, which is used to describe the provider
-        within the GUI. This string should be short (e.g. "Lastools") and localised.
+        """Return provider name used in the GUI.
 
-        :return: provider name
-        :rtype: str
+        Returns
+        -------
+        str
+            Short, localised provider name.
         """
         return __title__
 
     def longName(self) -> str:
-        """Longer version of the provider name, which can include
-        extra details such as version numbers. E.g. "Lastools LIDAR tools". This string should be localised. The default
-        implementation returns the same string as name().
+        """Return longer provider name (may include version information).
 
-        :return: provider long name
-        :rtype: str
+        Returns
+        -------
+        str
+            Localised long name for display in the GUI.
         """
         return self.tr("{} - Tools".format(__title__))
 
     def icon(self) -> QIcon:
-        """QIcon used for your provider inside the Processing toolbox menu.
+        """Return icon used for the provider inside the Processing toolbox menu.
 
-        :return: provider icon
-        :rtype: QIcon
+        Returns
+        -------
+        QIcon
+            Icon for the provider.
         """
         return QIcon(str(__icon_path__))
 
     def tr(self, message: str) -> str:
-        """Get the translation for a string using Qt translation API.
+        """Translate a string using Qt translation API.
 
-        :param message: String for translation.
-        :type message: str, QString
+        Parameters
+        ----------
+        message : str
+            String to be translated.
 
-        :returns: Translated version of message.
-        :rtype: str
+        Returns
+        -------
+        str
+            Translated version of message.
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate(self.__class__.__name__, message)
 
     def versionInfo(self) -> str:
-        """Version information for the provider, or an empty string if this is not \
-        applicable (e.g. for inbuilt Processing providers). For plugin based providers, \
-        this should return the plugin’s version identifier.
+        """Return provider version information.
 
-        :return: version
-        :rtype: str
+        Returns
+        -------
+        str
+            Version string for the provider (plugin version).
         """
         return __version__

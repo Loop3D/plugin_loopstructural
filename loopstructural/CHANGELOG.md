@@ -1,5 +1,80 @@
 # Changelog
 
+## [0.1.11](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.10...v0.1.11) (2025-09-08)
+
+
+### Bug Fixes
+
+* use python 3.9 compatible typehint ([f52b729](https://github.com/Loop3D/plugin_loopstructural/commit/f52b7292e054d8deacc2934e33be4d831785d512))
+* use python 3.9 compatible typehint ([e3c6b48](https://github.com/Loop3D/plugin_loopstructural/commit/e3c6b48e58363a34ece61d2c27e26defc34839af))
+
+## [0.1.10](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.9...v0.1.10) (2025-09-08)
+
+
+### Bug Fixes
+
+* add edge visibility toggle and line width control in ObjectPropertiesWidget ([8bf43e1](https://github.com/Loop3D/plugin_loopstructural/commit/8bf43e1311d5c967c6113239d84fd36b34fd21b3))
+* add geopandas ([62a8124](https://github.com/Loop3D/plugin_loopstructural/commit/62a8124c06a083e3748706c588016aceb7bc8861))
+* add histogram for scalar value, allow selecting scalar, choose to colour with scalar or with solid colour ([ea0aefc](https://github.com/Loop3D/plugin_loopstructural/commit/ea0aefc6b67e200bb2e4e4f157a25624c161c392))
+* add layer from qgis to visualisation ([50cec1b](https://github.com/Loop3D/plugin_loopstructural/commit/50cec1bd9772499c5484f700d6bf8d569eb9a818))
+* adding export of scalar field value to qgis vector pointset ([037d50f](https://github.com/Loop3D/plugin_loopstructural/commit/037d50f980dfa18d818f4d42e829f6ac50b308dd))
+* allow all pv objects to be loaded ([742508e](https://github.com/Loop3D/plugin_loopstructural/commit/742508e63adabd9f9620595ded28a68ef8ee2c24))
+* apply colourmap change and refactored actor/mapper update into single function ([352f5b1](https://github.com/Loop3D/plugin_loopstructural/commit/352f5b1b2fc50e1f3717f58ea737bde2d9b40b07))
+* evalute feature onto vtk grid ([33b2967](https://github.com/Loop3D/plugin_loopstructural/commit/33b29670aa31d92bbfb8bd65cb2ec070522fd8dc))
+* lint ([efec3ab](https://github.com/Loop3D/plugin_loopstructural/commit/efec3ab55774dbd0bf41798457b2662162b636e8))
+* linting ([dc7d8f2](https://github.com/Loop3D/plugin_loopstructural/commit/dc7d8f24c2ec55a1de780cdb4f4bec9b8e7be9a6))
+* make fold plunge/azi attributes of panel for easy access ([ccc03b9](https://github.com/Loop3D/plugin_loopstructural/commit/ccc03b99238dbaf6968ca56957bb7052dd37a398))
+* put all feature options in QgsCollapsibleGroupBox ([08a50db](https://github.com/Loop3D/plugin_loopstructural/commit/08a50db9b8d37157462817779045e4be83993bf9))
+* remove feature data from data manager when its deleted ([3ce70a1](https://github.com/Loop3D/plugin_loopstructural/commit/3ce70a17bcf740c30c6e4001e4896e179cdce8ff))
+* remove print statements, rescale z for data to be in real coordinates ([29abb3e](https://github.com/Loop3D/plugin_loopstructural/commit/29abb3ebd11cd74e105a6440f52032fea88eb69b))
+* streamline color handling and scalar updates in ObjectPropertiesWidget ([165f25f](https://github.com/Loop3D/plugin_loopstructural/commit/165f25fcebf6a605bdb1fb89ce94ac8fa9b0e250))
+* update viewer to store meshes and a reference to actors. ([1dc4b2f](https://github.com/Loop3D/plugin_loopstructural/commit/1dc4b2f65fa3cdb3547feee743839fe16a7fa8ff))
+* updating stratigraphic column, need update loopstructural. ([2572749](https://github.com/Loop3D/plugin_loopstructural/commit/2572749f858158503292f1b7b5c520053ecf5788))
+* upgrade loopstructural requirement ([c905dda](https://github.com/Loop3D/plugin_loopstructural/commit/c905dda4448183fc0ad68bae7bfe5fac84635b02))
+* use active_scalars_name to prefile scalars kwarg ([8124f36](https://github.com/Loop3D/plugin_loopstructural/commit/8124f36adab8eff9aa596b529dfe7e3af94b7e9b))
+* use z coordinate if it exists for all manually added features ([5561ded](https://github.com/Loop3D/plugin_loopstructural/commit/5561ded0cc3772e16180c35c1d8275f17b7a09fe))
+* uses the meshes dictionary for export ([437817c](https://github.com/Loop3D/plugin_loopstructural/commit/437817c3415dafd02b11a5ca6c99f4fa9775881b))
+
+## [0.1.9](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.8...v0.1.9) (2025-09-03)
+
+
+### Bug Fixes
+
+* add delete feature option ([a194636](https://github.com/Loop3D/plugin_loopstructural/commit/a194636eb3885d1213b9548f2c01d749d37ad72f))
+* add logging for when project is cleared ([80f6762](https://github.com/Loop3D/plugin_loopstructural/commit/80f67625d47003e958a5aea59efed926af4f16d4))
+* add loopsolver for inequalities ([5f6ebee](https://github.com/Loop3D/plugin_loopstructural/commit/5f6ebee505da75568b2980647f873d9bc54a5e30))
+* catch dem missing error ([14fcc9e](https://github.com/Loop3D/plugin_loopstructural/commit/14fcc9e9c5c04ce3ea30d7c3e5034355771f3cd9))
+* remove feature selector from foliation dialog ([d0f3502](https://github.com/Loop3D/plugin_loopstructural/commit/d0f35022dc2283bc8b03654531549e3006199871))
+* reset plugin when new project created ([5a3d33c](https://github.com/Loop3D/plugin_loopstructural/commit/5a3d33cc0eab3c35f1097e34931f07d878b4a12d))
+* set dem on load ([128f1da](https://github.com/Loop3D/plugin_loopstructural/commit/128f1da65a7a2d20e4fbdc9b1be0332336c40977))
+* upgrade ls ([83850ee](https://github.com/Loop3D/plugin_loopstructural/commit/83850eee8817e16f1bd54193ec8939752b7463e6))
+
+## [0.1.8](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.7...v0.1.8) (2025-08-26)
+
+
+### Bug Fixes
+
+* abstract data table into separate class ([3a253a6](https://github.com/Loop3D/plugin_loopstructural/commit/3a253a6b4b7f9f2cf401ba0a682be727fc1aadce))
+* add AddFaultDialog and AddFoldFrameDialog for fault and fold frame creation ([367c252](https://github.com/Loop3D/plugin_loopstructural/commit/367c252697fe80d8de388ba9446e8d1d94874e51))
+* add convert from feature to structural frame button ([7cfd1ad](https://github.com/Loop3D/plugin_loopstructural/commit/7cfd1ade0e74c6bacc0e8b527d05175081dec274))
+* add data table to feature details panel ([8948cde](https://github.com/Loop3D/plugin_loopstructural/commit/8948cded69bb1eae51882e7a7605b703ba29eaef))
+* add pyqtgraph ([67b06ba](https://github.com/Loop3D/plugin_loopstructural/commit/67b06ba3a5cd29f409b2c15b956f83f95c7bdddb))
+* add unconformity button ([7b78503](https://github.com/Loop3D/plugin_loopstructural/commit/7b7850366e5032a001b7231f6d445d5c1e4380de))
+* adding splot dialog ([a027910](https://github.com/Loop3D/plugin_loopstructural/commit/a0279101cdd44c522a419e07d19526ad46f2771b))
+* convert from structural frame to fold frame ([5c9dfe7](https://github.com/Loop3D/plugin_loopstructural/commit/5c9dfe74480962d68bc48e503a453ef8ba43e59c))
+* copy data to new feature name if name changes ([136a6a5](https://github.com/Loop3D/plugin_loopstructural/commit/136a6a5fef1bcb2d8e9122cb57d1a03d05185340))
+* dip direction now works ([a422032](https://github.com/Loop3D/plugin_loopstructural/commit/a42203287b0443e93d4b68432c0fba98c740d50f))
+* don't try and add id to widget ([4286e07](https://github.com/Loop3D/plugin_loopstructural/commit/4286e07c10fc95075a68c2b4c00e4ab762b779c9))
+* ensure geoh5py try catch actually has import in the block ([4c71c6c](https://github.com/Loop3D/plugin_loopstructural/commit/4c71c6c9b36d117c81017047417b89269e145bb9))
+* integrate layer selection table into add foliation dialog ([0bcc4da](https://github.com/Loop3D/plugin_loopstructural/commit/0bcc4dacb1e6ebb1882dd2370f0b2ca52ecca8cf))
+* linting ([7d8d47a](https://github.com/Loop3D/plugin_loopstructural/commit/7d8d47a621373cf54a5ef36f22868ba62eab1e29))
+* move model_setup to own submodule. Change from add fold frame to just foliation ([ee7e8cc](https://github.com/Loop3D/plugin_loopstructural/commit/ee7e8ccb2a976c7bb724e18e7f306cac4480c3ec))
+* pass pitch to fault model ([d32d962](https://github.com/Loop3D/plugin_loopstructural/commit/d32d96225af1f08103279bee4b22395110c37dcf))
+* remove layer name from delete button ([422bc14](https://github.com/Loop3D/plugin_loopstructural/commit/422bc1476f84916e55382aefe579194344f4a1aa))
+* replace items table with layer selection table in base feature details panel ([c4b649c](https://github.com/Loop3D/plugin_loopstructural/commit/c4b649c76a48855f4c371146ffa59edeab30ecb3))
+* upgrade LS ([5016afb](https://github.com/Loop3D/plugin_loopstructural/commit/5016afbde1a63ca997aa7085d6fa05731280cac0))
+* use data arg, not specifc name ([a6d70ec](https://github.com/Loop3D/plugin_loopstructural/commit/a6d70ec0a2d912f3c2e6363f40d71cdf1f9a6594))
+
 ## [0.1.7](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.6...v0.1.7) (2025-07-30)
 
 

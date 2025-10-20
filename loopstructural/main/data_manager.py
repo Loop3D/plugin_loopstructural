@@ -31,6 +31,7 @@ class ModellingDataManager:
         self.project = project
         self.project.readProject.connect(self.onLoadProject)
         self.project.writeProject.connect(self.onSaveProject)
+        self.project.cleared.connect(self.onNewProject)
         self._bounding_box = BoundingBox(
             origin=[
                 default_bounding_box['xmin'],
@@ -83,7 +84,9 @@ class ModellingDataManager:
 
             except json.JSONDecodeError as e:
                 self.logger(message=f"Error loading data manager: {e}", log_level=2)
-
+    def onNewProject(self):
+        self.logger(message="New project created, clearing data...", log_level=3)
+        self.update_from_dict({})
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
         if model_manager is None:
@@ -185,7 +188,7 @@ class ModellingDataManager:
     def set_use_dem(self, use_dem):
         self.use_dem = use_dem
         self._model_manager.set_dem_function(self.dem_function)
-
+        
     def set_basal_contacts(self, basal_contacts, unitname_field=None, use_z_coordinate=False):
         """Set the basal contacts for the model."""
         self._basal_contacts = {
@@ -413,7 +416,10 @@ class ModellingDataManager:
         ):
             structural_orientations['layer'] = structural_orientations['layer'].name()
         if self.dem_layer is not None:
-            dem_layer_name = self.dem_layer.name()
+            try:
+                dem_layer_name = self.dem_layer.name()
+            except RuntimeError as e:
+                self.logger(message=f"Error getting DEM layer name: {e}", log_level=2)
 
         return {
             'bounding_box': self._bounding_box.to_dict(),
@@ -530,10 +536,11 @@ class ModellingDataManager:
         if 'stratigraphic_column' in data:
             self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
         else:
-            self._stratigraphic_column = StratigraphicColumn()
+            self._stratigraphic_column.clear()
 
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
+
 
     def find_layer_by_name(self, layer_name):
         """Find a layer by name in the project."""
@@ -578,7 +585,7 @@ class ModellingDataManager:
             )  # Convert QgsVectorLayer to GeoDataFrame
         if self._model_manager:
             self._model_manager.add_foliation(
-                foliation_name, foliation_data, folded_feature_name=folded_feature_name
+                foliation_name, foliation_data, folded_feature_name=folded_feature_name,use_z_coordinate=True
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
         else:
