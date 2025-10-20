@@ -216,7 +216,7 @@ class LoopStructuralInterpolationEvaluationAlgorithm(QgsProcessingAlgorithm):
 
         # Evaluate interpolator
         try:
-            values = interpolator.evaluate(points)
+            values = interpolator.evaluate_value(points)
         except Exception as e:
             raise QgsProcessingException(f"Failed to evaluate interpolator: {e}")
 
@@ -284,7 +284,7 @@ class LoopStructuralInterpolationEvaluationAlgorithm(QgsProcessingAlgorithm):
 
         # Evaluate interpolator
         try:
-            values = interpolator.evaluate(points)
+            values = interpolator.evaluate_value(points)
         except Exception as e:
             raise QgsProcessingException(f"Failed to evaluate interpolator: {e}")
 
@@ -370,7 +370,7 @@ class LoopStructuralInterpolationEvaluationAlgorithm(QgsProcessingAlgorithm):
 
         # Evaluate interpolator
         try:
-            values = interpolator.evaluate(points)
+            values = interpolator.evaluate_value(points)
         except Exception as e:
             raise QgsProcessingException(f"Failed to evaluate interpolator: {e}")
 

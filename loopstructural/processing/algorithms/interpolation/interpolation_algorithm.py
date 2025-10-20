@@ -11,7 +11,6 @@
 
 from typing import Any, Optional
 import tempfile
-import numpy as np
 import dill as pickle
 
 from qgis.core import (
@@ -27,8 +26,9 @@ from qgis.core import (
     QgsProcessingParameterFileDestination,
 )
 
-from LoopStructural import InterpolatorBuilder
+from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
+import pandas as pd
 
 
 class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
@@ -200,21 +200,18 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
             maximum=[extent.xMaximum(), extent.yMaximum(), z_max]
         )
         
-        # Create interpolator builder
-        interpolator_builder = InterpolatorBuilder(
-            interpolatortype='PLI',  # Piecewise Linear Interpolator
-            bounding_box=bbox
-        )
+        # Build data DataFrame
+        dfs = []
         
         # Add value constraints
         if value_layer is not None and value_field_name:
             feedback.pushInfo(f"Adding value constraints from field '{value_field_name}'...")
-            value_constraints = self._extract_value_constraints(
+            value_df = self._extract_value_data(
                 value_layer, value_field_name, feedback
             )
-            if len(value_constraints) > 0:
-                interpolator_builder.add_value_constraints(value_constraints)
-                feedback.pushInfo(f"Added {len(value_constraints)} value constraints.")
+            if len(value_df) > 0:
+                dfs.append(value_df)
+                feedback.pushInfo(f"Added {len(value_df)} value constraints.")
             else:
                 feedback.pushWarning("No valid value constraints found.")
         
@@ -223,19 +220,28 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
             feedback.pushInfo(
                 f"Adding gradient constraints from strike/dip fields '{strike_field_name}'/'{dip_field_name}'..."
             )
-            gradient_constraints = self._extract_gradient_constraints(
+            gradient_df = self._extract_gradient_data(
                 gradient_layer, strike_field_name, dip_field_name, feedback
             )
-            if len(gradient_constraints) > 0:
-                interpolator_builder.add_gradient_constraints(gradient_constraints)
-                feedback.pushInfo(f"Added {len(gradient_constraints)} gradient constraints.")
+            if len(gradient_df) > 0:
+                dfs.append(gradient_df)
+                feedback.pushInfo(f"Added {len(gradient_df)} gradient constraints.")
             else:
                 feedback.pushWarning("No valid gradient constraints found.")
         
-        # Build the interpolator
-        feedback.pushInfo("Building interpolator...")
+        if not dfs:
+            raise QgsProcessingException("No valid constraints found to build interpolator.")
+        
+        # Combine all data
+        data = pd.concat(dfs, ignore_index=True)
+        
+        # Create geological model and build interpolator
+        feedback.pushInfo("Building interpolator using GeologicalModel...")
         try:
-            interpolator = interpolator_builder.build()
+            model = GeologicalModel(bbox)
+            model.create_and_add_foliation('interpolated_field', data=data)
+            feature = model['interpolated_field']
+            interpolator = feature.interpolator
         except Exception as e:
             raise QgsProcessingException(f"Failed to build interpolator: {e}")
         
@@ -256,14 +262,14 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo("Interpolator saved successfully.")
         return {self.OUTPUT: out_path}
     
-    def _extract_value_constraints(
+    def _extract_value_data(
         self, 
         source,
         value_field: str,
         feedback: QgsProcessingFeedback
-    ) -> np.ndarray:
-        """Extract value constraints as numpy array (x, y, z, value)."""
-        constraints = []
+    ) -> pd.DataFrame:
+        """Extract value constraints as pandas DataFrame."""
+        rows = []
         for feat in source.getFeatures():
             geom = feat.geometry()
             if geom is None or geom.isEmpty():
@@ -292,27 +298,27 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
                 elif geom.type() == 1:  # Line
                     points = geom.asPolyline()
             
-            # Add constraint for each point
+            # Add data for each point
             for p in points:
                 try:
                     x = p.x()
                     y = p.y()
                     z = p.z() if hasattr(p, 'z') else 0.0
-                    constraints.append([x, y, z, value])
+                    rows.append({'X': x, 'Y': y, 'Z': z, 'val': value, 'feature_name': 'interpolated_field'})
                 except Exception:
                     continue
         
-        return np.array(constraints) if constraints else np.array([]).reshape(0, 4)
+        return pd.DataFrame(rows)
     
-    def _extract_gradient_constraints(
+    def _extract_gradient_data(
         self,
         source,
         strike_field: str,
         dip_field: str,
         feedback: QgsProcessingFeedback
-    ) -> np.ndarray:
-        """Extract gradient constraints from strike/dip as numpy array (x, y, z, gx, gy, gz)."""
-        constraints = []
+    ) -> pd.DataFrame:
+        """Extract gradient constraints from strike/dip as pandas DataFrame."""
+        rows = []
         for feat in source.getFeatures():
             geom = feat.geometry()
             if geom is None or geom.isEmpty():
@@ -338,29 +344,21 @@ class LoopStructuralInterpolationAlgorithm(QgsProcessingAlgorithm):
                 if geom.type() == 0:  # Point
                     points = [geom.asPoint()]
             
-            # Convert strike/dip to gradient vector
-            # Strike is azimuth (0-360), dip is angle from horizontal (0-90)
-            # This follows geological convention
-            strike_rad = np.radians(strike)
-            dip_rad = np.radians(dip)
-            
-            # Gradient vector (normal to the plane)
-            # This is the gradient direction pointing updip
-            gx = np.sin(dip_rad) * np.sin(strike_rad)
-            gy = -np.sin(dip_rad) * np.cos(strike_rad)
-            gz = np.cos(dip_rad)
-            
-            # Add constraint for each point
+            # Add data for each point
             for p in points:
                 try:
                     x = p.x()
                     y = p.y()
                     z = p.z() if hasattr(p, 'z') else 0.0
-                    constraints.append([x, y, z, gx, gy, gz])
+                    rows.append({
+                        'X': x, 'Y': y, 'Z': z,
+                        'strike': strike, 'dip': dip,
+                        'feature_name': 'interpolated_field'
+                    })
                 except Exception:
                     continue
         
-        return np.array(constraints) if constraints else np.array([]).reshape(0, 6)
+        return pd.DataFrame(rows)
 
     def createInstance(self) -> QgsProcessingAlgorithm:
         """Create a new instance of the algorithm."""
