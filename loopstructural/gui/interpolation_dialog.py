@@ -14,6 +14,7 @@ from qgis.core import (
     QgsPointXY,
     QgsField,
     QgsFields,
+    QgsMapLayerProxyModel
 )
 from qgis.PyQt.QtCore import QVariant
 
@@ -88,8 +89,14 @@ class InterpolationDialog(QDialog):
                 self.grid3DExtentWidget.setMapCanvas(canvas)
         except:
             pass
-        
-        # Set field combos to follow layer combos
+        self.valueLayerCombo.setFilters(QgsMapLayerProxyModel.PointLayer | QgsMapLayerProxyModel.LineLayer)
+        self.gradientLayerCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.pointLayerCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
+        # Allow empty selection for layer combos
+        self.valueLayerCombo.setAllowEmptyLayer(True)
+        self.gradientLayerCombo.setAllowEmptyLayer(True)
+        self.pointLayerCombo.setAllowEmptyLayer(True)
+        # Allow empty selection for field combos
         self.valueFieldCombo.setLayer(None)
         self.strikeFieldCombo.setLayer(None)
         self.dipFieldCombo.setLayer(None)
@@ -154,13 +161,14 @@ class InterpolationDialog(QDialog):
                 QMessageBox.warning(self, "Invalid Input", "Please select a value field.")
                 return
             
-            if gradient_layer and (not strike_field or not dip_field):
-                QMessageBox.warning(
-                    self, 
-                    "Invalid Input", 
-                    "Please select both strike and dip fields for gradient data."
-                )
-                return
+            if gradient_layer:
+                if not strike_field or not dip_field:
+                    QMessageBox.warning(
+                        self, 
+                        "Invalid Input", 
+                        "Please select both strike and dip fields for gradient data."
+                    )
+                    return
             
             # Get extent and pixel size
             extent = self.extentWidget.outputExtent()

@@ -54,11 +54,7 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QgsMapLayerComboBox" name="valueLayerCombo">
-            <property name="filters">
-             <set>QgsMapLayerProxyModel::PointLayer|QgsMapLayerProxyModel::LineLayer</set>
-            </property>
-           </widget>
+           <widget class="QgsMapLayerComboBox" name="valueLayerCombo"/>
           </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_2">
@@ -78,11 +74,7 @@
            </widget>
           </item>
           <item row="2" column="1">
-           <widget class="QgsMapLayerComboBox" name="gradientLayerCombo">
-            <property name="filters">
-             <set>QgsMapLayerProxyModel::PointLayer</set>
-            </property>
-           </widget>
+           <widget class="QgsMapLayerComboBox" name="gradientLayerCombo"/>
           </item>
           <item row="3" column="0">
            <widget class="QLabel" name="label_4">
@@ -384,11 +376,7 @@
             </widget>
            </item>
            <item row="0" column="1">
-            <widget class="QgsMapLayerComboBox" name="pointLayerCombo">
-             <property name="filters">
-              <set>QgsMapLayerProxyModel::PointLayer</set>
-             </property>
-            </widget>
+            <widget class="QgsMapLayerComboBox" name="pointLayerCombo"/>
            </item>
           </layout>
          </widget>
