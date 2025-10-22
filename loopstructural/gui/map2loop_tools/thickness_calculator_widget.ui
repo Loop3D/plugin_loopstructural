@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ThicknessCalculatorWidget</class>
+ <widget class="QWidget" name="ThicknessCalculatorWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Thickness Calculator</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <item row="0" column="0">
+      <widget class="QLabel" name="calculatorTypeLabel">
+       <property name="text">
+        <string>Calculator Type:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QComboBox" name="calculatorTypeComboBox"/>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="dtmLayerLabel">
+       <property name="text">
+        <string>DTM Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QgsMapLayerComboBox" name="dtmLayerComboBox">
+       <property name="filters">
+        <set>QgsMapLayerProxyModel::RasterLayer</set>
+       </property>
+       <property name="allowEmptyLayer">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="geologyLayerLabel">
+       <property name="text">
+        <string>Geology Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QgsMapLayerComboBox" name="geologyLayerComboBox">
+       <property name="filters">
+        <set>QgsMapLayerProxyModel::PolygonLayer</set>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="unitNameFieldLabel">
+       <property name="text">
+        <string>Unit Name Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QgsFieldComboBox" name="unitNameFieldComboBox"/>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="basalContactsLabel">
+       <property name="text">
+        <string>Basal Contacts Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QgsMapLayerComboBox" name="basalContactsComboBox">
+       <property name="filters">
+        <set>QgsMapLayerProxyModel::LineLayer</set>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="sampledContactsLabel">
+       <property name="text">
+        <string>Sampled Contacts Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QgsMapLayerComboBox" name="sampledContactsComboBox">
+       <property name="filters">
+        <set>QgsMapLayerProxyModel::PointLayer</set>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="structureLayerLabel">
+       <property name="text">
+        <string>Structure/Orientation Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QgsMapLayerComboBox" name="structureLayerComboBox">
+       <property name="filters">
+        <set>QgsMapLayerProxyModel::PointLayer</set>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="0">
+      <widget class="QLabel" name="dipFieldLabel">
+       <property name="text">
+        <string>Dip Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="1">
+      <widget class="QgsFieldComboBox" name="dipFieldComboBox"/>
+     </item>
+     <item row="8" column="0">
+      <widget class="QLabel" name="dipDirFieldLabel">
+       <property name="text">
+        <string>Dip Direction Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="1">
+      <widget class="QgsFieldComboBox" name="dipDirFieldComboBox"/>
+     </item>
+     <item row="9" column="0">
+      <widget class="QLabel" name="orientationTypeLabel">
+       <property name="text">
+        <string>Orientation Type:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="1">
+      <widget class="QComboBox" name="orientationTypeComboBox"/>
+     </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="stratiColumnLabel">
+       <property name="text">
+        <string>Stratigraphic Order Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QgsMapLayerComboBox" name="stratiColumnComboBox">
+       <property name="allowEmptyLayer">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="0">
+      <widget class="QLabel" name="maxLineLengthLabel">
+       <property name="text">
+        <string>Max Line Length:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="1">
+      <widget class="QgsDoubleSpinBox" name="maxLineLengthSpinBox">
+       <property name="maximum">
+        <double>1000000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>1000.000000000000000</double>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="runButton">
+     <property name="text">
+      <string>Calculate Thickness</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsFieldComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsfieldcombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsDoubleSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>qgsdoublespinbox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
