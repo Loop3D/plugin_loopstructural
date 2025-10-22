@@ -2,7 +2,7 @@
 
 import os
 
-from PyQt5.QtWidgets import QWidget, QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
 
@@ -29,6 +29,18 @@ class SamplerWidget(QWidget):
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "sampler_widget.ui")
         uic.loadUi(ui_path, self)
+
+        # Configure layer filters programmatically (avoid QgsMapLayerProxyModel in .ui)
+        try:
+            from qgis.core import QgsMapLayerProxyModel
+
+            # DTM should show raster layers, geology polygons
+            self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
+            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+            # spatialData can be any type, leave default
+        except Exception:
+            # If QGIS isn't available, skip filter setup
+            pass
 
         # Initialize sampler types
         self.sampler_types = ["Decimator", "Spacing"]
@@ -64,8 +76,8 @@ class SamplerWidget(QWidget):
 
     def _run_sampler(self):
         """Run the sampler algorithm."""
-        from qgis.core import QgsProcessingFeedback
         from qgis import processing
+        from qgis.core import QgsProcessingFeedback
 
         # Validate inputs
         if not self.spatialDataLayerComboBox.currentLayer():

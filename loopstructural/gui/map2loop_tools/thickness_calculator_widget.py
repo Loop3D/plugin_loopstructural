@@ -2,7 +2,7 @@
 
 import os
 
-from PyQt5.QtWidgets import QWidget, QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
 
@@ -29,6 +29,18 @@ class ThicknessCalculatorWidget(QWidget):
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "thickness_calculator_widget.ui")
         uic.loadUi(ui_path, self)
+
+        # Configure layer filters programmatically (avoid enum values in .ui)
+        try:
+            from qgis.core import QgsMapLayerProxyModel
+
+            self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
+            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+            self.basalContactsComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+            self.sampledContactsComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+        except Exception:
+            pass
 
         # Initialize calculator types
         self.calculator_types = ["InterpolatedStructure", "StructuralPoint"]
@@ -80,8 +92,8 @@ class ThicknessCalculatorWidget(QWidget):
 
     def _run_calculator(self):
         """Run the thickness calculator algorithm."""
-        from qgis.core import QgsProcessingFeedback
         from qgis import processing
+        from qgis.core import QgsProcessingFeedback
 
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
@@ -97,7 +109,9 @@ class ThicknessCalculatorWidget(QWidget):
             return
 
         if not self.structureLayerComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a structure/orientation layer.")
+            QMessageBox.warning(
+                self, "Missing Input", "Please select a structure/orientation layer."
+            )
             return
 
         # Prepare parameters

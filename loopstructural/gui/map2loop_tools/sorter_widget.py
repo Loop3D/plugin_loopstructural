@@ -2,7 +2,7 @@
 
 import os
 
-from PyQt5.QtWidgets import QWidget, QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
 
@@ -29,6 +29,18 @@ class SorterWidget(QWidget):
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "sorter_widget.ui")
         uic.loadUi(ui_path, self)
+
+        # Configure layer filters programmatically (avoid QGIS enums in UI)
+        try:
+            from qgis.core import QgsMapLayerProxyModel
+
+            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+            self.contactsLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+            self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
+            # preserve allowEmptyLayer where UI set it
+        except Exception:
+            pass
 
         # Initialize sorting algorithms
         self.sorting_algorithms = [
@@ -100,8 +112,8 @@ class SorterWidget(QWidget):
 
     def _run_sorter(self):
         """Run the stratigraphic sorter algorithm."""
-        from qgis.core import QgsProcessingFeedback
         from qgis import processing
+        from qgis.core import QgsProcessingFeedback
 
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
@@ -118,7 +130,9 @@ class SorterWidget(QWidget):
         if is_observation_projections:
             if not self.structureLayerComboBox.currentLayer():
                 QMessageBox.warning(
-                    self, "Missing Input", "Structure layer is required for observation projections."
+                    self,
+                    "Missing Input",
+                    "Structure layer is required for observation projections.",
                 )
                 return
             if not self.dtmLayerComboBox.currentLayer():
