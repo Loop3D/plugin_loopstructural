@@ -1,19 +1,21 @@
-"""Map2Loop processing tools widgets.
+"""Map2Loop processing tools dialogs.
 
-This module contains GUI widgets for map2loop processing tools that can be
-incorporated into the main dock widget.
+This module contains GUI dialogs for map2loop processing tools that can be
+accessed from the plugin menu.
 """
 
-from .basal_contacts_widget import BasalContactsWidget
-from .sampler_widget import SamplerWidget
-from .sorter_widget import SorterWidget
-from .thickness_calculator_widget import ThicknessCalculatorWidget
-from .user_defined_sorter_widget import UserDefinedSorterWidget
+from .dialogs import (
+    BasalContactsDialog,
+    SamplerDialog,
+    SorterDialog,
+    ThicknessCalculatorDialog,
+    UserDefinedSorterDialog,
+)
 
 __all__ = [
-    'BasalContactsWidget',
-    'SamplerWidget',
-    'SorterWidget',
-    'ThicknessCalculatorWidget',
-    'UserDefinedSorterWidget',
+    'BasalContactsDialog',
+    'SamplerDialog',
+    'SorterDialog',
+    'ThicknessCalculatorDialog',
+    'UserDefinedSorterDialog',
 ]

@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 from loopstructural.gui.modelling.fault_adjacency_tab import FaultAdjacencyTab
 from loopstructural.gui.modelling.geological_history_tab import GeologialHistoryTab
 from loopstructural.gui.modelling.geological_model_tab import GeologicalModelTab
-from loopstructural.gui.modelling.map2loop_tools_tab import Map2LoopToolsTab
 from loopstructural.gui.modelling.model_definition import ModelDefinitionTab
 
 
@@ -34,14 +33,12 @@ class ModellingWidget(QWidget):
         self.geological_model_tab_widget = GeologicalModelTab(
             self, model_manager=self.model_manager, data_manager=self.data_manager
         )
-        self.map2loop_tools_tab_widget = Map2LoopToolsTab(self, data_manager=self.data_manager)
 
         mainLayout = QVBoxLayout(self)
         self.setLayout(mainLayout)
         tabWidget = QTabWidget(self)
         mainLayout.addWidget(tabWidget)
         tabWidget.addTab(self.model_definition_tab_widget, "Load Data")
-        tabWidget.addTab(self.map2loop_tools_tab_widget, "Map2Loop Tools")
         tabWidget.addTab(self.geological_history_tab_widget, "Stratigraphic Column")
         tabWidget.addTab(self.fault_adjacency_tab_widget, "Fault Adjacency")
         tabWidget.addTab(self.geological_model_tab_widget, "Geological Model")

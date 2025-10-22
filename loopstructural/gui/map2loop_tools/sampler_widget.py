@@ -75,9 +75,23 @@ class SamplerWidget(QWidget):
             self.geologyLayerComboBox.setAllowEmptyLayer(True)
 
     def _run_sampler(self):
-        """Run the sampler algorithm."""
-        from qgis import processing
-        from qgis.core import QgsProcessingFeedback
+        """Run the sampler algorithm using map2loop classes directly."""
+        import pandas as pd
+        from map2loop.sampler import SamplerDecimator, SamplerSpacing
+        from osgeo import gdal
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsFeature,
+            QgsField,
+            QgsFields,
+            QgsGeometry,
+            QgsPointXY,
+            QgsProject,
+            QgsVectorLayer,
+        )
+        from qgis.PyQt.QtCore import QVariant
+
+        from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame
 
         # Validate inputs
         if not self.spatialDataLayerComboBox.currentLayer():
@@ -96,26 +110,109 @@ class SamplerWidget(QWidget):
                 QMessageBox.warning(self, "Missing Input", "DTM layer is required for Decimator.")
                 return
 
-        # Prepare parameters
-        params = {
-            'SAMPLER_TYPE': self.samplerTypeComboBox.currentIndex(),
-            'SPATIAL_DATA': self.spatialDataLayerComboBox.currentLayer(),
-            'DTM': self.dtmLayerComboBox.currentLayer(),
-            'GEOLOGY': self.geologyLayerComboBox.currentLayer(),
-            'DECIMATION': self.decimationSpinBox.value(),
-            'SPACING': self.spacingSpinBox.value(),
-            'OUTPUT': 'TEMPORARY_OUTPUT',
-        }
-
-        # Run the algorithm
+        # Get layers and convert to appropriate formats
         try:
-            feedback = QgsProcessingFeedback()
-            result = processing.run("plugin_map2loop:sampler", params, feedback=feedback)
+            spatial_data_layer = self.spatialDataLayerComboBox.currentLayer()
+            spatial_data_gdf = qgsLayerToGeoDataFrame(spatial_data_layer)
 
-            if result:
-                QMessageBox.information(self, "Success", "Sampling completed successfully!")
+            dtm_layer = self.dtmLayerComboBox.currentLayer()
+            dtm_gdal = gdal.Open(dtm_layer.source()) if dtm_layer and dtm_layer.isValid() else None
+
+            geology_layer = self.geologyLayerComboBox.currentLayer()
+            geology_gdf = (
+                qgsLayerToGeoDataFrame(geology_layer)
+                if geology_layer and geology_layer.isValid()
+                else None
+            )
+
+            # Run the appropriate sampler
+            if sampler_type == "Decimator":
+                decimation = self.decimationSpinBox.value()
+                sampler = SamplerDecimator(
+                    decimation=decimation, dtm_data=dtm_gdal, geology_data=geology_gdf
+                )
+                samples = sampler.sample(spatial_data_gdf)
+            else:  # Spacing
+                spacing = self.spacingSpinBox.value()
+                sampler = SamplerSpacing(
+                    spacing=spacing, dtm_data=dtm_gdal, geology_data=geology_gdf
+                )
+                samples = sampler.sample(spatial_data_gdf)
+
+            # Convert result back to QGIS layer and add to project
+            if samples is not None and not samples.empty:
+                layer_name = f"Sampled Contacts ({sampler_type})"
+
+                fields = QgsFields()
+                for column_name in samples.columns:
+                    if column_name == 'geometry':
+                        continue
+                    dtype = samples[column_name].dtype
+                    dtype_str = str(dtype)
+
+                    if dtype_str in ['float16', 'float32', 'float64']:
+                        field_type = QVariant.Double
+                    elif dtype_str in ['int8', 'int16', 'int32', 'int64']:
+                        field_type = QVariant.Int
+                    else:
+                        field_type = QVariant.String
+
+                    fields.append(QgsField(column_name, field_type))
+
+                crs = None
+                if spatial_data_gdf is not None and spatial_data_gdf.crs is not None:
+                    crs = QgsCoordinateReferenceSystem.fromWkt(spatial_data_gdf.crs.to_wkt())
+
+                # Create layer
+                geom_type = "PointZ" if 'Z' in samples.columns else "Point"
+                layer = QgsVectorLayer(
+                    f"{geom_type}?crs={crs.authid() if crs else 'EPSG:4326'}", layer_name, "memory"
+                )
+                provider = layer.dataProvider()
+                provider.addAttributes(fields)
+                layer.updateFields()
+
+                # Add features
+                for _index, row in samples.iterrows():
+                    feature = QgsFeature(fields)
+
+                    # Add geometry
+                    if 'Z' in samples.columns and pd.notna(row.get('Z')):
+                        wkt = f"POINT Z ({row['X']} {row['Y']} {row['Z']})"
+                        feature.setGeometry(QgsGeometry.fromWkt(wkt))
+                    else:
+                        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(row['X'], row['Y'])))
+
+                    # Add attributes
+                    attributes = []
+                    for column_name in samples.columns:
+                        if column_name == 'geometry':
+                            continue
+                        value = row.get(column_name)
+                        dtype = samples[column_name].dtype
+
+                        if pd.isna(value):
+                            attributes.append(None)
+                        elif dtype in ['float16', 'float32', 'float64']:
+                            attributes.append(float(value))
+                        elif dtype in ['int8', 'int16', 'int32', 'int64']:
+                            attributes.append(int(value))
+                        else:
+                            attributes.append(str(value))
+
+                    feature.setAttributes(attributes)
+                    provider.addFeature(feature)
+
+                layer.updateExtents()
+                QgsProject.instance().addMapLayer(layer)
+
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Sampling completed! Layer '{layer_name}' added with {len(samples)} features.",
+                )
             else:
-                QMessageBox.warning(self, "Error", "Failed to complete sampling.")
+                QMessageBox.warning(self, "Warning", "No samples were generated.")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
