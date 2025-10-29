@@ -82,17 +82,6 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
-            QgsProcessingParameterField(
-                'FORMATION_FIELD',
-                'Formation Field',
-                parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.String,
-                defaultValue='formation',
-                optional=True
-            )
-        )
-
-        self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT_FAULTS,
                 "FAULTS",
