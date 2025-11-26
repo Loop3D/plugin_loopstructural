@@ -1,0 +1,400 @@
+import pandas as pd
+from map2loop.contact_extractor import ContactExtractor
+from map2loop.sampler import SamplerDecimator, SamplerSpacing
+from map2loop.sorter import (
+    SorterAgeBased,
+    SorterAlpha,
+    SorterMaximiseContacts,
+    SorterObservationProjections,
+    SorterUseHint,
+    SorterUseNetworkX,
+)
+from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
+from osgeo import gdal
+
+from ..main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+
+# Mapping of sorter names to sorter classes
+SORTER_LIST = {
+    "Age‐based": SorterAgeBased,
+    "NetworkX topological": SorterUseNetworkX,
+    "Hint (deprecated)": SorterUseHint,
+    "Adjacency α": SorterAlpha,
+    "Maximise contacts": SorterMaximiseContacts,
+    "Observation projections": SorterObservationProjections,
+}
+
+
+def extract_basal_contacts(
+    geology,
+    stratigraphic_order,
+    faults=None,
+    ignore_units=None,
+    unit_name_field=None,
+    all_contacts=False,
+    updater=None,
+):
+    """Extract basal contacts from geological data.
+
+    Parameters
+    ----------
+    geology : QgsVectorLayer or GeoDataFrame
+        Geological layer as a GeoDataFrame or QgsVectorLayer.
+    stratigraphic_order : list
+        List defining the stratigraphic order of units.
+    faults : QgsVectorLayer or GeoDataFrame, optional
+        Faults layer as a GeoDataFrame or QgsVectorLayer, by default None.
+    ignore_units : list, optional
+        List of unit names to ignore, by default None.
+    unit_name_field : str, optional
+        Name of the field containing unit names, by default None.
+    all_contacts : bool, optional
+        Whether to return all contacts in addition to basal contacts, by default False.
+    updater : callable, optional
+        Callback function for progress updates, by default None.
+
+    Returns
+    -------
+    dict
+        Dictionary containing 'basal_contacts' GeoDataFrame and optionally 'all_contacts' GeoDataFrame.
+    """
+    geology = qgsLayerToGeoDataFrame(geology)
+    if unit_name_field and unit_name_field in geology.columns:
+        mask = ~geology[unit_name_field].astype(str).str.strip().isin(ignore_units or [])
+        geology = geology[mask].reset_index(drop=True)
+        if updater:
+            updater(f"filtered by unit name field: {unit_name_field}")
+    else:
+        if updater:
+            updater(f"no unit name field found: {unit_name_field}")
+
+    faults = qgsLayerToGeoDataFrame(faults) if faults else None
+    if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology.columns:
+        geology = geology.rename(columns={unit_name_field: 'UNITNAME'})
+    if updater:
+        updater("Extracting Basal Contacts...")
+    contact_extractor = ContactExtractor(geology, faults)
+    all_contacts_result = contact_extractor.extract_all_contacts()
+    basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
+
+    if ignore_units:
+        basal_contacts = basal_contacts[
+            ~basal_contacts['UNITNAME'].astype(str).str.strip().isin(ignore_units)
+        ].reset_index(drop=True)
+    if all_contacts:
+        return {'basal_contacts': basal_contacts, 'all_contacts': all_contacts_result}
+    return {'basal_contacts': basal_contacts}
+
+
+def sort_stratigraphic_column(
+    geology,
+    contacts,
+    sorting_algorithm="Observation projections",
+    unit_name_field="UNITNAME",
+    min_age_field=None,
+    max_age_field=None,
+    group_field=None,
+    structure=None,
+    dip_field="DIP",
+    dipdir_field="DIPDIR",
+    orientation_type="Dip Direction",
+    dtm=None,
+    updater=None,
+):
+    """Sort stratigraphic units using map2loop sorters.
+
+    Parameters
+    ----------
+    geology : QgsVectorLayer or GeoDataFrame
+        Geology polygon layer.
+    contacts : QgsVectorLayer or GeoDataFrame
+        Contacts line layer.
+    sorting_algorithm : str, optional
+        Name of the sorting algorithm, by default "Observation projections".
+    unit_name_field : str, optional
+        Name of the unit name field, by default "UNITNAME".
+    min_age_field : str, optional
+        Name of the minimum age field, by default None.
+    max_age_field : str, optional
+        Name of the maximum age field, by default None.
+    group_field : str, optional
+        Name of the group field, by default None.
+    structure : QgsVectorLayer or GeoDataFrame, optional
+        Structure point layer, by default None.
+    dip_field : str, optional
+        Name of the dip field, by default "DIP".
+    dipdir_field : str, optional
+        Name of the dip direction field, by default "DIPDIR".
+    orientation_type : str, optional
+        Type of orientation ("Dip Direction" or "Strike"), by default "Dip Direction".
+    dtm : QgsRasterLayer or GDAL dataset, optional
+        Digital terrain model, by default None.
+    updater : callable, optional
+        Callback function for progress updates, by default None.
+
+    Returns
+    -------
+    list
+        List of unit names sorted from youngest to oldest.
+    """
+    if updater:
+        updater(f"Sorting using {sorting_algorithm}...")
+
+    # Get the sorter class
+    sorter_cls = SORTER_LIST.get(sorting_algorithm, SorterObservationProjections)
+
+    # Convert layers to GeoDataFrames
+    geology_gdf = qgsLayerToGeoDataFrame(geology)
+    contacts_gdf = qgsLayerToGeoDataFrame(contacts)
+
+    # Build units DataFrame
+    units_df = geology_gdf[['UNITNAME']].drop_duplicates().reset_index(drop=True)
+    if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
+        units_df = geology_gdf[[unit_name_field]].drop_duplicates().reset_index(drop=True)
+        units_df.columns = ['UNITNAME']
+
+    # Build relationships DataFrame (contacts without geometry)
+    relationships_df = contacts_gdf.copy()
+    if 'geometry' in relationships_df.columns:
+        relationships_df = relationships_df.drop(columns=['geometry'])
+    if 'length' in relationships_df.columns:
+        relationships_df = relationships_df.drop(columns=['length'])
+
+    # For observation projections, need additional data
+    if sorter_cls == SorterObservationProjections:
+        if structure is None or dtm is None:
+            raise ValueError(
+                "Structure and DTM layers are required for Observation Projections sorter"
+            )
+
+        structure_gdf = qgsLayerToGeoDataFrame(structure)
+
+        # Handle dip field
+        if dip_field and dip_field != 'DIP' and dip_field in structure_gdf.columns:
+            structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
+
+        # Handle dip direction field based on orientation type
+        if dipdir_field and dipdir_field in structure_gdf.columns:
+            if orientation_type == 'Strike':
+                structure_gdf['DIPDIR'] = structure_gdf[dipdir_field].apply(
+                    lambda val: (val + 90.0) % 360.0 if pd.notna(val) else val
+                )
+            elif orientation_type == 'Dip Direction':
+                structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
+
+        # Convert DTM to GDAL dataset if needed
+        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
+            dtm_gdal = gdal.Open(dtm.source())
+        else:
+            dtm_gdal = dtm
+
+        # Run sorter with all parameters
+        order = sorter_cls().sort(
+            units_df,
+            relationships_df,
+            contacts_gdf,
+            geology_gdf,
+            structure_gdf,
+            dtm_gdal,
+        )
+    else:
+        # Run sorter with basic parameters
+        order = sorter_cls().sort(
+            units_df,
+            relationships_df,
+            contacts_gdf,
+        )
+
+    if updater:
+        updater(f"Sorting complete: {len(order)} units ordered")
+
+    return order
+
+
+def sample_contacts(
+    spatial_data,
+    sampler_type="Spacing",
+    decimation=None,
+    spacing=None,
+    dtm=None,
+    geology=None,
+    updater=None,
+):
+    """Sample spatial data using map2loop samplers.
+
+    Parameters
+    ----------
+    spatial_data : QgsVectorLayer or GeoDataFrame
+        Spatial data to sample (points or lines).
+    sampler_type : str, optional
+        Type of sampler ("Decimator" or "Spacing"), by default "Spacing".
+    decimation : int, optional
+        Decimation factor for Decimator, by default None.
+    spacing : float, optional
+        Spacing for Spacing sampler, by default None.
+    dtm : QgsRasterLayer or GDAL dataset, optional
+        Digital terrain model, by default None.
+    geology : QgsVectorLayer or GeoDataFrame, optional
+        Geology polygon layer, by default None.
+    updater : callable, optional
+        Callback function for progress updates, by default None.
+
+    Returns
+    -------
+    GeoDataFrame
+        Sampled data as GeoDataFrame.
+    """
+    if updater:
+        updater(f"Sampling using {sampler_type}...")
+
+    # Convert spatial data to GeoDataFrame
+    spatial_gdf = qgsLayerToGeoDataFrame(spatial_data)
+
+    # Convert DTM to GDAL dataset if needed
+    dtm_gdal = None
+    if dtm is not None:
+        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
+            dtm_gdal = gdal.Open(dtm.source())
+        else:
+            dtm_gdal = dtm
+
+    # Convert geology to GeoDataFrame if provided
+    geology_gdf = None
+    if geology is not None:
+        geology_gdf = qgsLayerToGeoDataFrame(geology)
+
+    # Run sampler
+    if sampler_type == "Decimator":
+        if decimation is None:
+            raise ValueError("decimation parameter is required for Decimator sampler")
+        sampler = SamplerDecimator(
+            decimation=decimation, dtm_data=dtm_gdal, geology_data=geology_gdf
+        )
+    else:  # Spacing
+        if spacing is None:
+            raise ValueError("spacing parameter is required for Spacing sampler")
+        sampler = SamplerSpacing(spacing=spacing, dtm_data=dtm_gdal, geology_data=geology_gdf)
+
+    samples = sampler.sample(spatial_gdf)
+
+    if updater:
+        updater(f"Sampling complete: {len(samples)} samples generated")
+
+    return samples
+
+
+def calculate_thickness(
+    geology,
+    basal_contacts,
+    sampled_contacts,
+    structure,
+    calculator_type="InterpolatedStructure",
+    dtm=None,
+    unit_name_field="UNITNAME",
+    dip_field="DIP",
+    dipdir_field="DIPDIR",
+    orientation_type="Dip Direction",
+    max_line_length=None,
+    stratigraphic_order=None,
+    updater=None,
+):
+    """Calculate thickness using map2loop thickness calculators.
+
+    Parameters
+    ----------
+    geology : QgsVectorLayer or GeoDataFrame
+        Geology polygon layer.
+    basal_contacts : QgsVectorLayer or GeoDataFrame
+        Basal contacts line layer.
+    sampled_contacts : QgsVectorLayer or GeoDataFrame
+        Sampled contacts point layer.
+    structure : QgsVectorLayer or GeoDataFrame
+        Structure point layer with orientation data.
+    calculator_type : str, optional
+        Type of calculator ("InterpolatedStructure" or "StructuralPoint"), by default "InterpolatedStructure".
+    dtm : QgsRasterLayer or GDAL dataset, optional
+        Digital terrain model, by default None.
+    unit_name_field : str, optional
+        Name of the unit name field, by default "UNITNAME".
+    dip_field : str, optional
+        Name of the dip field, by default "DIP".
+    dipdir_field : str, optional
+        Name of the dip direction field, by default "DIPDIR".
+    orientation_type : str, optional
+        Type of orientation ("Dip Direction" or "Strike"), by default "Dip Direction".
+    max_line_length : float, optional
+        Maximum line length for StructuralPoint calculator, by default None.
+    stratigraphic_order : list, optional
+        List of unit names in stratigraphic order, by default None.
+    updater : callable, optional
+        Callback function for progress updates, by default None.
+
+    Returns
+    -------
+    GeoDataFrame
+        Calculated thickness data as GeoDataFrame.
+    """
+    if updater:
+        updater(f"Calculating thickness using {calculator_type}...")
+
+    # Convert layers to GeoDataFrames
+    geology_gdf = qgsLayerToGeoDataFrame(geology)
+    basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
+    sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
+    structure_gdf = qgsLayerToGeoDataFrame(structure)
+
+    # Rename unit name field if needed
+    if unit_name_field and unit_name_field != 'UNITNAME':
+        if unit_name_field in geology_gdf.columns:
+            geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
+
+    # Handle dip field
+    if dip_field and dip_field != 'DIP' and dip_field in structure_gdf.columns:
+        structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
+
+    # Handle dip direction field based on orientation type
+    if dipdir_field and dipdir_field in structure_gdf.columns:
+        if orientation_type == 'Strike':
+            structure_gdf['DIPDIR'] = structure_gdf[dipdir_field].apply(
+                lambda val: (val + 90.0) % 360.0 if pd.notna(val) else val
+            )
+        elif orientation_type == 'Dip Direction':
+            structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
+
+    # Convert DTM to GDAL dataset if needed
+    dtm_gdal = None
+    if dtm is not None:
+        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
+            dtm_gdal = gdal.Open(dtm.source())
+        else:
+            dtm_gdal = dtm
+
+    # Run thickness calculator
+    if calculator_type == "InterpolatedStructure":
+        calculator = InterpolatedStructure(
+            geology_gdf,
+            basal_contacts_gdf,
+            sampled_contacts_gdf,
+            structure_gdf,
+            dtm_data=dtm_gdal,
+            stratigraphic_column=stratigraphic_order,
+        )
+    else:  # StructuralPoint
+        if max_line_length is None:
+            raise ValueError("max_line_length parameter is required for StructuralPoint calculator")
+        calculator = StructuralPoint(
+            geology_gdf,
+            basal_contacts_gdf,
+            sampled_contacts_gdf,
+            structure_gdf,
+            max_line_length=max_line_length,
+            dtm_data=dtm_gdal,
+            stratigraphic_column=stratigraphic_order,
+        )
+
+    thickness = calculator.calculate_thickness()
+
+    if updater:
+        updater(f"Thickness calculation complete: {len(thickness)} records")
+
+    return thickness

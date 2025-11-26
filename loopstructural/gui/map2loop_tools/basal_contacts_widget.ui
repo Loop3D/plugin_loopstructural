@@ -39,23 +39,13 @@
       <widget class="QgsFieldComboBox" name="unitNameFieldComboBox"/>
      </item>
      <item row="2" column="0">
-      <widget class="QLabel" name="formationFieldLabel">
-       <property name="text">
-        <string>Formation Field:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="1">
-      <widget class="QgsFieldComboBox" name="formationFieldComboBox"/>
-     </item>
-     <item row="3" column="0">
       <widget class="QLabel" name="faultsLayerLabel">
        <property name="text">
         <string>Faults Layer:</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="2" column="1">
       <widget class="QgsMapLayerComboBox" name="faultsLayerComboBox">
        <!-- filters removed: will be configured in python; keep allowEmptyLayer if desired -->
        <property name="allowEmptyLayer">
@@ -63,24 +53,16 @@
        </property>
       </widget>
      </item>
+     
+     
      <item row="4" column="0">
-      <widget class="QLabel" name="stratiColumnLabel">
-       <property name="text">
-        <string>Stratigraphic Order Layer:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="1">
-      <widget class="QgsMapLayerComboBox" name="stratiColumnComboBox"/>
-     </item>
-     <item row="5" column="0">
       <widget class="QLabel" name="ignoreUnitsLabel">
        <property name="text">
         <string>Units to Ignore:</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
+     <item row="4" column="1">
       <widget class="QLineEdit" name="ignoreUnitsLineEdit">
        <property name="placeholderText">
         <string>Comma-separated list of units to ignore</string>
