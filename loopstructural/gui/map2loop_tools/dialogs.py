@@ -10,10 +10,11 @@ from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 class SamplerDialog(QDialog):
     """Dialog for running samplers using map2loop classes directly."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         """Initialize the sampler dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Sampler")
+        self.data_manager = data_manager    
         self.setup_ui()
 
     def setup_ui(self):
@@ -41,10 +42,11 @@ class SamplerDialog(QDialog):
 class SorterDialog(QDialog):
     """Dialog for running stratigraphic sorter using map2loop classes directly."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         """Initialize the sorter dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Automatic Stratigraphic Sorter")
+        self.data_manager = data_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -103,10 +105,11 @@ class UserDefinedSorterDialog(QDialog):
 class BasalContactsDialog(QDialog):
     """Dialog for extracting basal contacts using map2loop classes directly."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         """Initialize the basal contacts dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Basal Contacts Extractor")
+        self.data_manager = data_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -133,10 +136,11 @@ class BasalContactsDialog(QDialog):
 class ThicknessCalculatorDialog(QDialog):
     """Dialog for calculating thickness using map2loop classes directly."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         """Initialize the thickness calculator dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Thickness Calculator")
+        self.data_manager = data_manager
         self.setup_ui()
 
     def setup_ui(self):
