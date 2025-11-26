@@ -140,44 +140,44 @@ class LoopstructuralPlugin:
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
-        
+
         # -- Map2Loop Tools submenu
         self.action_sampler = QAction(
             "Sampler",
             self.iface.mainWindow(),
         )
         self.action_sampler.triggered.connect(self.show_sampler_dialog)
-        
+
         self.action_sorter = QAction(
             "Automatic Stratigraphic Sorter",
             self.iface.mainWindow(),
         )
         self.action_sorter.triggered.connect(self.show_sorter_dialog)
-        
+
         self.action_user_sorter = QAction(
             "User-Defined Stratigraphic Column",
             self.iface.mainWindow(),
         )
         self.action_user_sorter.triggered.connect(self.show_user_sorter_dialog)
-        
+
         self.action_basal_contacts = QAction(
             "Extract Basal Contacts",
             self.iface.mainWindow(),
         )
         self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
-        
+
         self.action_thickness = QAction(
             "Thickness Calculator",
             self.iface.mainWindow(),
         )
         self.action_thickness.triggered.connect(self.show_thickness_dialog)
-        
+
         self.iface.addPluginToMenu(__title__, self.action_sampler)
         self.iface.addPluginToMenu(__title__, self.action_sorter)
         self.iface.addPluginToMenu(__title__, self.action_user_sorter)
         self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
         self.iface.addPluginToMenu(__title__, self.action_thickness)
-        
+
         self.initProcessing()
 
         # -- Help menu
@@ -311,7 +311,7 @@ class LoopstructuralPlugin:
         """Show the user-defined stratigraphic column dialog."""
         from loopstructural.gui.map2loop_tools import UserDefinedSorterDialog
 
-        dialog = UserDefinedSorterDialog(self.iface.mainWindow())
+        dialog = UserDefinedSorterDialog(self.iface.mainWindow(), data_manager=self.data_manager)
         dialog.exec_()
 
     def show_basal_contacts_dialog(self):

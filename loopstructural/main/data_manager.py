@@ -2,10 +2,10 @@ import json
 from collections import defaultdict
 
 import numpy as np
+from LoopStructural.datatypes import BoundingBox
 from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
 
 from LoopStructural import FaultTopology, StratigraphicColumn
-from LoopStructural.datatypes import BoundingBox
 
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
@@ -58,7 +58,7 @@ class ModellingDataManager:
         self.basal_contacts_callback = None
         self.fault_traces_callback = None
         self.structural_orientations_callback = None
-        self.stratigraphic_column_callback = None
+        self._stratigraphic_column_callbacks = []
         self.fault_adjacency = None
         self.fault_stratigraphy_adjacency = None
         self.elevation = np.nan
@@ -84,9 +84,11 @@ class ModellingDataManager:
 
             except json.JSONDecodeError as e:
                 self.logger(message=f"Error loading data manager: {e}", log_level=2)
+
     def onNewProject(self):
         self.logger(message="New project created, clearing data...", log_level=3)
         self.update_from_dict({})
+
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
         if model_manager is None:
@@ -139,7 +141,15 @@ class ModellingDataManager:
 
     def set_stratigraphic_column_callback(self, callback):
         """Set the callback for when the stratigraphic column is updated."""
-        self.stratigraphic_column_callback = callback
+        self._stratigraphic_column_callbacks.append(callback)
+
+    @property
+    def stratigraphic_column_callback(self):
+        def call_all():
+            for cb in self._stratigraphic_column_callbacks:
+                cb()
+
+        return call_all
 
     def set_dem_callback(self, callback):
         """Set the callback for when the DEM layer is updated."""
@@ -188,7 +198,7 @@ class ModellingDataManager:
     def set_use_dem(self, use_dem):
         self.use_dem = use_dem
         self._model_manager.set_dem_function(self.dem_function)
-        
+
     def set_basal_contacts(self, basal_contacts, unitname_field=None, use_z_coordinate=False):
         """Set the basal contacts for the model."""
         self._basal_contacts = {
@@ -227,6 +237,8 @@ class ModellingDataManager:
                     # Add the unit to the stratigraphic column if it does not already exist
                     self._stratigraphic_column.add_unit(name=unit_name, colour=None)
         self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
 
     def add_to_stratigraphic_column(self, unit_data):
         """Add a unit or unconformity to the stratigraphic column."""
@@ -249,12 +261,16 @@ class ModellingDataManager:
                 message=f"Added {unit_data.get('type')} '{unit_data.get('name')}' to the stratigraphic column."
             )
             self.update_stratigraphy()
+            if self.stratigraphic_column_callback:
+                self.stratigraphic_column_callback()
             return stratigraphic_element
 
     def remove_from_stratigraphic_column(self, unit_uuid):
         """Remove a unit or unconformity from the stratigraphic column."""
         self._stratigraphic_column.remove_unit(uuid=unit_uuid)
         self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
 
     def update_stratigraphic_column_order(self, new_order):
         """Update the order of units in the stratigraphic column."""
@@ -262,6 +278,8 @@ class ModellingDataManager:
             raise ValueError("new_order must be a list of unit uuids.")
         self._stratigraphic_column.update_order(new_order)
         self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
 
     def get_basal_contacts(self):
         """Get the basal contacts."""
@@ -541,7 +559,6 @@ class ModellingDataManager:
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
-
     def find_layer_by_name(self, layer_name):
         """Find a layer by name in the project."""
         if layer_name is None:
@@ -585,7 +602,10 @@ class ModellingDataManager:
             )  # Convert QgsVectorLayer to GeoDataFrame
         if self._model_manager:
             self._model_manager.add_foliation(
-                foliation_name, foliation_data, folded_feature_name=folded_feature_name,use_z_coordinate=True
+                foliation_name,
+                foliation_data,
+                folded_feature_name=folded_feature_name,
+                use_z_coordinate=True,
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
         else:

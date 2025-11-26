@@ -26,10 +26,8 @@ class SamplerDialog(QDialog):
 
         # Replace the run button with dialog buttons
         self.widget.runButton.hide()
-        
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
-        )
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         self.button_box.accepted.connect(self._run_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
@@ -59,10 +57,8 @@ class SorterDialog(QDialog):
 
         # Replace the run button with dialog buttons
         self.widget.runButton.hide()
-        
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
-        )
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         self.button_box.accepted.connect(self._run_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
@@ -75,10 +71,12 @@ class SorterDialog(QDialog):
 class UserDefinedSorterDialog(QDialog):
     """Dialog for user-defined stratigraphic column using map2loop classes directly."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, data_manager=None):
         """Initialize the user-defined sorter dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop User-Defined Stratigraphic Column")
+        self.data_manager = data_manager
+
         self.setup_ui()
 
     def setup_ui(self):
@@ -86,18 +84,16 @@ class UserDefinedSorterDialog(QDialog):
         from .user_defined_sorter_widget import UserDefinedSorterWidget
 
         layout = QVBoxLayout(self)
-        self.widget = UserDefinedSorterWidget(self)
+        self.widget = UserDefinedSorterWidget(self, data_manager=self.data_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
-        self.widget.runButton.hide()
-        
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
-        )
-        self.button_box.accepted.connect(self._run_and_accept)
-        self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
+        # self.widget.runButton.hide()
+
+        # self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        # self.button_box.accepted.connect(self._run_and_accept)
+        # self.button_box.rejected.connect(self.reject)
+        # layout.addWidget(self.button_box)
 
     def _run_and_accept(self):
         """Run the sorter and accept dialog if successful."""
@@ -123,10 +119,8 @@ class BasalContactsDialog(QDialog):
 
         # Replace the run button with dialog buttons
         self.widget.runButton.hide()
-        
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
-        )
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         self.button_box.accepted.connect(self._run_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
@@ -155,10 +149,8 @@ class ThicknessCalculatorDialog(QDialog):
 
         # Replace the run button with dialog buttons
         self.widget.runButton.hide()
-        
-        self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
-        )
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         self.button_box.accepted.connect(self._run_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)

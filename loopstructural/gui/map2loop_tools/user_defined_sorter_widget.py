@@ -2,15 +2,17 @@
 
 import os
 
-from PyQt5.QtWidgets import QWidget, QTableWidgetItem, QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 from qgis.PyQt import uic
+
+from loopstructural.gui.modelling.stratigraphic_column import StratColumnWidget
 
 
 class UserDefinedSorterWidget(QWidget):
     """Widget for creating a user-defined stratigraphic column.
 
-    This widget allows users to manually define the stratigraphic order
-    of units from youngest to oldest.
+    This widget uses the LoopStructural StratigraphicColumn widget
+    and links it to the data manager for integration with the model.
     """
 
     def __init__(self, parent=None, data_manager=None):
@@ -24,80 +26,43 @@ class UserDefinedSorterWidget(QWidget):
             Data manager for accessing shared data.
         """
         super().__init__(parent)
+
+        if data_manager is None:
+            raise ValueError("data_manager must be provided")
+
         self.data_manager = data_manager
 
         # Load the UI file
-        ui_path = os.path.join(os.path.dirname(__file__), "user_defined_sorter_widget.ui")
-        uic.loadUi(ui_path, self)
 
-        # Connect signals
-        self.addRowButton.clicked.connect(self._add_row)
-        self.removeRowButton.clicked.connect(self._remove_row)
-        self.moveUpButton.clicked.connect(self._move_up)
-        self.moveDownButton.clicked.connect(self._move_down)
-        self.runButton.clicked.connect(self._run_sorter)
+        # Create and add the StratigraphicColumn widget to the UI
+        self.strat_column_widget = StratColumnWidget(parent=self, data_manager=self.data_manager)
 
-        # Initialize with a few empty rows
-        for _ in range(3):
-            self._add_row()
-
-    def _add_row(self):
-        """Add a new row to the stratigraphic column table."""
-        row_count = self.stratiColumnTable.rowCount()
-        self.stratiColumnTable.insertRow(row_count)
-        self.stratiColumnTable.setItem(row_count, 0, QTableWidgetItem(""))
-
-    def _remove_row(self):
-        """Remove the selected row from the stratigraphic column table."""
-        current_row = self.stratiColumnTable.currentRow()
-        if current_row >= 0:
-            self.stratiColumnTable.removeRow(current_row)
-
-    def _move_up(self):
-        """Move the selected row up in the stratigraphic column table."""
-        current_row = self.stratiColumnTable.currentRow()
-        if current_row > 0:
-            # Get current row data
-            item = self.stratiColumnTable.takeItem(current_row, 0)
-
-            # Remove current row
-            self.stratiColumnTable.removeRow(current_row)
-
-            # Insert row above
-            self.stratiColumnTable.insertRow(current_row - 1)
-            self.stratiColumnTable.setItem(current_row - 1, 0, item)
-
-            # Select the moved row
-            self.stratiColumnTable.setCurrentCell(current_row - 1, 0)
-
-    def _move_down(self):
-        """Move the selected row down in the stratigraphic column table."""
-        current_row = self.stratiColumnTable.currentRow()
-        if current_row >= 0 and current_row < self.stratiColumnTable.rowCount() - 1:
-            # Get current row data
-            item = self.stratiColumnTable.takeItem(current_row, 0)
-
-            # Remove current row
-            self.stratiColumnTable.removeRow(current_row)
-
-            # Insert row below
-            self.stratiColumnTable.insertRow(current_row + 1)
-            self.stratiColumnTable.setItem(current_row + 1, 0, item)
-
-            # Select the moved row
-            self.stratiColumnTable.setCurrentCell(current_row + 1, 0)
+        # Add the stratigraphic column widget to the UI layout
+        # Assuming the UI has a placeholder widget or layout for this
+        if hasattr(self, 'stratiColumnWidget'):
+            # If the UI has a widget called stratiColumnWidget, use its layout
+            layout = self.stratiColumnWidget.layout()
+            if layout is None:
+                layout = QVBoxLayout(self.stratiColumnWidget)
+            layout.addWidget(self.strat_column_widget)
+        else:
+            # Otherwise, add it to the main layout
+            main_layout = self.layout()
+            if main_layout is None:
+                main_layout = QVBoxLayout(self)
+            main_layout.addWidget(self.strat_column_widget)
 
     def _run_sorter(self):
-        """Run the user-defined stratigraphic sorter algorithm."""
-        from qgis.core import QgsProcessingFeedback
-        from qgis import processing
+        """Run the user-defined stratigraphic sorter algorithm.
 
-        # Get stratigraphic column data
-        strati_column = []
-        for row in range(self.stratiColumnTable.rowCount()):
-            item = self.stratiColumnTable.item(row, 0)
-            if item and item.text().strip():
-                strati_column.append(item.text().strip())
+        This method will use the stratigraphic column from the StratColumnWidget
+        that is already linked to the data manager, ensuring the model is updated.
+        """
+        from qgis import processing
+        from qgis.core import QgsProcessingFeedback
+
+        # Get stratigraphic column data from the data manager
+        strati_column = self.get_stratigraphic_column()
 
         if not strati_column:
             QMessageBox.warning(
@@ -114,9 +79,7 @@ class UserDefinedSorterWidget(QWidget):
         # Run the algorithm
         try:
             feedback = QgsProcessingFeedback()
-            result = processing.run(
-                "plugin_map2loop:loop_sorter_2", params, feedback=feedback
-            )
+            result = processing.run("plugin_map2loop:loop_sorter_2", params, feedback=feedback)
 
             if result:
                 QMessageBox.information(
@@ -131,33 +94,44 @@ class UserDefinedSorterWidget(QWidget):
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def get_stratigraphic_column(self):
-        """Get the current stratigraphic column.
+        """Get the current stratigraphic column from the data manager.
 
         Returns
         -------
         list
             List of unit names from youngest to oldest.
         """
-        strati_column = []
-        for row in range(self.stratiColumnTable.rowCount()):
-            item = self.stratiColumnTable.item(row, 0)
-            if item and item.text().strip():
-                strati_column.append(item.text().strip())
-        return strati_column
+        if hasattr(self, 'data_manager') and self.data_manager is not None:
+            strati_column = self.data_manager.get_stratigraphic_column()
+            # Extract unit names in order
+            unit_names = []
+            for element in strati_column.order:
+                if hasattr(element, 'name'):
+                    unit_names.append(element.name)
+            return unit_names
+        return []
 
     def set_stratigraphic_column(self, units):
-        """Set the stratigraphic column.
+        """Set the stratigraphic column in the data manager.
 
         Parameters
         ----------
         units : list
             List of unit names from youngest to oldest.
         """
-        # Clear existing rows
-        self.stratiColumnTable.setRowCount(0)
+        if not hasattr(self, 'data_manager') or self.data_manager is None:
+            raise ValueError("data_manager is not initialized")
 
-        # Add new rows
-        for unit in units:
-            row_count = self.stratiColumnTable.rowCount()
-            self.stratiColumnTable.insertRow(row_count)
-            self.stratiColumnTable.setItem(row_count, 0, QTableWidgetItem(unit))
+        # Clear the existing column
+        self.data_manager._stratigraphic_column.clear()
+
+        # Add each unit to the stratigraphic column
+        for unit_name in units:
+            self.data_manager.add_to_stratigraphic_column(
+                {'type': 'unit', 'name': unit_name, 'colour': None}
+            )
+
+        # The callback is already called by add_to_stratigraphic_column
+        # But we still update the display to be safe
+        if hasattr(self, 'strat_column_widget'):
+            self.strat_column_widget.update_display()
