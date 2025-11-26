@@ -1,4 +1,4 @@
-"""NTGS configuration helpers used by the data conversion UI."""
+"""configuration helpers used by the data conversion UI."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Any, Dict, Iterable, MutableMapping
 
 
-class NtgsConfig:
+class Config:
     """Container for the default NTGS configuration."""
 
     def __init__(self) -> None:
@@ -109,11 +109,11 @@ def _coerce_config_value(template_value: Any, new_value: Any) -> Any:
     return str(new_value)
 
 
-class NtgsConfigurationModel:
+class ConfigurationState:
     """State holder for the NTGS configuration mapping."""
 
     def __init__(self, *, base_config: MutableMapping[str, Dict[str, Any]] | None = None):
-        self._config = deepcopy(base_config) if base_config is not None else NtgsConfig().as_dict()
+        self._config = deepcopy(base_config) if base_config is not None else Config().as_dict()
 
     def data_types(self) -> Iterable[str]:
         """Return the supported data types."""
