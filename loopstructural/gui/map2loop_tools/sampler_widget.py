@@ -75,10 +75,7 @@ class SamplerWidget(QWidget):
             self.geologyLayerComboBox.setAllowEmptyLayer(True)
 
     def _run_sampler(self):
-        """Run the sampler algorithm using map2loop classes directly."""
-        import pandas as pd
-        from map2loop.sampler import SamplerDecimator, SamplerSpacing
-        from osgeo import gdal
+        """Run the sampler algorithm using the map2loop API."""
         from qgis.core import (
             QgsCoordinateReferenceSystem,
             QgsFeature,
@@ -91,7 +88,7 @@ class SamplerWidget(QWidget):
         )
         from qgis.PyQt.QtCore import QVariant
 
-        from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+        from ...main.m2l_api import sample_contacts
 
         # Validate inputs
         if not self.spatialDataLayerComboBox.currentLayer():
@@ -110,34 +107,26 @@ class SamplerWidget(QWidget):
                 QMessageBox.warning(self, "Missing Input", "DTM layer is required for Decimator.")
                 return
 
-        # Get layers and convert to appropriate formats
+        # Run the sampler API
         try:
-            spatial_data_layer = self.spatialDataLayerComboBox.currentLayer()
-            spatial_data_gdf = qgsLayerToGeoDataFrame(spatial_data_layer)
+            kwargs = {
+                'spatial_data': self.spatialDataLayerComboBox.currentLayer(),
+                'sampler_type': sampler_type,
+                'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
+            }
 
-            dtm_layer = self.dtmLayerComboBox.currentLayer()
-            dtm_gdal = gdal.Open(dtm_layer.source()) if dtm_layer and dtm_layer.isValid() else None
-
-            geology_layer = self.geologyLayerComboBox.currentLayer()
-            geology_gdf = (
-                qgsLayerToGeoDataFrame(geology_layer)
-                if geology_layer and geology_layer.isValid()
-                else None
-            )
-
-            # Run the appropriate sampler
             if sampler_type == "Decimator":
-                decimation = self.decimationSpinBox.value()
-                sampler = SamplerDecimator(
-                    decimation=decimation, dtm_data=dtm_gdal, geology_data=geology_gdf
-                )
-                samples = sampler.sample(spatial_data_gdf)
+                kwargs['decimation'] = self.decimationSpinBox.value()
+                kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+                kwargs['geology'] = self.geologyLayerComboBox.currentLayer()
             else:  # Spacing
-                spacing = self.spacingSpinBox.value()
-                sampler = SamplerSpacing(
-                    spacing=spacing, dtm_data=dtm_gdal, geology_data=geology_gdf
-                )
-                samples = sampler.sample(spatial_data_gdf)
+                kwargs['spacing'] = self.spacingSpinBox.value()
+                if self.dtmLayerComboBox.currentLayer():
+                    kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+                if self.geologyLayerComboBox.currentLayer():
+                    kwargs['geology'] = self.geologyLayerComboBox.currentLayer()
+
+            samples = sample_contacts(**kwargs)
 
             # Convert result back to QGIS layer and add to project
             if samples is not None and not samples.empty:
@@ -160,8 +149,8 @@ class SamplerWidget(QWidget):
                     fields.append(QgsField(column_name, field_type))
 
                 crs = None
-                if spatial_data_gdf is not None and spatial_data_gdf.crs is not None:
-                    crs = QgsCoordinateReferenceSystem.fromWkt(spatial_data_gdf.crs.to_wkt())
+                if samples.crs is not None:
+                    crs = QgsCoordinateReferenceSystem.fromWkt(samples.crs.to_wkt())
 
                 # Create layer
                 geom_type = "PointZ" if 'Z' in samples.columns else "Point"
@@ -177,7 +166,7 @@ class SamplerWidget(QWidget):
                     feature = QgsFeature(fields)
 
                     # Add geometry
-                    if 'Z' in samples.columns and pd.notna(row.get('Z')):
+                    if 'Z' in samples.columns and __import__('pandas').notna(row.get('Z')):
                         wkt = f"POINT Z ({row['X']} {row['Y']} {row['Z']})"
                         feature.setGeometry(QgsGeometry.fromWkt(wkt))
                     else:
@@ -190,6 +179,7 @@ class SamplerWidget(QWidget):
                             continue
                         value = row.get(column_name)
                         dtype = samples[column_name].dtype
+                        pd = __import__('pandas')
 
                         if pd.isna(value):
                             attributes.append(None)

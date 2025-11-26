@@ -91,9 +91,8 @@ class ThicknessCalculatorWidget(QWidget):
             self.maxLineLengthSpinBox.setVisible(False)
 
     def _run_calculator(self):
-        """Run the thickness calculator algorithm."""
-        from qgis import processing
-        from qgis.core import QgsProcessingFeedback
+        """Run the thickness calculator algorithm using the map2loop API."""
+        from ...main.m2l_api import calculate_thickness
 
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
@@ -114,37 +113,51 @@ class ThicknessCalculatorWidget(QWidget):
             )
             return
 
+        calculator_type = self.calculatorTypeComboBox.currentText()
+
         # Prepare parameters
-        params = {
-            'THICKNESS_CALCULATOR_TYPE': self.calculatorTypeComboBox.currentIndex(),
-            'DTM': self.dtmLayerComboBox.currentLayer(),
-            'GEOLOGY': self.geologyLayerComboBox.currentLayer(),
-            'UNIT_NAME_FIELD': self.unitNameFieldComboBox.currentField(),
-            'BASAL_CONTACTS': self.basalContactsComboBox.currentLayer(),
-            'SAMPLED_CONTACTS': self.sampledContactsComboBox.currentLayer(),
-            'STRUCTURE_DATA': self.structureLayerComboBox.currentLayer(),
-            'DIP_FIELD': self.dipFieldComboBox.currentField(),
-            'DIPDIR_FIELD': self.dipDirFieldComboBox.currentField(),
-            'ORIENTATION_TYPE': self.orientationTypeComboBox.currentIndex(),
-            'STRATIGRAPHIC_COLUMN_LAYER': self.stratiColumnComboBox.currentLayer(),
-            'MAX_LINE_LENGTH': self.maxLineLengthSpinBox.value(),
-            'BOUNDING_BOX_TYPE': 0,  # Extract from geology layer
-            'OUTPUT': 'TEMPORARY_OUTPUT',
-        }
-
-        # Run the algorithm
         try:
-            feedback = QgsProcessingFeedback()
-            result = processing.run(
-                "plugin_map2loop:thickness_calculator", params, feedback=feedback
-            )
+            kwargs = {
+                'geology': self.geologyLayerComboBox.currentLayer(),
+                'basal_contacts': self.basalContactsComboBox.currentLayer(),
+                'sampled_contacts': self.sampledContactsComboBox.currentLayer(),
+                'structure': self.structureLayerComboBox.currentLayer(),
+                'calculator_type': calculator_type,
+                'unit_name_field': self.unitNameFieldComboBox.currentField(),
+                'dip_field': self.dipFieldComboBox.currentField(),
+                'dipdir_field': self.dipDirFieldComboBox.currentField(),
+                'orientation_type': self.orientationTypeComboBox.currentText(),
+                'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
+            }
 
-            if result:
+            # Add optional parameters
+            if self.dtmLayerComboBox.currentLayer():
+                kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+
+            if calculator_type == "StructuralPoint":
+                kwargs['max_line_length'] = self.maxLineLengthSpinBox.value()
+
+            if self.stratiColumnComboBox.currentLayer():
+                # Extract unit names from stratigraphic column layer
+                strati_layer = self.stratiColumnComboBox.currentLayer()
+                strati_order = [
+                    f['unit_name']
+                    for f in strati_layer.getFeatures()
+                    if 'unit_name' in f.fields().names()
+                ]
+                if strati_order:
+                    kwargs['stratigraphic_order'] = strati_order
+
+            result = calculate_thickness(**kwargs)
+
+            if result is not None and not result.empty:
                 QMessageBox.information(
-                    self, "Success", "Thickness calculation completed successfully!"
+                    self,
+                    "Success",
+                    f"Thickness calculation completed successfully! ({len(result)} records)",
                 )
             else:
-                QMessageBox.warning(self, "Error", "Failed to calculate thickness.")
+                QMessageBox.warning(self, "Error", "No thickness data was calculated.")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

@@ -112,8 +112,7 @@ class SorterWidget(QWidget):
 
     def _run_sorter(self):
         """Run the stratigraphic sorter algorithm."""
-        from qgis import processing
-        from qgis.core import QgsProcessingFeedback
+        from ...main.m2l_api import sort_stratigraphic_column
 
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
@@ -125,6 +124,7 @@ class SorterWidget(QWidget):
             return
 
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
+        algorithm_name = self.sorting_algorithms[algorithm_index]
         is_observation_projections = algorithm_index == 5
 
         if is_observation_projections:
@@ -141,34 +141,45 @@ class SorterWidget(QWidget):
                 )
                 return
 
-        # Prepare parameters
-        params = {
-            'SORTING_ALGORITHM': algorithm_index,
-            'INPUT_GEOLOGY': self.geologyLayerComboBox.currentLayer(),
-            'UNIT_NAME_FIELD': self.unitNameFieldComboBox.currentField(),
-            'MIN_AGE_FIELD': self.minAgeFieldComboBox.currentField(),
-            'MAX_AGE_FIELD': self.maxAgeFieldComboBox.currentField(),
-            'GROUP_FIELD': self.groupFieldComboBox.currentField(),
-            'CONTACTS_LAYER': self.contactsLayerComboBox.currentLayer(),
-            'OUTPUT': 'TEMPORARY_OUTPUT',
-            'JSON_OUTPUT': 'TEMPORARY_OUTPUT',
-        }
-
-        if is_observation_projections:
-            params['INPUT_STRUCTURE'] = self.structureLayerComboBox.currentLayer()
-            params['DIP_FIELD'] = self.dipFieldComboBox.currentField()
-            params['DIPDIR_FIELD'] = self.dipDirFieldComboBox.currentField()
-            params['ORIENTATION_TYPE'] = self.orientationTypeComboBox.currentIndex()
-            params['INPUT_DTM'] = self.dtmLayerComboBox.currentLayer()
-
-        # Run the algorithm
+        # Run the sorter API
         try:
-            feedback = QgsProcessingFeedback()
-            result = processing.run("plugin_map2loop:loop_sorter", params, feedback=feedback)
+            kwargs = {
+                'geology': self.geologyLayerComboBox.currentLayer(),
+                'contacts': self.contactsLayerComboBox.currentLayer(),
+                'sorting_algorithm': algorithm_name,
+                'unit_name_field': self.unitNameFieldComboBox.currentField(),
+                'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
+            }
 
-            if result:
+            # Add optional fields
+            min_age_field = self.minAgeFieldComboBox.currentField()
+            if min_age_field:
+                kwargs['min_age_field'] = min_age_field
+
+            max_age_field = self.maxAgeFieldComboBox.currentField()
+            if max_age_field:
+                kwargs['max_age_field'] = max_age_field
+
+            group_field = self.groupFieldComboBox.currentField()
+            if group_field:
+                kwargs['group_field'] = group_field
+
+            if is_observation_projections:
+                kwargs['structure'] = self.structureLayerComboBox.currentLayer()
+                kwargs['dip_field'] = self.dipFieldComboBox.currentField()
+                kwargs['dipdir_field'] = self.dipDirFieldComboBox.currentField()
+                kwargs['orientation_type'] = self.orientation_types[
+                    self.orientationTypeComboBox.currentIndex()
+                ]
+                kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+
+            result = sort_stratigraphic_column(**kwargs)
+
+            if result and len(result) > 0:
                 QMessageBox.information(
-                    self, "Success", "Stratigraphic column created successfully!"
+                    self,
+                    "Success",
+                    f"Stratigraphic column created successfully! ({len(result)} units)",
                 )
             else:
                 QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
