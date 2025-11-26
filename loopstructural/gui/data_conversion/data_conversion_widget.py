@@ -22,26 +22,31 @@ from PyQt5.QtWidgets import (
 from qgis.core import QgsMapLayer, QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
-from ...main.vectorLayerWrapper import QgsLayerFromGeoDataFrame, qgsLayerToGeoDataFrame
+from ...main.vectorLayerWrapper import QgsLayerFromDataFrame, QgsLayerFromGeoDataFrame
 from .configuration import ConfigurationState
 from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
 
-try:  # geopandas is required for dataframe conversions, but guard import for safety
-    from geopandas import GeoDataFrame as _GeoDataFrameType
-except Exception:  # pragma: no cover - geopandas unavailable
-    _GeoDataFrameType = None
+try:
+    from geopandas import GeoDataFrame
+except Exception:  # pragma: no cover - geopandas may be unavailable in tests
+    GeoDataFrame = None
+
+try:
+    from pandas import DataFrame
+except Exception:  # pragma: no cover - pandas may be unavailable in tests
+    DataFrame = None
 
 
 def _run_loop_conversion(
-    survey_name: SurveyName, data_sources: Mapping[Datatype | str, Any]
-) -> Any:
+    survey_name: SurveyName, data_sources: Mapping[Datatype | str, str]
+) -> Tuple[Any, Any]:
     """Execute the LoopDataConverter workflow for the supplied survey and data."""
     if not data_sources:
         raise ValueError("At least one data source is required for conversion.")
 
-    formatted_sources: Dict[str, Any] = {}
+    formatted_sources: Dict[str, str] = {}
     for data_type, dataset in data_sources.items():
-        if dataset is None:
+        if not dataset:
             continue
         key = data_type.name if isinstance(data_type, Datatype) else str(data_type)
         formatted_sources[key.split(".")[-1].upper()] = dataset
@@ -51,7 +56,8 @@ def _run_loop_conversion(
 
     input_data = InputData(**formatted_sources)
     converter = LoopConverter(survey_name=survey_name, data=input_data)
-    return converter.convert()
+    conversion_result = converter.convert()
+    return converter, conversion_result
 
 
 @dataclass
@@ -102,6 +108,7 @@ class AutomaticConversionWidget(QWidget):
     """Widget showing the automatic conversion workflow."""
 
     SUPPORTED_DATA_TYPES: Tuple[str, ...] = ("GEOLOGY", "STRUCTURE", "FAULT", "FOLD")
+    OUTPUT_DATA_TYPES: Tuple[str, ...] = ("GEOLOGY", "STRUCTURE", "FAULT", "FOLD", "FAULT_ORIENTATION")
     OUTPUT_GROUP_NAME = "Loop-Ready Data"
 
     def __init__(
@@ -210,19 +217,19 @@ class AutomaticConversionWidget(QWidget):
             self.sources_layout.addRow(self._format_identifier_label(data_type), combo)
             self.layer_selectors[data_type] = combo
 
-    def _collect_data_sources(self) -> Dict[Datatype | str, Any]:
-        data_sources: Dict[Datatype | str, Any] = {}
+    def _collect_data_sources(self) -> Dict[Datatype | str, str]:
+        data_sources: Dict[Datatype | str, str] = {}
         for data_type, combo in self.layer_selectors.items():
             layer = combo.currentLayer()
             if layer and isinstance(layer, QgsVectorLayer) and layer.isValid():
-                dataframe = qgsLayerToGeoDataFrame(layer)
-                if dataframe is not None:
-                    data_sources[data_type] = dataframe
+                path = layer.source()
+                if path:
+                    data_sources[data_type] = path
         return data_sources
 
     def _handle_run_conversion(self) -> None:
-        converter = self.current_converter()
-        if converter is None:
+        converter_option = self.current_converter()
+        if converter_option is None:
             self._update_status("Please select a converter before running.", error=True)
             return
 
@@ -231,12 +238,15 @@ class AutomaticConversionWidget(QWidget):
             self._update_status("Select at least one data source layer before running.", error=True)
             return
 
+        loop_converter: Any = None
         result: Any = None
         added_layers = 0
         try:
-            survey = self._normalise_survey_name(converter.identifier)
-            result = self.run_conversion(survey, sources)
-            layers = self._materialise_layers_from_result(result)
+            survey = self._normalise_survey_name(converter_option.identifier)
+            loop_converter, result = self.run_conversion(survey, sources)
+            layers = self._build_layers_from_converter(loop_converter)
+            if not layers:
+                layers = self._materialise_layers_from_result(result)
             if layers:
                 added_layers = self._add_layers_to_project_group(layers)
         except Exception as exc:  # pragma: no cover - UI feedback
@@ -258,7 +268,9 @@ class AutomaticConversionWidget(QWidget):
         self.status_label.setStyleSheet(f"color: {color};")
         self.status_label.setText(message)
 
-    def run_conversion(self, survey_name: SurveyName | str, data_sources: Mapping[Datatype | str, Any]) -> Any:
+    def run_conversion(
+        self, survey_name: SurveyName | str, data_sources: Mapping[Datatype | str, str]
+    ) -> Tuple[Any, Any]:
         """Execute the LoopConverter against the supplied dataset."""
         survey = self._normalise_survey_name(survey_name)
         return _run_loop_conversion(survey, data_sources)
@@ -279,6 +291,73 @@ class AutomaticConversionWidget(QWidget):
             return SurveyName[key.upper()]
         except KeyError as exc:
             raise ValueError(f"Unknown survey name '{value}'.") from exc
+
+    def _build_layers_from_converter(self, converter: Any) -> List[QgsVectorLayer]:
+        if converter is None:
+            return []
+        data_store = getattr(converter, "data", None)
+        if not data_store:
+            return []
+
+        layers: List[QgsVectorLayer] = []
+        for identifier in self.OUTPUT_DATA_TYPES:
+            dtype = self._datatype_for_name(identifier)
+            dataset = self._extract_dataset(data_store, dtype)
+            if dataset is None:
+                continue
+            layer = self._vector_layer_from_value(dtype, dataset)
+            if layer is not None and layer.isValid():
+                layers.append(layer)
+        return layers
+
+    def _datatype_for_name(self, identifier: str | Datatype) -> Datatype | str:
+        if isinstance(identifier, Datatype):
+            return identifier
+        try:
+            return Datatype[str(identifier)]
+        except Exception:
+            return str(identifier)
+
+    def _extract_dataset(self, data_store: Any, key: Datatype | str) -> Any:
+        if data_store is None:
+            return None
+
+        candidates: List[Any] = []
+        if isinstance(key, Datatype):
+            candidates.append(key)
+            candidates.append(key.name)
+            value = getattr(key, "value", None)
+            if value is not None:
+                candidates.append(value)
+        else:
+            candidates.append(key)
+
+        text_key = str(key)
+        if "." in text_key:
+            text_key = text_key.split(".", 1)[-1]
+        candidates.extend(
+            [
+                text_key,
+                text_key.upper(),
+                text_key.lower(),
+            ]
+        )
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            if isinstance(data_store, Mapping) and candidate in data_store:
+                return data_store[candidate]
+            getter = getattr(data_store, "__getitem__", None)
+            if callable(getter):
+                try:
+                    return getter(candidate)
+                except Exception:
+                    pass
+            attr_name = str(candidate).lower()
+            if hasattr(data_store, attr_name):
+                return getattr(data_store, attr_name)
+        return None
 
     def _materialise_layers_from_result(self, result: Any) -> List[QgsVectorLayer]:
         layers: List[QgsVectorLayer] = []
@@ -308,8 +387,26 @@ class AutomaticConversionWidget(QWidget):
         if isinstance(value, QgsVectorLayer):
             value.setName(label)
             return value
-        if _GeoDataFrameType is not None and isinstance(value, _GeoDataFrameType):
-            return QgsLayerFromGeoDataFrame(value, layer_name=label)
+        if GeoDataFrame is not None and isinstance(value, GeoDataFrame):
+            try:
+                return QgsLayerFromGeoDataFrame(value, layer_name=label)
+            except ValueError:
+                # fall back to attribute-only table if geometry is missing
+                return QgsLayerFromDataFrame(value, layer_name=label)
+        if DataFrame is not None and isinstance(value, DataFrame):
+            return QgsLayerFromDataFrame(value, layer_name=label)
+        if (
+            DataFrame is not None
+            and isinstance(value, list)
+            and value
+            and all(isinstance(item, Mapping) for item in value)
+        ):
+            try:
+                dataframe = DataFrame(value)
+            except Exception:
+                dataframe = None
+            if dataframe is not None:
+                return QgsLayerFromDataFrame(dataframe, layer_name=label)
         if isinstance(value, str):
             layer = QgsVectorLayer(value, label, "ogr")
             return layer if layer.isValid() else None
@@ -366,7 +463,30 @@ class AutomaticConversionWidget(QWidget):
         return list(self.SUPPORTED_DATA_TYPES)
 
     def _format_identifier_label(self, identifier: Datatype | str) -> str:
-        name = identifier.name if isinstance(identifier, Datatype) else str(identifier)
+        member: Optional[Datatype] = identifier if isinstance(identifier, Datatype) else None
+        text_value = None if isinstance(identifier, Datatype) else str(identifier).strip()
+
+        if member is None and text_value:
+            # Try exact member name
+            candidates = getattr(Datatype, "__members__", {})
+            key = text_value.split(".", 1)[-1].upper()
+            member = candidates.get(key)
+
+        if member is None and text_value:
+            # Try matching the enum value
+            lowered = text_value.lower()
+            for enum_member in getattr(Datatype, "__members__", {}).values():
+                if str(getattr(enum_member, "value", "")).lower() == lowered:
+                    member = enum_member
+                    break
+
+        if member is not None:
+            name = member.name
+        else:
+            name = text_value or "Data"
+            if "." in name:
+                name = name.split(".")[-1]
+
         parts = name.replace("_", " ").split()
         return " ".join(part.capitalize() for part in parts) or "Data"
 
