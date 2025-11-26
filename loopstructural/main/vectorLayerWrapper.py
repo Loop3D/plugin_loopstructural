@@ -22,6 +22,7 @@ from qgis.core import (
     QgsProject,
     QgsRaster,
     QgsRasterLayer,
+    QgsVectorLayer,
     QgsWkbTypes,
 )
 from qgis.PyQt.QtCore import QDateTime, QVariant
@@ -485,6 +486,193 @@ def _fields_from_dataframe(df, drop_cols=None) -> QgsFields:
         vtype = _qvariant_type_from_dtype(dtype)
         fields.append(QgsField(name, vtype))
     return fields
+
+
+def _geometry_from_value(value):
+    """Convert shapely/QGIS geometry objects into QgsGeometry instances."""
+    if value is None:
+        return None
+    if isinstance(value, QgsGeometry):
+        return QgsGeometry(value)
+    # QgsGeometry with asWkb
+    for attr in ("asWkb", "exportToWkb"):
+        method = getattr(value, attr, None)
+        if callable(method):
+            try:
+                data = method()
+            except Exception:
+                data = None
+            if data:
+                try:
+                    data = bytes(data)
+                except Exception:
+                    pass
+                try:
+                    return QgsGeometry.fromWkb(data)
+                except Exception:
+                    continue
+    # Shapely geometries expose wkb/wkt attributes
+    wkb_data = getattr(value, "wkb", None)
+    if wkb_data is not None:
+        try:
+            return QgsGeometry.fromWkb(bytes(wkb_data))
+        except Exception:
+            pass
+    wkt_data = getattr(value, "wkt", None)
+    if wkt_data:
+        try:
+            return QgsGeometry.fromWkt(str(wkt_data))
+        except Exception:
+            pass
+    return None
+
+
+def _infer_wkb_type_from_geoms(geoms) -> QgsWkbTypes.Type:
+    """Infer a WKB type from a GeoSeries or iterable of geometries."""
+    for geom in geoms:
+        qgs_geom = _geometry_from_value(geom)
+        if qgs_geom is not None and not qgs_geom.isEmpty():
+            return qgs_geom.wkbType()
+    return QgsWkbTypes.Point
+
+
+def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
+    """Best-effort conversion of GeoPandas CRS metadata to QgsCoordinateReferenceSystem."""
+    crs = QgsCoordinateReferenceSystem()
+    if crs_info is None:
+        return crs
+    # pyproj CRS exposes helpers like to_wkt/to_epsg
+    text = None
+    for attr in ("to_wkt", "to_string"):
+        method = getattr(crs_info, attr, None)
+        if callable(method):
+            try:
+                text = method()
+            except Exception:
+                text = None
+            if text:
+                break
+    if text:
+        try:
+            return QgsCoordinateReferenceSystem.fromWkt(text)
+        except Exception:
+            temp = QgsCoordinateReferenceSystem()
+            if hasattr(temp, "createFromWkt"):
+                try:
+                    if temp.createFromWkt(text):
+                        return temp
+                except Exception:
+                    pass
+    try:
+        epsg = crs_info.to_epsg()
+        if epsg:
+            return QgsCoordinateReferenceSystem.fromEpsgId(int(epsg))
+    except Exception:
+        pass
+    if isinstance(crs_info, str):
+        try:
+            temp = QgsCoordinateReferenceSystem(crs_info)
+            if temp.isValid():
+                return temp
+        except Exception:
+            pass
+    return crs
+
+
+def QgsLayerFromGeoDataFrame(geodataframe, layer_name: str = "Converted Data"):
+    """Create an in-memory QgsVectorLayer from a GeoPandas GeoDataFrame."""
+    if geodataframe is None:
+        return None
+    geometry_series = getattr(geodataframe, "geometry", None)
+    if geometry_series is None:
+        raise ValueError("GeoDataFrame must include a geometry column.")
+    geometry_column = geometry_series.name
+    wkb_type = _infer_wkb_type_from_geoms(geometry_series)
+    geom_name = QgsWkbTypes.displayString(wkb_type) or "Point"
+    crs = _crs_from_geodataframe_crs(getattr(geodataframe, "crs", None))
+    uri = geom_name
+    if crs.isValid():
+        authid = crs.authid()
+        if authid:
+            uri = f"{geom_name}?crs={authid}"
+    layer = QgsVectorLayer(uri, layer_name, "memory")
+    if crs.isValid():
+        layer.setCrs(crs)
+    provider = layer.dataProvider()
+    attribute_fields = []
+    for column in geodataframe.columns:
+        if column == geometry_column:
+            continue
+        attribute_fields.append(QgsField(str(column), _qvariant_type_from_dtype(geodataframe[column].dtype)))
+    if attribute_fields:
+        provider.addAttributes(attribute_fields)
+        layer.updateFields()
+    non_geom_cols = [col for col in geodataframe.columns if col != geometry_column]
+    features = []
+    for _, row in geodataframe.iterrows():
+        feat = QgsFeature(layer.fields())
+        attrs = []
+        for column in non_geom_cols:
+            val = row[column]
+            if isinstance(val, np.generic):
+                try:
+                    val = val.item()
+                except Exception:
+                    pass
+            if pd.isna(val):
+                val = None
+            attrs.append(val)
+        feat.setAttributes(attrs)
+        geom = _geometry_from_value(row[geometry_column])
+        if geom is not None and not geom.isEmpty():
+            feat.setGeometry(geom)
+        features.append(feat)
+    if features:
+        provider.addFeatures(features)
+        layer.updateExtents()
+    return layer
+
+
+def QgsLayerFromDataFrame(dataframe, layer_name: str = "Converted Table"):
+    """Create an attribute-only memory layer from a pandas-compatible DataFrame."""
+    if dataframe is None:
+        return None
+    df = dataframe.copy()
+    geometry_series = getattr(df, "geometry", None)
+    geometry_name = getattr(geometry_series, "name", None)
+    if geometry_name and geometry_name in df.columns:
+        df = df.drop(columns=[geometry_name])
+
+    layer = QgsVectorLayer("None", layer_name, "memory")
+    provider = layer.dataProvider()
+
+    attributes = []
+    for column in df.columns:
+        attributes.append(QgsField(str(column), _qvariant_type_from_dtype(df[column].dtype)))
+    if attributes:
+        provider.addAttributes(attributes)
+        layer.updateFields()
+
+    features = []
+    for _, row in df.iterrows():
+        feat = QgsFeature(layer.fields())
+        attrs = []
+        for column in df.columns:
+            val = row[column]
+            if pd.isna(val):
+                val = None
+            elif isinstance(val, np.generic):
+                try:
+                    val = val.item()
+                except Exception:
+                    pass
+            attrs.append(val)
+        feat.setAttributes(attrs)
+        features.append(feat)
+    if features:
+        provider.addFeatures(features)
+        layer.updateExtents()
+    return layer
 
 
 # ---------- main function you'll call inside processAlgorithm ----------
