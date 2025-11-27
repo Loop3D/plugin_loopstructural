@@ -5,6 +5,8 @@ import os
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
+from ...main.helpers import ColumnMatcher, get_layer_names
+
 
 class ThicknessCalculatorWidget(QWidget):
     """Widget for configuring and running the thickness calculator.
@@ -55,12 +57,49 @@ class ThicknessCalculatorWidget(QWidget):
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
         self.structureLayerComboBox.layerChanged.connect(self._on_structure_layer_changed)
         self.runButton.clicked.connect(self._run_calculator)
-
+        self._guess_layers()
         # Set up field combo boxes
         self._setup_field_combo_boxes()
 
         # Initial state update
         self._on_calculator_type_changed()
+
+    def _guess_layers(self):
+        """Attempt to auto-select layers based on common naming conventions."""
+        if not self.data_manager:
+            return
+
+        # Attempt to find geology layer
+        geology_layer_names = get_layer_names(self.geologyLayerComboBox)
+        geology_matcher = ColumnMatcher(geology_layer_names)
+        geology_layer_match = geology_matcher.find_match('GEOLOGY')
+        if geology_layer_match:
+            geology_layer = self.data_manager.find_layer_by_name(geology_layer_match)
+            self.geologyLayerComboBox.setLayer(geology_layer)
+
+        # Attempt to find basal contacts layer
+        basal_contacts_names = get_layer_names(self.basalContactsComboBox)
+        basal_matcher = ColumnMatcher(basal_contacts_names)
+        basal_layer_match = basal_matcher.find_match('BASAL_CONTACTS')
+        if basal_layer_match:
+            basal_layer = self.data_manager.find_layer_by_name(basal_layer_match)
+            self.basalContactsComboBox.setLayer(basal_layer)
+
+        # Attempt to find sampled contacts layer
+        sampled_contacts_names = get_layer_names(self.sampledContactsComboBox)
+        sampled_matcher = ColumnMatcher(sampled_contacts_names)
+        sampled_layer_match = sampled_matcher.find_match('SAMPLED_CONTACTS')
+        if sampled_layer_match:
+            sampled_layer = self.data_manager.find_layer_by_name(sampled_layer_match)
+            self.sampledContactsComboBox.setLayer(sampled_layer)
+
+        # Attempt to find structure layer
+        structure_layer_names = get_layer_names(self.structureLayerComboBox)
+        structure_matcher = ColumnMatcher(structure_layer_names)
+        structure_layer_match = structure_matcher.find_match('STRUCTURE')
+        if structure_layer_match:
+            structure_layer = self.data_manager.find_layer_by_name(structure_layer_match)
+            self.structureLayerComboBox.setLayer(structure_layer)
 
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes to link to their respective layers."""
@@ -70,14 +109,37 @@ class ThicknessCalculatorWidget(QWidget):
 
     def _on_geology_layer_changed(self):
         """Update field combo boxes when geology layer changes."""
+
         layer = self.geologyLayerComboBox.currentLayer()
         self.unitNameFieldComboBox.setLayer(layer)
 
+        # Auto-detect appropriate fields
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+
+            # Auto-select UNITNAME field
+            if unit_match := matcher.find_match('UNITNAME'):
+                self.unitNameFieldComboBox.setField(unit_match)
+
     def _on_structure_layer_changed(self):
         """Update field combo boxes when structure layer changes."""
+
         layer = self.structureLayerComboBox.currentLayer()
         self.dipFieldComboBox.setLayer(layer)
         self.dipDirFieldComboBox.setLayer(layer)
+
+        # Auto-detect appropriate fields
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+
+            # Auto-select DIP and DIPDIR fields
+            if dip_match := matcher.find_match('DIP'):
+                self.dipFieldComboBox.setField(dip_match)
+
+            if dipdir_match := matcher.find_match('DIPDIR'):
+                self.dipDirFieldComboBox.setField(dipdir_match)
 
     def _on_calculator_type_changed(self):
         """Update UI based on selected calculator type."""
