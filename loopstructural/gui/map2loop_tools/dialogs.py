@@ -14,7 +14,7 @@ class SamplerDialog(QDialog):
         """Initialize the sampler dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Sampler")
-        self.data_manager = data_manager    
+        self.data_manager = data_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -54,7 +54,7 @@ class SorterDialog(QDialog):
         from .sorter_widget import SorterWidget
 
         layout = QVBoxLayout(self)
-        self.widget = SorterWidget(self)
+        self.widget = SorterWidget(self, data_manager=self.data_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -117,7 +117,7 @@ class BasalContactsDialog(QDialog):
         from .basal_contacts_widget import BasalContactsWidget
 
         layout = QVBoxLayout(self)
-        self.widget = BasalContactsWidget(self)
+        self.widget = BasalContactsWidget(self, data_manager=self.data_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -148,7 +148,7 @@ class ThicknessCalculatorDialog(QDialog):
         from .thickness_calculator_widget import ThicknessCalculatorWidget
 
         layout = QVBoxLayout(self)
-        self.widget = ThicknessCalculatorWidget(self)
+        self.widget = ThicknessCalculatorWidget(self,data_manager=self.data_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons

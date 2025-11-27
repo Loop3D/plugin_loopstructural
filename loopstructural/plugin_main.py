@@ -297,14 +297,14 @@ class LoopstructuralPlugin:
         """Show the sampler dialog."""
         from loopstructural.gui.map2loop_tools import SamplerDialog
 
-        dialog = SamplerDialog(self.iface.mainWindow())
+        dialog = SamplerDialog(self.iface.mainWindow(), data_manager=self.data_manager)
         dialog.exec_()
 
     def show_sorter_dialog(self):
         """Show the automatic stratigraphic sorter dialog."""
         from loopstructural.gui.map2loop_tools import SorterDialog
 
-        dialog = SorterDialog(self.iface.mainWindow())
+        dialog = SorterDialog(self.iface.mainWindow(), data_manager=self.data_manager)
         dialog.exec_()
 
     def show_user_sorter_dialog(self):
@@ -318,14 +318,14 @@ class LoopstructuralPlugin:
         """Show the basal contacts extractor dialog."""
         from loopstructural.gui.map2loop_tools import BasalContactsDialog
 
-        dialog = BasalContactsDialog(self.iface.mainWindow())
+        dialog = BasalContactsDialog(self.iface.mainWindow(), data_manager=self.data_manager)
         dialog.exec_()
 
     def show_thickness_dialog(self):
         """Show the thickness calculator dialog."""
         from loopstructural.gui.map2loop_tools import ThicknessCalculatorDialog
 
-        dialog = ThicknessCalculatorDialog(self.iface.mainWindow())
+        dialog = ThicknessCalculatorDialog(self.iface.mainWindow(), data_manager=self.data_manager)
         dialog.exec_()
 
     def tr(self, message: str) -> str:
