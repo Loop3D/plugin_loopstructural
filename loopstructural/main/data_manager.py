@@ -559,7 +559,7 @@ class ModellingDataManager:
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
-    def find_layer_by_name(self, layer_name):
+    def find_layer_by_name(self, layer_name, layer_type=QgsVectorLayer):
         """Find a layer by name in the project."""
         if layer_name is None:
             return None
@@ -574,11 +574,11 @@ class ModellingDataManager:
                     log_level=2,
                 )
             i = 0
-            while i < len(layers) and not issubclass(type(layers[i]), QgsVectorLayer):
+            while i < len(layers) and not issubclass(type(layers[i]), layer_type):
 
                 i += 1
 
-            if issubclass(type(layers[i]), QgsVectorLayer):
+            if issubclass(type(layers[i]), layer_type):
                 return layers[i]
             else:
                 self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
