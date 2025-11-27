@@ -7,7 +7,9 @@ from qgis.PyQt import uic
 
 from loopstructural.gui.modelling.model_definition import fault_layers
 
+from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
+from ...main.vectorLayerWrapper import addGeoDataFrameToproject
 
 
 class BasalContactsWidget(QWidget):
@@ -58,9 +60,30 @@ class BasalContactsWidget(QWidget):
         # Connect signals
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
         self.runButton.clicked.connect(self._run_extractor)
-
+        self._guess_layers()
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+
+    def _guess_layers(self):
+        """Attempt to auto-select layers based on common naming conventions."""
+        if not self.data_manager:
+            return
+
+        # Attempt to find geology layer
+        geology_layer_names = get_layer_names(self.geologyLayerComboBox)
+        geology_matcher = ColumnMatcher(geology_layer_names)
+        geology_layer_match = geology_matcher.find_match('GEOLOGY')
+        if geology_layer_match:
+            geology_layer = self.data_manager.find_layer_by_name(geology_layer_match)
+            self.geologyLayerComboBox.setLayer(geology_layer)
+
+        # Attempt to find faults layer
+        fault_layer_names = get_layer_names(self.faultsLayerComboBox)
+        fault_layer_matcher = ColumnMatcher(fault_layer_names)
+        fault_layer_match = fault_layer_matcher.find_match('FAULTS')
+        if fault_layer_match:
+            faults_layer = self.data_manager.find_layer_by_name(fault_layer_match)
+            self.faultsLayerComboBox.setLayer(faults_layer)
 
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes to link to their respective layers."""
@@ -76,8 +99,19 @@ class BasalContactsWidget(QWidget):
 
     def _on_geology_layer_changed(self):
         """Update field combo boxes when geology layer changes."""
+        from ...main.helpers import ColumnMatcher
+
         layer = self.geologyLayerComboBox.currentLayer()
         self.unitNameFieldComboBox.setLayer(layer)
+
+        # Auto-detect appropriate fields
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+
+            # Auto-select UNITNAME field
+            if unit_match := matcher.find_match('UNITNAME'):
+                self.unitNameFieldComboBox.setField(unit_match)
 
     def _run_extractor(self):
         """Run the basal contacts extraction algorithm."""
@@ -98,15 +132,36 @@ class BasalContactsWidget(QWidget):
         stratigraphic_order = (
             self.data_manager._stratigraphic_column.get_unit_names() if self.data_manager else []
         )
-        extract_basal_contacts(
+
+        # Check if user wants all contacts or just basal contacts
+        all_contacts = self.allContactsCheckBox.isChecked()
+        if all_contacts:
+            stratigraphic_order = list(set([g[unit_name_field] for g in geology.getFeatures()]))
+        result = extract_basal_contacts(
             geology=geology,
             stratigraphic_order=stratigraphic_order,
             faults=faults,
             ignore_units=ignore_units,
             unit_name_field=unit_name_field,
-            all_contacts=False,
+            all_contacts=all_contacts,
             updater=lambda message: QMessageBox.information(self, "Extraction Progress", message),
         )
+
+        # Show success message based on what was extracted
+        if all_contacts and result:
+            addGeoDataFrameToproject(result['all_contacts'], "All contacts")
+            contact_type = "all contacts and basal contacts"
+        else:
+            addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
+
+            contact_type = "basal contacts"
+
+        if result:
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Successfully extracted {contact_type}!",
+            )
 
     def get_parameters(self):
         """Get current widget parameters.
@@ -127,6 +182,7 @@ class BasalContactsWidget(QWidget):
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'faults_layer': self.faultsLayerComboBox.currentLayer(),
             'ignore_units': ignore_units,
+            'all_contacts': self.allContactsCheckBox.isChecked(),
         }
 
     def set_parameters(self, params):
@@ -141,6 +197,7 @@ class BasalContactsWidget(QWidget):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
         if 'faults_layer' in params and params['faults_layer']:
             self.faultsLayerComboBox.setLayer(params['faults_layer'])
-        
         if 'ignore_units' in params and params['ignore_units']:
             self.ignoreUnitsLineEdit.setText(', '.join(params['ignore_units']))
+        if 'all_contacts' in params:
+            self.allContactsCheckBox.setChecked(params['all_contacts'])
