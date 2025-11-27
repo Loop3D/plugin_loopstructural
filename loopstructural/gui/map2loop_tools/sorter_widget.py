@@ -3,7 +3,10 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
+from qgis.core import QgsRasterLayer
 from qgis.PyQt import uic
+
+from loopstructural.main.helpers import get_layer_names
 
 
 class SorterWidget(QWidget):
@@ -24,6 +27,8 @@ class SorterWidget(QWidget):
             Data manager for accessing shared data.
         """
         super().__init__(parent)
+        if data_manager is None:
+            raise ValueError("data_manager must be provided")
         self.data_manager = data_manager
 
         # Load the UI file
@@ -57,18 +62,53 @@ class SorterWidget(QWidget):
         # Initialize orientation types
         self.orientation_types = ['', 'Dip Direction', 'Strike']
         self.orientationTypeComboBox.addItems(self.orientation_types)
-
         # Connect signals
         self.sortingAlgorithmComboBox.currentIndexChanged.connect(self._on_algorithm_changed)
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
         self.structureLayerComboBox.layerChanged.connect(self._on_structure_layer_changed)
         self.runButton.clicked.connect(self._run_sorter)
+        self.orientationTypeComboBox.setCurrentIndex(1)  # Default to Dip Direction
+        self._guess_layers()
 
         # Set up field combo boxes
         self._setup_field_combo_boxes()
 
         # Initial state update
         self._on_algorithm_changed()
+
+    def _guess_layers(self):
+        """Automatically detect and set appropriate field names using ColumnMatcher."""
+        from ...main.helpers import ColumnMatcher
+
+        # Auto-detect geology fields
+        geology_layer_names = get_layer_names(self.geologyLayerComboBox)
+
+        geology_layer_matcher = ColumnMatcher(geology_layer_names)
+        geology_layer_match = geology_layer_matcher.find_match('GEOLOGY')
+        geology_layer = self.data_manager.find_layer_by_name(geology_layer_match)
+        self.geologyLayerComboBox.setLayer(geology_layer)
+
+        # Auto-detect structure fields
+        structure_layer_names = get_layer_names(self.structureLayerComboBox)
+        structure_layer_matcher = ColumnMatcher(structure_layer_names)
+        structure_layer_match = structure_layer_matcher.find_match('STRUCTURE')
+        structure_layer = self.data_manager.find_layer_by_name(structure_layer_match)
+        self.structureLayerComboBox.setLayer(structure_layer)
+
+        contact_layer_names = get_layer_names(self.contactsLayerComboBox)
+        contact_layer_matcher = ColumnMatcher(contact_layer_names)
+        contact_layer_match = contact_layer_matcher.find_match('CONTACTS')
+        contact_layer = self.data_manager.find_layer_by_name(contact_layer_match)
+        self.contactsLayerComboBox.setLayer(contact_layer)
+
+        dem_layer_names = get_layer_names(self.dtmLayerComboBox)
+        dem_layer_matcher = ColumnMatcher(dem_layer_names)
+        dem_layer_match = dem_layer_matcher.find_match('DTM')
+        if not dem_layer_match:
+            dem_layer_match = dem_layer_matcher.find_match('DEM')
+        print(dem_layer_match)
+        dem_layer = self.data_manager.find_layer_by_name(dem_layer_match, layer_type=QgsRasterLayer)
+        self.dtmLayerComboBox.setLayer(dem_layer)
 
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes to link to their respective layers."""
@@ -81,17 +121,51 @@ class SorterWidget(QWidget):
 
     def _on_geology_layer_changed(self):
         """Update field combo boxes when geology layer changes."""
+        from ...main.helpers import ColumnMatcher
+
         layer = self.geologyLayerComboBox.currentLayer()
         self.unitNameFieldComboBox.setLayer(layer)
         self.minAgeFieldComboBox.setLayer(layer)
         self.maxAgeFieldComboBox.setLayer(layer)
         self.groupFieldComboBox.setLayer(layer)
 
+        # Auto-detect appropriate fields
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+
+            # Auto-select best matches
+            if unit_match := matcher.find_match('UNITNAME'):
+                self.unitNameFieldComboBox.setField(unit_match)
+
+            if min_age_match := matcher.find_match('MIN_AGE'):
+                self.minAgeFieldComboBox.setField(min_age_match)
+
+            if max_age_match := matcher.find_match('MAX_AGE'):
+                self.maxAgeFieldComboBox.setField(max_age_match)
+
+            if group_match := matcher.find_match('GROUP'):
+                self.groupFieldComboBox.setField(group_match)
+
     def _on_structure_layer_changed(self):
         """Update field combo boxes when structure layer changes."""
+        from ...main.helpers import ColumnMatcher
+
         layer = self.structureLayerComboBox.currentLayer()
         self.dipFieldComboBox.setLayer(layer)
         self.dipDirFieldComboBox.setLayer(layer)
+
+        # Auto-detect appropriate fields
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+
+            # Auto-select best matches
+            if dip_match := matcher.find_match('DIP'):
+                self.dipFieldComboBox.setField(dip_match)
+
+            if dipdir_match := matcher.find_match('DIPDIR'):
+                self.dipDirFieldComboBox.setField(dipdir_match)
 
     def _on_algorithm_changed(self):
         """Update UI based on selected sorting algorithm."""
