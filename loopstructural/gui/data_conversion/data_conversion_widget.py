@@ -503,9 +503,11 @@ class AutomaticConversionWidget(QWidget):
             options.append(ConverterOption(identifier=name, label=label, description=description))
         return options
 
-
 class ManualConversionWidget(QWidget):
     """Widget that lets the user map table columns to the NTGS configuration."""
+
+    OUTPUT_DATA_TYPES: Tuple[str, ...] = AutomaticConversionWidget.OUTPUT_DATA_TYPES
+    OUTPUT_GROUP_NAME = AutomaticConversionWidget.OUTPUT_GROUP_NAME
 
     def __init__(
         self,
@@ -553,6 +555,21 @@ class ManualConversionWidget(QWidget):
         self.form_layout = QFormLayout(self.form_widget)
         self.form_layout.setLabelAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.scroll_area.setWidget(self.form_widget)
+
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.run_button = QPushButton("Run Conversion")
+        self.run_button.clicked.connect(self._handle_run_conversion)
+        actions_layout.addWidget(self.run_button)
+        actions_layout.addStretch()
+
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("manualConversionStatus")
+        actions_layout.addWidget(self.status_label)
+
+        layout.addWidget(actions_widget)
 
         self.data_type_combo.currentIndexChanged.connect(self._handle_data_type_changed)
         self.layer_combo.layerChanged.connect(self._handle_layer_changed)
@@ -667,6 +684,258 @@ class ManualConversionWidget(QWidget):
             }
         else:
             self.layer_selections[self.current_data_type] = None
+
+    def _collect_data_sources(self) -> Dict[Datatype | str, str]:
+        data_sources: Dict[Datatype | str, str] = {}
+        for data_type, selection in self.layer_selections.items():
+            layer = self._layer_from_selection(selection or {})
+            if layer and isinstance(layer, QgsVectorLayer) and layer.isValid():
+                path = layer.source()
+                if path:
+                    data_sources[self._datatype_for_name(data_type)] = path
+        return data_sources
+
+    def _handle_run_conversion(self) -> None:
+        self._persist_current_values()
+        sources = self._collect_data_sources()
+        if not sources:
+            self._update_status("Select at least one data source layer before running.", error=True)
+            return
+
+        converter: Any = None
+        result: Any = None
+        added_layers = 0
+        try:
+            survey = self._manual_survey_name()
+            converter, result = _run_loop_conversion(survey, sources)
+            layers = self._build_layers_from_converter(converter)
+            if not layers:
+                layers = self._materialise_layers_from_result(result)
+            if layers:
+                added_layers = self._add_layers_to_project_group(layers)
+        except Exception as exc:  # pragma: no cover - UI feedback
+            self._update_status(f"Conversion failed: {exc}", error=True)
+            return
+
+        if added_layers:
+            message = f"Conversion completed: {added_layers} layer(s) added to '{self.OUTPUT_GROUP_NAME}'."
+        elif result not in (None, True):
+            message = f"Conversion completed: {result}"
+        else:
+            message = "Conversion completed successfully."
+        self._update_status(message)
+
+    def _update_status(self, message: str, *, error: bool = False) -> None:
+        color = "#c00000" if error else "#006400"
+        self.status_label.setStyleSheet(f"color: {color};")
+        self.status_label.setText(message)
+
+    def _manual_survey_name(self) -> SurveyName:
+        options = self._default_converter_options()
+        identifier: SurveyName | str | None = None
+        for option in options:
+            if str(option.identifier).upper() == "NTGS":
+                identifier = option.identifier
+                break
+        if identifier is None and options:
+            identifier = options[0].identifier
+        if identifier is None:
+            members = getattr(SurveyName, "__members__", {}) or {}
+            if "NTGS" in members:
+                identifier = members["NTGS"]
+            elif members:
+                identifier = next(iter(members.values()))
+            else:
+                raise ValueError("No survey definitions available for manual conversion.")
+        return AutomaticConversionWidget._normalise_survey_name(identifier)
+
+    def _default_converter_options(self) -> List[ConverterOption]:
+        members = getattr(SurveyName, "__members__", None)
+        if not isinstance(members, Mapping):
+            return []
+        options: List[ConverterOption] = []
+        for name, survey in members.items():
+            label = getattr(survey, "value", None)
+            if not isinstance(label, str) or not label.strip():
+                label = self._format_identifier_label(name)
+            description = getattr(survey, "description", "")
+            options.append(ConverterOption(identifier=name, label=label, description=description))
+        return options
+
+    def _build_layers_from_converter(self, converter: Any) -> List[QgsVectorLayer]:
+        if converter is None:
+            return []
+        data_store = getattr(converter, "data", None)
+        if not data_store:
+            return []
+
+        layers: List[QgsVectorLayer] = []
+        for identifier in self.OUTPUT_DATA_TYPES:
+            dtype = self._datatype_for_name(identifier)
+            dataset = self._extract_dataset(data_store, dtype)
+            if dataset is None:
+                continue
+            layer = self._vector_layer_from_value(dtype, dataset)
+            if layer is not None and layer.isValid():
+                layers.append(layer)
+        return layers
+
+    def _datatype_for_name(self, identifier: str | Datatype) -> Datatype | str:
+        if isinstance(identifier, Datatype):
+            return identifier
+        try:
+            return Datatype[str(identifier)]
+        except Exception:
+            return str(identifier)
+
+    def _extract_dataset(self, data_store: Any, key: Datatype | str) -> Any:
+        if data_store is None:
+            return None
+
+        candidates: List[Any] = []
+        if isinstance(key, Datatype):
+            candidates.append(key)
+            candidates.append(key.name)
+            value = getattr(key, "value", None)
+            if value is not None:
+                candidates.append(value)
+        else:
+            candidates.append(key)
+
+        text_key = str(key)
+        if "." in text_key:
+            text_key = text_key.split(".", 1)[-1]
+        candidates.extend(
+            [
+                text_key,
+                text_key.upper(),
+                text_key.lower(),
+            ]
+        )
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            if isinstance(data_store, Mapping) and candidate in data_store:
+                return data_store[candidate]
+            getter = getattr(data_store, "__getitem__", None)
+            if callable(getter):
+                try:
+                    return getter(candidate)
+                except Exception:
+                    pass
+            attr_name = str(candidate).lower()
+            if hasattr(data_store, attr_name):
+                return getattr(data_store, attr_name)
+        return None
+
+    def _materialise_layers_from_result(self, result: Any) -> List[QgsVectorLayer]:
+        layers: List[QgsVectorLayer] = []
+        self._collect_layers_from_result(result, layers, prefix="output")
+        return layers
+
+    def _collect_layers_from_result(
+        self, payload: Any, layers: List[QgsVectorLayer], *, prefix: str
+    ) -> None:
+        if payload is None:
+            return
+        if isinstance(payload, Mapping):
+            for key, value in payload.items():
+                label = str(key)
+                self._collect_layers_from_result(value, layers, prefix=label or prefix)
+            return
+        if isinstance(payload, (list, tuple, set)):
+            for index, value in enumerate(payload, start=1):
+                self._collect_layers_from_result(value, layers, prefix=f"{prefix}_{index}")
+            return
+        layer = self._vector_layer_from_value(prefix, payload)
+        if layer is not None and layer.isValid():
+            layers.append(layer)
+
+    def _vector_layer_from_value(self, name: Any, value: Any) -> Optional[QgsVectorLayer]:
+        label = self._format_identifier_label(str(name))
+        if isinstance(value, QgsVectorLayer):
+            value.setName(label)
+            return value
+        if GeoDataFrame is not None and isinstance(value, GeoDataFrame):
+            try:
+                return QgsLayerFromGeoDataFrame(value, layer_name=label)
+            except ValueError:
+                return QgsLayerFromDataFrame(value, layer_name=label)
+        if DataFrame is not None and isinstance(value, DataFrame):
+            return QgsLayerFromDataFrame(value, layer_name=label)
+        if (
+            DataFrame is not None
+            and isinstance(value, list)
+            and value
+            and all(isinstance(item, Mapping) for item in value)
+        ):
+            try:
+                dataframe = DataFrame(value)
+            except Exception:
+                dataframe = None
+            if dataframe is not None:
+                return QgsLayerFromDataFrame(dataframe, layer_name=label)
+        if isinstance(value, str):
+            layer = QgsVectorLayer(value, label, "ogr")
+            return layer if layer.isValid() else None
+        if isinstance(value, Mapping):
+            provider = str(value.get("provider") or "ogr")
+            nested_layer = value.get("layer")
+            if isinstance(nested_layer, QgsVectorLayer):
+                nested_layer.setName(str(value.get("name") or label))
+                return nested_layer if nested_layer.isValid() else None
+            for key in ("path", "source", "file"):
+                path = value.get(key)
+                if isinstance(path, str):
+                    layer_name = str(value.get("name") or label)
+                    layer = QgsVectorLayer(path, layer_name, provider)
+                    return layer if layer.isValid() else None
+        return None
+
+    def _add_layers_to_project_group(self, layers: Iterable[QgsVectorLayer]) -> int:
+        project = self.project or QgsProject.instance()
+        if project is None:
+            return 0
+        root = project.layerTreeRoot()
+        if root is None:
+            return 0
+        group = root.findGroup(self.OUTPUT_GROUP_NAME)
+        if group is None:
+            group = root.insertGroup(0, self.OUTPUT_GROUP_NAME)
+        added = 0
+        for layer in layers:
+            if project.mapLayer(layer.id()) is None:
+                project.addMapLayer(layer, False)
+            group.addLayer(layer)
+            added += 1
+        return added
+
+    def _format_identifier_label(self, identifier: Datatype | str) -> str:
+        member: Optional[Datatype] = identifier if isinstance(identifier, Datatype) else None
+        text_value = None if isinstance(identifier, Datatype) else str(identifier).strip()
+
+        if member is None and text_value:
+            candidates = getattr(Datatype, "__members__", {})
+            key = text_value.split(".", 1)[-1].upper()
+            member = candidates.get(key)
+
+        if member is None and text_value:
+            lowered = text_value.lower()
+            for enum_member in getattr(Datatype, "__members__", {}).values():
+                if str(getattr(enum_member, "value", "")).lower() == lowered:
+                    member = enum_member
+                    break
+
+        if member is not None:
+            name = member.name
+        else:
+            name = text_value or "Data"
+            if "." in name:
+                name = name.split(".")[-1]
+
+        parts = name.replace("_", " ").split()
+        return " ".join(part.capitalize() for part in parts) or "Data"
 
     def get_configuration(self) -> Dict[str, Dict[str, Any]]:
         """Return the configuration map built from the user selections."""
