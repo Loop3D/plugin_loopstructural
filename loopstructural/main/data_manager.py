@@ -6,6 +6,7 @@ from LoopStructural.datatypes import BoundingBox
 from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
 
 from LoopStructural import FaultTopology, StratigraphicColumn
+from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
@@ -240,13 +241,22 @@ class ModellingDataManager:
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
+    def get_stratigraphic_unit_names(self):
+        """Get the names of the stratigraphic units in the column."""
+        units = []
+        for u in self._stratigraphic_column.order:
+            if u.element_type == StratigraphicColumnElementType.UNIT:
+                units.append(u.name)
+                print(f"Unit: {u.name}")
+        return units
+
     def add_to_stratigraphic_column(self, unit_data):
         """Add a unit or unconformity to the stratigraphic column."""
         stratigraphic_element = None
         if isinstance(unit_data, dict):
             if unit_data.get('type') == 'unit':
                 stratigraphic_element = self._stratigraphic_column.add_unit(
-                    name=unit_data.get('name'), colour=unit_data.get('colour')
+                    name=unit_data.get('name'), colour=unit_data.get('colour', None)
                 )
             elif unit_data.get('type') == 'unconformity':
                 stratigraphic_element = self._stratigraphic_column.add_unconformity(
@@ -349,6 +359,9 @@ class ModellingDataManager:
     def get_stratigraphic_column(self):
         """Get the stratigraphic column."""
         return self._stratigraphic_column
+
+    def clear_stratigraphic_column(self):
+        self._stratigraphic_column.clear()
 
     def update_stratigraphy(self):
         """Update the foliation features in the model manager."""
