@@ -68,83 +68,93 @@
       <widget class="QgsFieldComboBox" name="maxAgeFieldComboBox"/>
      </item>
      <item row="5" column="0">
-      <widget class="QLabel" name="groupFieldLabel">
-       <property name="text">
-        <string>Group Field:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="1">
-      <widget class="QgsFieldComboBox" name="groupFieldComboBox"/>
-     </item>
-     <item row="6" column="0">
       <widget class="QLabel" name="contactsLayerLabel">
        <property name="text">
         <string>Contacts Layer:</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
+     <item row="5" column="1">
       <widget class="QgsMapLayerComboBox" name="contactsLayerComboBox">
       </widget>
      </item>
-     <item row="7" column="0">
+     <item row="6" column="0">
       <widget class="QLabel" name="structureLayerLabel">
        <property name="text">
         <string>Structure Layer:</string>
        </property>
       </widget>
      </item>
-     <item row="7" column="1">
+     <item row="6" column="1">
       <widget class="QgsMapLayerComboBox" name="structureLayerComboBox">
        <property name="allowEmptyLayer">
         <bool>true</bool>
        </property>
       </widget>
      </item>
-     <item row="8" column="0">
+     <item row="7" column="0">
       <widget class="QLabel" name="dipFieldLabel">
        <property name="text">
         <string>Dip Field:</string>
        </property>
       </widget>
      </item>
-     <item row="8" column="1">
+     <item row="7" column="1">
       <widget class="QgsFieldComboBox" name="dipFieldComboBox"/>
      </item>
-     <item row="9" column="0">
+     <item row="8" column="0">
       <widget class="QLabel" name="dipDirFieldLabel">
        <property name="text">
         <string>Dip Direction Field:</string>
        </property>
       </widget>
      </item>
-     <item row="9" column="1">
+     <item row="8" column="1">
       <widget class="QgsFieldComboBox" name="dipDirFieldComboBox"/>
      </item>
-     <item row="10" column="0">
+     <item row="9" column="0">
       <widget class="QLabel" name="orientationTypeLabel">
        <property name="text">
         <string>Orientation Type:</string>
        </property>
       </widget>
      </item>
-     <item row="10" column="1">
+     <item row="9" column="1">
       <widget class="QComboBox" name="orientationTypeComboBox"/>
      </item>
-     <item row="11" column="0">
+     <item row="10" column="0">
       <widget class="QLabel" name="dtmLayerLabel">
        <property name="text">
         <string>DTM Layer:</string>
        </property>
       </widget>
      </item>
-     <item row="11" column="1">
+     <item row="10" column="1">
       <widget class="QgsMapLayerComboBox" name="dtmLayerComboBox">
        <property name="allowEmptyLayer">
         <bool>true</bool>
        </property>
       </widget>
+     </item>
+     <item row="11" column="0">
+      <widget class="QLabel" name="unitName1FieldLabel">
+       <property name="text">
+        <string>Unit Name 1 Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="1">
+      <widget class="QgsFieldComboBox" name="unitName1FieldComboBox"/>
+     </item>
+     <item row="12" column="0">
+      <widget class="QLabel" name="unitName2FieldLabel">
+       <property name="text">
+        <string>Unit Name 2 Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="1">
+      <widget class="QgsFieldComboBox" name="unitName2FieldComboBox"/>
      </item>
     </layout>
    </item>

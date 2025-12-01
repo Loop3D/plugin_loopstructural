@@ -7,6 +7,7 @@ from qgis.core import QgsRasterLayer
 from qgis.PyQt import uic
 
 from loopstructural.main.helpers import get_layer_names
+from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST
 
 
 class SorterWidget(QWidget):
@@ -48,14 +49,7 @@ class SorterWidget(QWidget):
             pass
 
         # Initialize sorting algorithms
-        self.sorting_algorithms = [
-            "Age‐based",
-            "NetworkX topological",
-            "Hint (deprecated)",
-            "Adjacency α",
-            "Maximise contacts",
-            "Observation projections",
-        ]
+        self.sorting_algorithms = list(SORTER_LIST.keys())
         self.sortingAlgorithmComboBox.addItems(self.sorting_algorithms)
         self.sortingAlgorithmComboBox.setCurrentIndex(5)  # Default to Observation projections
 
@@ -106,7 +100,6 @@ class SorterWidget(QWidget):
         dem_layer_match = dem_layer_matcher.find_match('DTM')
         if not dem_layer_match:
             dem_layer_match = dem_layer_matcher.find_match('DEM')
-        print(dem_layer_match)
         dem_layer = self.data_manager.find_layer_by_name(dem_layer_match, layer_type=QgsRasterLayer)
         self.dtmLayerComboBox.setLayer(dem_layer)
 
@@ -115,7 +108,6 @@ class SorterWidget(QWidget):
         self.unitNameFieldComboBox.setLayer(self.geologyLayerComboBox.currentLayer())
         self.minAgeFieldComboBox.setLayer(self.geologyLayerComboBox.currentLayer())
         self.maxAgeFieldComboBox.setLayer(self.geologyLayerComboBox.currentLayer())
-        self.groupFieldComboBox.setLayer(self.geologyLayerComboBox.currentLayer())
         self.dipFieldComboBox.setLayer(self.structureLayerComboBox.currentLayer())
         self.dipDirFieldComboBox.setLayer(self.structureLayerComboBox.currentLayer())
 
@@ -127,7 +119,6 @@ class SorterWidget(QWidget):
         self.unitNameFieldComboBox.setLayer(layer)
         self.minAgeFieldComboBox.setLayer(layer)
         self.maxAgeFieldComboBox.setLayer(layer)
-        self.groupFieldComboBox.setLayer(layer)
 
         # Auto-detect appropriate fields
         if layer:
@@ -143,9 +134,6 @@ class SorterWidget(QWidget):
 
             if max_age_match := matcher.find_match('MAX_AGE'):
                 self.maxAgeFieldComboBox.setField(max_age_match)
-
-            if group_match := matcher.find_match('GROUP'):
-                self.groupFieldComboBox.setField(group_match)
 
     def _on_structure_layer_changed(self):
         """Update field combo boxes when structure layer changes."""
@@ -168,21 +156,78 @@ class SorterWidget(QWidget):
                 self.dipDirFieldComboBox.setField(dipdir_match)
 
     def _on_algorithm_changed(self):
-        """Update UI based on selected sorting algorithm."""
+        """Update UI based on selected sorting algorithm and map2loop requirements."""
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
-        is_observation_projections = algorithm_index == 5
+        algorithm_name = self.sorting_algorithms[algorithm_index]
+        # Import map2loop's required arguments for sorters
+        try:
+            from map2loop.project import REQUIRED_ARGUMENTS as M2L_REQUIRED_ARGUMENTS
+        except ImportError:
+            M2L_REQUIRED_ARGUMENTS = {}
+        # Fallback to PARAMETERS_DICTIONARY if not found
+        required_fields = M2L_REQUIRED_ARGUMENTS.get(algorithm_name) or PARAMETERS_DICTIONARY.get(
+            algorithm_name, []
+        )
 
-        # Show/hide structure-related fields for observation projections
-        self.structureLayerLabel.setVisible(is_observation_projections)
-        self.structureLayerComboBox.setVisible(is_observation_projections)
-        self.dipFieldLabel.setVisible(is_observation_projections)
-        self.dipFieldComboBox.setVisible(is_observation_projections)
-        self.dipDirFieldLabel.setVisible(is_observation_projections)
-        self.dipDirFieldComboBox.setVisible(is_observation_projections)
-        self.orientationTypeLabel.setVisible(is_observation_projections)
-        self.orientationTypeComboBox.setVisible(is_observation_projections)
-        self.dtmLayerLabel.setVisible(is_observation_projections)
-        self.dtmLayerComboBox.setVisible(is_observation_projections)
+        # Hide all relevant widgets by default
+        self.minAgeFieldLabel.setVisible(False)
+        self.minAgeFieldComboBox.setVisible(False)
+        self.maxAgeFieldLabel.setVisible(False)
+        self.maxAgeFieldComboBox.setVisible(False)
+        self.unitName1FieldLabel.setVisible(False)
+        self.unitName1FieldComboBox.setVisible(False)
+        self.unitName2FieldLabel.setVisible(False)
+        self.unitName2FieldComboBox.setVisible(False)
+
+        self.contactsLayerLabel.setVisible(False)
+        self.contactsLayerComboBox.setVisible(False)
+        self.structureLayerLabel.setVisible(False)
+        self.structureLayerComboBox.setVisible(False)
+        self.dipFieldLabel.setVisible(False)
+        self.dipFieldComboBox.setVisible(False)
+        self.dipDirFieldLabel.setVisible(False)
+        self.dipDirFieldComboBox.setVisible(False)
+        self.orientationTypeLabel.setVisible(False)
+        self.orientationTypeComboBox.setVisible(False)
+        self.dtmLayerLabel.setVisible(False)
+        self.dtmLayerComboBox.setVisible(False)
+
+        # Show widgets based on required fields
+        geology_layer = self.geologyLayerComboBox.currentLayer()
+        if 'min_age_column' in required_fields or 'min_age_field' in required_fields:
+            self.minAgeFieldLabel.setVisible(True)
+            self.minAgeFieldComboBox.setVisible(True)
+            self.minAgeFieldComboBox.setLayer(geology_layer)
+        if 'max_age_column' in required_fields or 'max_age_field' in required_fields:
+            self.maxAgeFieldLabel.setVisible(True)
+            self.maxAgeFieldComboBox.setVisible(True)
+            self.maxAgeFieldComboBox.setLayer(geology_layer)
+        if 'unitname1_column' in required_fields or 'unitname_1' in required_fields:
+            self.unitName1FieldLabel.setVisible(True)
+            self.unitName1FieldComboBox.setVisible(True)
+            self.unitName1FieldComboBox.setLayer(self.contactsLayerComboBox.currentLayer())
+        if 'unitname2_column' in required_fields or 'unitname_2' in required_fields:
+            self.unitName2FieldLabel.setVisible(True)
+            self.unitName2FieldComboBox.setVisible(True)
+            self.unitName2FieldComboBox.setLayer(self.contactsLayerComboBox.currentLayer())
+
+        if 'contacts' in required_fields or 'contacts_layer' in required_fields:
+            self.contactsLayerLabel.setVisible(True)
+            self.contactsLayerComboBox.setVisible(True)
+        if 'structure' in required_fields or 'structure_layer' in required_fields:
+            self.structureLayerLabel.setVisible(True)
+            self.structureLayerComboBox.setVisible(True)
+            self.dipFieldLabel.setVisible(True)
+            self.dipFieldComboBox.setVisible(True)
+            self.dipDirFieldLabel.setVisible(True)
+            self.dipDirFieldComboBox.setVisible(True)
+            self.orientationTypeLabel.setVisible(True)
+            self.orientationTypeComboBox.setVisible(True)
+            self.dtmLayerLabel.setVisible(True)
+            self.dtmLayerComboBox.setVisible(True)
+
+        # Optionally, handle any additional custom fields from map2loop
+        # (Add more widget visibility logic here if new fields are added in map2loop)
 
     def _run_sorter(self):
         """Run the stratigraphic sorter algorithm."""
@@ -221,7 +266,7 @@ class SorterWidget(QWidget):
                 'geology': self.geologyLayerComboBox.currentLayer(),
                 'contacts': self.contactsLayerComboBox.currentLayer(),
                 'sorting_algorithm': algorithm_name,
-                'unit_name_field': self.unitNameFieldComboBox.currentField(),
+                'unit_name_column': self.unitNameFieldComboBox.currentField(),
                 'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
             }
 
@@ -234,10 +279,6 @@ class SorterWidget(QWidget):
             if max_age_field:
                 kwargs['max_age_field'] = max_age_field
 
-            group_field = self.groupFieldComboBox.currentField()
-            if group_field:
-                kwargs['group_field'] = group_field
-
             if is_observation_projections:
                 kwargs['structure'] = self.structureLayerComboBox.currentLayer()
                 kwargs['dip_field'] = self.dipFieldComboBox.currentField()
@@ -248,8 +289,12 @@ class SorterWidget(QWidget):
                 kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
 
             result = sort_stratigraphic_column(**kwargs)
-
             if result and len(result) > 0:
+                # Clear and update stratigraphic column in data_manager
+                self.data_manager.clear_stratigraphic_column()
+                for unit in result:
+                    self.data_manager.add_to_stratigraphic_column({'name': unit, 'type': 'unit'})
+                self.data_manager.stratigraphic_column_callback()
                 QMessageBox.information(
                     self,
                     "Success",
@@ -278,7 +323,6 @@ class SorterWidget(QWidget):
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'min_age_field': self.minAgeFieldComboBox.currentField(),
             'max_age_field': self.maxAgeFieldComboBox.currentField(),
-            'group_field': self.groupFieldComboBox.currentField(),
             'contacts_layer': self.contactsLayerComboBox.currentLayer(),
         }
 

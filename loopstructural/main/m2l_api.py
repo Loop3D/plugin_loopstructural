@@ -16,12 +16,18 @@ from ..main.vectorLayerWrapper import qgsLayerToGeoDataFrame
 
 # Mapping of sorter names to sorter classes
 SORTER_LIST = {
-    "Age‐based": SorterAgeBased,
+    "Age based": SorterAgeBased,
     "NetworkX topological": SorterUseNetworkX,
-    "Hint (deprecated)": SorterUseHint,
     "Adjacency α": SorterAlpha,
     "Maximise contacts": SorterMaximiseContacts,
     "Observation projections": SorterObservationProjections,
+}
+PARAMETERS_DICTIONARY = {
+    "Age based": SorterAgeBased.required_arguments,
+    "NetworkX topological": SorterUseNetworkX.required_arguments,
+    "Adjacency α": SorterAlpha.required_arguments,
+    "Maximise contacts": SorterMaximiseContacts.required_arguments,
+    "Observation projections": SorterObservationProjections.required_arguments,
 }
 
 
@@ -93,8 +99,10 @@ def sort_stratigraphic_column(
     unit_name_field="UNITNAME",
     min_age_field=None,
     max_age_field=None,
-    group_field=None,
+    unitname1_field=None,
+    unitname2_field=None,
     structure=None,
+    unit_name_column=None,
     dip_field="DIP",
     dipdir_field="DIPDIR",
     orientation_type="Dip Direction",
@@ -142,17 +150,29 @@ def sort_stratigraphic_column(
 
     # Get the sorter class
     sorter_cls = SORTER_LIST.get(sorting_algorithm, SorterObservationProjections)
+    required_args = getattr(sorter_cls, 'required_arguments', [])
 
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
     contacts_gdf = qgsLayerToGeoDataFrame(contacts)
-
+    print(geology_gdf.columns)
     # Build units DataFrame
     units_df = geology_gdf[['UNITNAME']].drop_duplicates().reset_index(drop=True)
     if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
         units_df = geology_gdf[[unit_name_field]].drop_duplicates().reset_index(drop=True)
         units_df.columns = ['UNITNAME']
-
+    if min_age_field and min_age_field in geology_gdf.columns:
+        units_df = units_df.merge(
+            geology_gdf[['UNITNAME', min_age_field]].drop_duplicates(),
+            on='UNITNAME',
+            how='left',
+        )
+    if max_age_field and max_age_field in geology_gdf.columns:
+        units_df = units_df.merge(
+            geology_gdf[['UNITNAME', max_age_field]].drop_duplicates(),
+            on='UNITNAME',
+            how='left',
+        )
     # Build relationships DataFrame (contacts without geometry)
     relationships_df = contacts_gdf.copy()
     if 'geometry' in relationships_df.columns:
@@ -160,51 +180,30 @@ def sort_stratigraphic_column(
     if 'length' in relationships_df.columns:
         relationships_df = relationships_df.drop(columns=['length'])
 
-    # For observation projections, need additional data
-    if sorter_cls == SorterObservationProjections:
-        if structure is None or dtm is None:
-            raise ValueError(
-                "Structure and DTM layers are required for Observation Projections sorter"
-            )
+    # Prepare all possible arguments
+    all_args = {
+        'geology_data': geology_gdf,
+        'contacts': contacts_gdf,
+        'relationships': relationships_df,
+        'unit_name_field': unit_name_field,
+        'min_age_column': min_age_field,
+        'max_age_column': max_age_field,
+        'unitname1_field': unitname1_field,
+        'unitname2_field': unitname2_field,
+        'structure': qgsLayerToGeoDataFrame(structure) if structure is not None else None,
+        'dip_field': dip_field,
+        'dipdir_field': dipdir_field,
+        'orientation_type': orientation_type,
+        'dtm': dtm,
+        'updater': updater,
+        'unit_name_column': unit_name_column,
+    }
 
-        structure_gdf = qgsLayerToGeoDataFrame(structure)
-
-        # Handle dip field
-        if dip_field and dip_field != 'DIP' and dip_field in structure_gdf.columns:
-            structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
-
-        # Handle dip direction field based on orientation type
-        if dipdir_field and dipdir_field in structure_gdf.columns:
-            if orientation_type == 'Strike':
-                structure_gdf['DIPDIR'] = structure_gdf[dipdir_field].apply(
-                    lambda val: (val + 90.0) % 360.0 if pd.notna(val) else val
-                )
-            elif orientation_type == 'Dip Direction':
-                structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
-
-        # Convert DTM to GDAL dataset if needed
-        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
-            dtm_gdal = gdal.Open(dtm.source())
-        else:
-            dtm_gdal = dtm
-
-        # Run sorter with all parameters
-        order = sorter_cls().sort(
-            units_df,
-            relationships_df,
-            contacts_gdf,
-            geology_gdf,
-            structure_gdf,
-            dtm_gdal,
-        )
-    else:
-        # Run sorter with basic parameters
-        order = sorter_cls().sort(
-            units_df,
-            relationships_df,
-            contacts_gdf,
-        )
-
+    # Only pass required arguments to the sorter
+    sorter_args = {k: v for k, v in all_args.items() if k in required_args}
+    print(f'Calling sorter with args: {sorter_args.keys()}')
+    sorter = sorter_cls(**sorter_args)
+    order = sorter.sort(units_df)
     if updater:
         updater(f"Sorting complete: {len(order)} units ordered")
 
