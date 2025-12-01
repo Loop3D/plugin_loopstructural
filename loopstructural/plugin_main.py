@@ -33,8 +33,10 @@ if importlib.util.find_spec("LoopStructural") is None:
     )
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
+from loopstructural.gui.interpolation_dialog import InterpolationDialog
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
+from loopstructural.main.interpolator_manager import InterpolatorManager
 from loopstructural.processing.provider import LoopstructuralProvider 
 from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
@@ -76,6 +78,7 @@ class LoopstructuralPlugin:
             mapCanvas=self.iface.mapCanvas(), logger=self.log, project=QgsProject.instance()
         )
         self.model_manager = GeologicalModelManager()
+        self.interpolator_manager = InterpolatorManager()
         self.data_manager.set_model_manager(self.model_manager)
 
     def injectLogHandler(self):
@@ -137,9 +140,16 @@ class LoopstructuralPlugin:
             self.tr("LoopStructural Visualisation"),
             self.iface.mainWindow(),
         )
+        self.action_interpolation = QAction(
+            QIcon(os.path.dirname(__file__) + "/icon.png"),
+            self.tr("LoopStructural Interpolation"),
+            self.iface.mainWindow(),
+        )
 
         self.toolbar.addAction(self.action_modelling)
+        self.toolbar.addAction(self.action_interpolation)
         # -- Menu
+        self.iface.addPluginToMenu(__title__, self.action_interpolation)
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
 
@@ -217,6 +227,7 @@ class LoopstructuralPlugin:
             self.action_visualisation.triggered.connect(
                 self.visualisation_dockwidget.toggleViewAction().trigger
             )
+            self.action_interpolation.triggered.connect(self._show_interpolation_dialog)
             # Store reference to main dock as None for unload compatibility
             self.loop_dockwidget = None
         else:
@@ -251,6 +262,7 @@ class LoopstructuralPlugin:
 
             # -- Connect actions
             self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
+            self.action_interpolation.triggered.connect(self._show_interpolation_dialog)
 
             # Store references to separate docks as None for unload compatibility
             self.modelling_dockwidget = None
@@ -271,6 +283,15 @@ class LoopstructuralPlugin:
         """
         return QCoreApplication.translate(self.__class__.__name__, message)
 
+    def _show_interpolation_dialog(self):
+        """Show the interpolation dialog."""
+        dialog = InterpolationDialog(
+            parent=self.iface.mainWindow(),
+            interpolator_manager=self.interpolator_manager,
+            logger=self.log
+        )
+        dialog.exec_()
+
     def unload(self):
         """Clean up when plugin is disabled or uninstalled."""
         # -- Clean up dock widgets
@@ -287,6 +308,7 @@ class LoopstructuralPlugin:
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
+        self.iface.removePluginMenu(__title__, self.action_interpolation)
         # self.iface.removeMenu(self.menu)
         # -- Clean up preferences panel in QGIS settings
         self.iface.unregisterOptionsWidgetFactory(self.options_factory)

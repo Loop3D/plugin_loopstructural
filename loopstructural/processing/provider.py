@@ -12,6 +12,9 @@ from loopstructural.__about__ import __icon_path__, __title__, __version__
 from .algorithms.interpolation.interpolation_algorithm import (
     LoopStructuralInterpolationAlgorithm,
 )
+from .algorithms.interpolation.interpolation_evaluation_algorithm import (
+    LoopStructuralInterpolationEvaluationAlgorithm,
+)
 from .algorithms.modelling.create_bounding_box import CreateBoundingBoxAlgorithm
 from .algorithms.modelling.create_model import CreateModelAlgorithm
 from .algorithms.modelling.create_and_add_foliation import CreateAndAddFoliationAlgorithm
@@ -28,6 +31,7 @@ class LoopstructuralProvider(QgsProcessingProvider):
     def loadAlgorithms(self):
         """Loads all algorithms belonging to this provider."""
         self.addAlgorithm(LoopStructuralInterpolationAlgorithm())
+        self.addAlgorithm(LoopStructuralInterpolationEvaluationAlgorithm())
         self.addAlgorithm(CreateBoundingBoxAlgorithm())
         self.addAlgorithm(CreateModelAlgorithm())
         self.addAlgorithm(CreateAndAddFoliationAlgorithm())
