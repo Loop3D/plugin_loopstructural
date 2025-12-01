@@ -130,7 +130,7 @@ class BasalContactsWidget(QWidget):
         unit_name_field = self.unitNameFieldComboBox.currentField()
         faults = self.faultsLayerComboBox.currentLayer()
         stratigraphic_order = (
-            self.data_manager._stratigraphic_column.get_unit_names() if self.data_manager else []
+            self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
         )
 
         # Check if user wants all contacts or just basal contacts
