@@ -8,6 +8,7 @@ from qgis.PyQt import uic
 
 from loopstructural.main.helpers import get_layer_names
 from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 
 class SorterWidget(QWidget):
@@ -304,6 +305,8 @@ class SorterWidget(QWidget):
                 QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
 
         except Exception as e:
+            if PlgOptionsManager.get_debug_mode():
+                raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def get_parameters(self):
