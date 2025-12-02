@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
 from ...main.helpers import ColumnMatcher, get_layer_names
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 
 class ThicknessCalculatorWidget(QWidget):
@@ -199,14 +200,9 @@ class ThicknessCalculatorWidget(QWidget):
             if calculator_type == "StructuralPoint":
                 kwargs['max_line_length'] = self.maxLineLengthSpinBox.value()
 
-            if self.stratiColumnComboBox.currentLayer():
-                # Extract unit names from stratigraphic column layer
-                strati_layer = self.stratiColumnComboBox.currentLayer()
-                strati_order = [
-                    f['unit_name']
-                    for f in strati_layer.getFeatures()
-                    if 'unit_name' in f.fields().names()
-                ]
+            # Get stratigraphic order from data_manager
+            if self.data_manager and hasattr(self.data_manager, 'stratigraphic_column'):
+                strati_order = [unit['name'] for unit in self.data_manager.stratigraphic_column]
                 if strati_order:
                     kwargs['stratigraphic_order'] = strati_order
 
@@ -222,6 +218,8 @@ class ThicknessCalculatorWidget(QWidget):
                 QMessageBox.warning(self, "Error", "No thickness data was calculated.")
 
         except Exception as e:
+            if PlgOptionsManager.get_debug_mode():
+                raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def get_parameters(self):
@@ -243,7 +241,6 @@ class ThicknessCalculatorWidget(QWidget):
             'dip_field': self.dipFieldComboBox.currentField(),
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
             'orientation_type': self.orientationTypeComboBox.currentIndex(),
-            'strati_column': self.stratiColumnComboBox.currentLayer(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
         }
 
@@ -267,8 +264,6 @@ class ThicknessCalculatorWidget(QWidget):
             self.sampledContactsComboBox.setLayer(params['sampled_contacts'])
         if 'structure_layer' in params and params['structure_layer']:
             self.structureLayerComboBox.setLayer(params['structure_layer'])
-        if 'strati_column' in params and params['strati_column']:
-            self.stratiColumnComboBox.setLayer(params['strati_column'])
         if 'orientation_type' in params:
             self.orientationTypeComboBox.setCurrentIndex(params['orientation_type'])
         if 'max_line_length' in params:
