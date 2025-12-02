@@ -125,27 +125,13 @@
       <widget class="QComboBox" name="orientationTypeComboBox"/>
      </item>
      <item row="10" column="0">
-      <widget class="QLabel" name="stratiColumnLabel">
-       <property name="text">
-        <string>Stratigraphic Order Layer:</string>
-       </property>
-      </widget>
-     </item>
-     <item row="10" column="1">
-      <widget class="QgsMapLayerComboBox" name="stratiColumnComboBox">
-       <property name="allowEmptyLayer">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
-     <item row="11" column="0">
       <widget class="QLabel" name="maxLineLengthLabel">
        <property name="text">
         <string>Max Line Length:</string>
        </property>
       </widget>
      </item>
-     <item row="11" column="1">
+     <item row="10" column="1">
       <widget class="QgsDoubleSpinBox" name="maxLineLengthSpinBox">
        <property name="maximum">
         <double>1000000.000000000000000</double>
