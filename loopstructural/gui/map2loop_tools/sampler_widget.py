@@ -4,6 +4,7 @@ import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 
 class SamplerWidget(QWidget):
@@ -149,7 +150,7 @@ class SamplerWidget(QWidget):
                     fields.append(QgsField(column_name, field_type))
 
                 crs = None
-                if samples.crs is not None:
+                if hasattr(samples, 'crs') and samples.crs is not None:
                     crs = QgsCoordinateReferenceSystem.fromWkt(samples.crs.to_wkt())
 
                 # Create layer
@@ -205,6 +206,8 @@ class SamplerWidget(QWidget):
                 QMessageBox.warning(self, "Warning", "No samples were generated.")
 
         except Exception as e:
+            if PlgOptionsManager.get_debug_mode():
+                raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def get_parameters(self):
