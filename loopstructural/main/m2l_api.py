@@ -94,7 +94,6 @@ def extract_basal_contacts(
 
 def sort_stratigraphic_column(
     geology,
-    contacts,
     sorting_algorithm="Observation projections",
     unit_name_field="UNITNAME",
     min_age_field=None,
@@ -108,6 +107,7 @@ def sort_stratigraphic_column(
     orientation_type="Dip Direction",
     dtm=None,
     updater=None,
+    contacts=None,
 ):
     """Sort stratigraphic units using map2loop sorters.
 

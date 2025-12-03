@@ -12,8 +12,6 @@
 # Python imports
 from typing import Any, Optional
 
-from map2loop.contact_extractor import ContactExtractor
-
 # QGIS imports
 from qgis import processing
 from qgis.core import (
