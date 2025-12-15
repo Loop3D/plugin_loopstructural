@@ -52,7 +52,12 @@ class SorterWidget(QWidget):
         # Initialize sorting algorithms
         self.sorting_algorithms = list(SORTER_LIST.keys())
         self.sortingAlgorithmComboBox.addItems(self.sorting_algorithms)
-        self.sortingAlgorithmComboBox.setCurrentIndex(5)  # Default to Observation projections
+        # Set default to 'Age based' if present, else fallback to first
+        try:
+            age_based_index = self.sorting_algorithms.index('Age based')
+        except ValueError:
+            age_based_index = 0
+        self.sortingAlgorithmComboBox.setCurrentIndex(age_based_index)
 
         # Initialize orientation types
         self.orientation_types = ['', 'Dip Direction', 'Strike']
