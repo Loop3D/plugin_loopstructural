@@ -161,6 +161,7 @@ class LoopstructuralPlugin:
         self.action_user_sorter.triggered.connect(self.show_user_sorter_dialog)
 
         self.action_basal_contacts = QAction(
+            QIcon(os.path.dirname(__file__) + "/resources/images/basal_contacts.png"),
             "Extract Basal Contacts",
             self.iface.mainWindow(),
         )
