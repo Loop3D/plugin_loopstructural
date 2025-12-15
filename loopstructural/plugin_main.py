@@ -141,7 +141,7 @@ class LoopstructuralPlugin:
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
 
-        # -- Map2Loop Tools submenu
+        # Map2Loop tool actions
         self.action_sampler = QAction(
             "Sampler",
             self.iface.mainWindow(),
@@ -165,6 +165,33 @@ class LoopstructuralPlugin:
             self.iface.mainWindow(),
         )
         self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
+
+        self.action_thickness = QAction(
+            "Thickness Calculator",
+            self.iface.mainWindow(),
+        )
+        self.action_thickness.triggered.connect(self.show_thickness_dialog)
+
+        # Add all map2loop tool actions to the toolbar
+        self.toolbar.addAction(self.action_sampler)
+        self.toolbar.addAction(self.action_sorter)
+        self.toolbar.addAction(self.action_user_sorter)
+        self.toolbar.addAction(self.action_basal_contacts)
+        self.toolbar.addAction(self.action_thickness)
+
+        self.iface.addPluginToMenu(__title__, self.action_sampler)
+        self.iface.addPluginToMenu(__title__, self.action_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_user_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
+        self.iface.addPluginToMenu(__title__, self.action_thickness)
+        self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
+
+        # Add all map2loop tool actions to the toolbar
+        self.toolbar.addAction(self.action_sampler)
+        self.toolbar.addAction(self.action_sorter)
+        self.toolbar.addAction(self.action_user_sorter)
+        self.toolbar.addAction(self.action_basal_contacts)
+        self.toolbar.addAction(self.action_thickness)
 
         self.action_thickness = QAction(
             "Thickness Calculator",
