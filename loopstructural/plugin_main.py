@@ -90,6 +90,8 @@ class LoopstructuralPlugin:
         """
         import logging
 
+        from map2loop.logging import setLogging as setLogging_m2l
+
         import LoopStructural
         from loopstructural.toolbelt.log_handler import PlgLoggerHandler
 
@@ -97,6 +99,7 @@ class LoopstructuralPlugin:
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
 
         LoopStructural.setLogging(level="warning", handler=handler)
+        setLogging_m2l(level="warning", handler=handler)
 
     def initGui(self):
         """Set up plugin UI elements."""
