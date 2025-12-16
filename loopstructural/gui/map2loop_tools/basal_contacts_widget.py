@@ -5,7 +5,6 @@ import os
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
-
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
 from ...main.vectorLayerWrapper import addGeoDataFrameToproject
@@ -135,7 +134,7 @@ class BasalContactsWidget(QWidget):
         # Check if user wants all contacts or just basal contacts
         all_contacts = self.allContactsCheckBox.isChecked()
         if all_contacts:
-            stratigraphic_order = list(set([g[unit_name_field] for g in geology.getFeatures()]))
+            stratigraphic_order = list({g[unit_name_field] for g in geology.getFeatures()})
         result = extract_basal_contacts(
             geology=geology,
             stratigraphic_order=stratigraphic_order,
