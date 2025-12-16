@@ -48,8 +48,7 @@
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QgsMapLayerComboBox" name="geologyLayerComboBox">
-      </widget>
+      <widget class="QgsMapLayerComboBox" name="geologyLayerComboBox"/>
      </item>
      <item row="3" column="0">
       <widget class="QLabel" name="unitNameFieldLabel">
@@ -69,69 +68,66 @@
       </widget>
      </item>
      <item row="4" column="1">
-      <widget class="QgsMapLayerComboBox" name="basalContactsComboBox">
-      </widget>
+      <widget class="QgsMapLayerComboBox" name="basalContactsComboBox"/>
      </item>
-     <item row="5" column="0">
+     <item row="6" column="0">
       <widget class="QLabel" name="sampledContactsLabel">
        <property name="text">
         <string>Sampled Contacts Layer:</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
-      <widget class="QgsMapLayerComboBox" name="sampledContactsComboBox">
-      </widget>
+     <item row="6" column="1">
+      <widget class="QgsMapLayerComboBox" name="sampledContactsComboBox"/>
      </item>
-     <item row="6" column="0">
+     <item row="7" column="0">
       <widget class="QLabel" name="structureLayerLabel">
        <property name="text">
         <string>Structure/Orientation Layer:</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
-      <widget class="QgsMapLayerComboBox" name="structureLayerComboBox">
-      </widget>
+     <item row="7" column="1">
+      <widget class="QgsMapLayerComboBox" name="structureLayerComboBox"/>
      </item>
-     <item row="7" column="0">
+     <item row="8" column="0">
       <widget class="QLabel" name="dipFieldLabel">
        <property name="text">
         <string>Dip Field:</string>
        </property>
       </widget>
      </item>
-     <item row="7" column="1">
+     <item row="8" column="1">
       <widget class="QgsFieldComboBox" name="dipFieldComboBox"/>
      </item>
-     <item row="8" column="0">
+     <item row="9" column="0">
       <widget class="QLabel" name="dipDirFieldLabel">
        <property name="text">
         <string>Dip Direction Field:</string>
        </property>
       </widget>
      </item>
-     <item row="8" column="1">
+     <item row="9" column="1">
       <widget class="QgsFieldComboBox" name="dipDirFieldComboBox"/>
      </item>
-     <item row="9" column="0">
+     <item row="10" column="0">
       <widget class="QLabel" name="orientationTypeLabel">
        <property name="text">
         <string>Orientation Type:</string>
        </property>
       </widget>
      </item>
-     <item row="9" column="1">
+     <item row="10" column="1">
       <widget class="QComboBox" name="orientationTypeComboBox"/>
      </item>
-     <item row="10" column="0">
+     <item row="11" column="0">
       <widget class="QLabel" name="maxLineLengthLabel">
        <property name="text">
         <string>Max Line Length:</string>
        </property>
       </widget>
      </item>
-     <item row="10" column="1">
+     <item row="11" column="1">
       <widget class="QgsDoubleSpinBox" name="maxLineLengthSpinBox">
        <property name="maximum">
         <double>1000000.000000000000000</double>
@@ -140,6 +136,30 @@
         <double>1000.000000000000000</double>
        </property>
       </widget>
+     </item>
+     <item row="12" column="0">
+      <widget class="QLabel" name="saveDebugLabel">
+       <property name="text">
+        <string>Save Debug Files:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="1">
+      <widget class="QCheckBox" name="saveDebugCheckBox">
+       <property name="text">
+        <string>Save debugging files (location tracking, lines)</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="basalContactUnitnameLabel">
+       <property name="text">
+        <string>Basal Contact Unitname:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QgsFieldComboBox" name="basalUnitNameFieldComboBox"/>
      </item>
     </layout>
    </item>
@@ -167,9 +187,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QgsMapLayerComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgsmaplayercombobox.h</header>
+   <class>QgsDoubleSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>qgsdoublespinbox.h</header>
   </customwidget>
   <customwidget>
    <class>QgsFieldComboBox</class>
@@ -177,9 +197,9 @@
    <header>qgsfieldcombobox.h</header>
   </customwidget>
   <customwidget>
-   <class>QgsDoubleSpinBox</class>
-   <extends>QDoubleSpinBox</extends>
-   <header>qgsdoublespinbox.h</header>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

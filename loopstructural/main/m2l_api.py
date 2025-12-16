@@ -296,6 +296,7 @@ def calculate_thickness(
     max_line_length=None,
     stratigraphic_order=None,
     updater=None,
+    basal_contacts_unit_name=None,
 ):
     """Calculate thickness using map2loop thickness calculators.
 
@@ -339,6 +340,11 @@ def calculate_thickness(
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
     basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
+    basal_contacts_gdf = (
+        basal_contacts_gdf.rename(columns={basal_contacts_unit_name: 'basal_unit'})
+        if basal_contacts_unit_name
+        else basal_contacts_gdf
+    )
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
     structure_gdf = qgsLayerToDataFrame(structure)
     bounding_box = {
@@ -397,6 +403,7 @@ def calculate_thickness(
     units_unique = units.drop_duplicates(subset=[unit_name_field]).reset_index(drop=True)
     units = pd.DataFrame({'name': units_unique[unit_name_field]})
     basal_contacts_gdf['type'] = 'BASAL'  # required by calculator
+
     thickness = calculator.compute(
         units,
         stratigraphic_order,
@@ -405,7 +412,12 @@ def calculate_thickness(
         geology_gdf,
         sampled_contacts_gdf,
     )
+    res = {'thicknesses': thickness}
     if updater:
         updater(f"Thickness calculation complete: {len(thickness)} records")
-    
-    return thickness
+    if hasattr(calculator, 'lines'):
+        res['lines'] = calculator.lines
+    if hasattr(calculator, 'location_tracking'):
+        res['location_tracking'] = calculator.location_tracking
+
+    return res

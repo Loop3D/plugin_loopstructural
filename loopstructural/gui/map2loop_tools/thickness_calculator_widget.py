@@ -8,6 +8,7 @@ from qgis.PyQt import uic
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ...main.helpers import ColumnMatcher, get_layer_names
+from ...main.vectorLayerWrapper import addGeoDataFrameToproject
 
 
 class ThicknessCalculatorWidget(QWidget):
@@ -58,6 +59,7 @@ class ThicknessCalculatorWidget(QWidget):
         self.calculatorTypeComboBox.currentIndexChanged.connect(self._on_calculator_type_changed)
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
         self.structureLayerComboBox.layerChanged.connect(self._on_structure_layer_changed)
+        self.basalContactsComboBox.layerChanged.connect(self._on_basal_contacts_layer_changed)
         self.runButton.clicked.connect(self._run_calculator)
         self._guess_layers()
         # Set up field combo boxes
@@ -108,6 +110,18 @@ class ThicknessCalculatorWidget(QWidget):
         self.unitNameFieldComboBox.setLayer(self.geologyLayerComboBox.currentLayer())
         self.dipFieldComboBox.setLayer(self.structureLayerComboBox.currentLayer())
         self.dipDirFieldComboBox.setLayer(self.structureLayerComboBox.currentLayer())
+        self.basalUnitNameFieldComboBox.setLayer(self.basalContactsComboBox.currentLayer())
+
+    def _on_basal_contacts_layer_changed(self):
+        """Update field combo box when basal contacts layer changes."""
+        layer = self.basalContactsComboBox.currentLayer()
+        self.basalUnitNameFieldComboBox.setLayer(layer)
+        # Optionally auto-select a likely unit name field
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+            if unit_match := matcher.find_match('UNITNAME'):
+                self.basalUnitNameFieldComboBox.setField(unit_match)
 
     def _on_geology_layer_changed(self):
         """Update field combo boxes when geology layer changes."""
@@ -188,6 +202,7 @@ class ThicknessCalculatorWidget(QWidget):
                 'structure': self.structureLayerComboBox.currentLayer(),
                 'calculator_type': calculator_type,
                 'unit_name_field': self.unitNameFieldComboBox.currentField(),
+                'basal_unit_name_field': self.basalUnitNameFieldComboBox.currentField(),
                 'dip_field': self.dipFieldComboBox.currentField(),
                 'dipdir_field': self.dipDirFieldComboBox.currentField(),
                 'orientation_type': self.orientationTypeComboBox.currentText(),
@@ -206,19 +221,32 @@ class ThicknessCalculatorWidget(QWidget):
 
             # Get stratigraphic order from data_manager
             if self.data_manager and hasattr(self.data_manager, 'stratigraphic_column'):
-                strati_order = [unit['name'] for unit in self.data_manager.stratigraphic_column]
+                strati_order = [unit['name'] for unit in self.data_manager._stratigraphic_column]
                 if strati_order:
                     kwargs['stratigraphic_order'] = strati_order
 
             result = calculate_thickness(**kwargs)
 
-            for idx in result.index:
-                u = result.loc[idx, 'name']
-                thick = result.loc[idx, 'ThicknessStdDev']
+            for idx in result['thicknesses'].index:
+                u = result['thicknesses'].loc[idx, 'name']
+                thick = result['thicknesses'].loc[idx, 'ThicknessStdDev']
                 if thick > 0:
 
-                    self.data_manager.stratigraphic_column.get_unit_by_name(u).thickness = thick
-            if result is not None and not result.empty:
+                    self.data_manager._stratigraphic_column.get_unit_by_name(u).thickness = thick
+            # Save debugging files if checkbox is checked
+            if self.saveDebugCheckBox.isChecked():
+                if 'lines' in result:
+                    if result['lines'] is not None and not result['lines'].empty:
+                        addGeoDataFrameToproject(result['lines'], "Lines")
+                if 'location_tracking' in result:
+                    if (
+                        result['location_tracking'] is not None
+                        and not result['location_tracking'].empty
+                    ):
+                        addGeoDataFrameToproject(
+                            result['location_tracking'], "Thickness Location Tracking"
+                        )
+            if result is not None and not result['thicknesses'].empty:
                 QMessageBox.information(
                     self,
                     "Success",
