@@ -5,8 +5,9 @@ import os
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
-from ...main.helpers import ColumnMatcher, get_layer_names
 from loopstructural.toolbelt.preferences import PlgOptionsManager
+
+from ...main.helpers import ColumnMatcher, get_layer_names
 
 
 class ThicknessCalculatorWidget(QWidget):
@@ -191,6 +192,9 @@ class ThicknessCalculatorWidget(QWidget):
                 'dipdir_field': self.dipDirFieldComboBox.currentField(),
                 'orientation_type': self.orientationTypeComboBox.currentText(),
                 'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
+                'stratigraphic_order': (
+                    self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
+                ),
             }
 
             # Add optional parameters
@@ -208,6 +212,12 @@ class ThicknessCalculatorWidget(QWidget):
 
             result = calculate_thickness(**kwargs)
 
+            for idx in result.index:
+                u = result.loc[idx, 'name']
+                thick = result.loc[idx, 'ThicknessStdDev']
+                if thick > 0:
+
+                    self.data_manager.stratigraphic_column.get_unit_by_name(u).thickness = thick
             if result is not None and not result.empty:
                 QMessageBox.information(
                     self,
