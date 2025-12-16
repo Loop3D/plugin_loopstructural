@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.12](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.11...v0.1.12) (2025-12-16)
+
+
+### Bug Fixes
+
+* add colour to surfaces ([7a95d32](https://github.com/Loop3D/plugin_loopstructural/commit/7a95d32824db6ac469965a05f5f2b657995232c8))
+* add option to separate visualisation/modelling widget ([7e511a3](https://github.com/Loop3D/plugin_loopstructural/commit/7e511a33d73d084a2312e7bef8e636e613d2184d))
+* colour faults using stratigraphic column ([9eb95fd](https://github.com/Loop3D/plugin_loopstructural/commit/9eb95fdd9eeb55afa3696fe7a5906b9eedb104ab))
+
 ## [0.1.11](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.10...v0.1.11) (2025-09-08)
 
 
