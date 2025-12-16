@@ -4,6 +4,7 @@ import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
+
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 
@@ -150,9 +151,13 @@ class SamplerWidget(QWidget):
                     fields.append(QgsField(column_name, field_type))
 
                 crs = None
-                if hasattr(samples, 'crs') and samples.crs is not None:
-                    crs = QgsCoordinateReferenceSystem.fromWkt(samples.crs.to_wkt())
-
+                if (
+                    hasattr(self.spatialDataLayerComboBox.currentLayer(), 'crs')
+                    and self.spatialDataLayerComboBox.currentLayer().crs() is not None
+                ):
+                    crs = QgsCoordinateReferenceSystem.fromWkt(
+                        self.spatialDataLayerComboBox.currentLayer().crs().toWkt()
+                    )
                 # Create layer
                 geom_type = "PointZ" if 'Z' in samples.columns else "Point"
                 layer = QgsVectorLayer(
