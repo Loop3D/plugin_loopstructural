@@ -20,9 +20,9 @@ class UnconformityWidget(QWidget):
         self.buttonDelete.clicked.connect(self.request_delete)
         self.uuid = uuid
         self.unconformity_type = 'erode'
-        self.comboBoxUnconformityType.currentIndexChanged.connect(
-            lambda: setattr(self, 'unconformity_type', self.comboBoxUnconformityType.currentText())
-        )
+        # self.comboBoxUnconformityType.currentIndexChanged.connect(
+        #     lambda: setattr(self, 'unconformity_type', self.comboBoxUnconformityType.currentText())
+        # )
 
     def request_delete(self):
 
@@ -38,11 +38,11 @@ class UnconformityWidget(QWidget):
         """
         if data:
             self.unconformity_type = data.get("unconformity_type", "")
-            self.unconformityTypeComboBox.setCurrentIndex(
-                self.unconformityTypeComboBox.findText(self.unconformity_type)
-            )
+            # self.unconformityTypeComboBox.setCurrentIndex(
+            #     self.unconformityTypeComboBox.findText(self.unconformity_type)
+            # )
         else:
             self.unconformity_type = 'erode'
-            self.unconformityTypeComboBox.setCurrentIndex(
-                self.unconformityTypeComboBox.findText(self.unconformity_type)
-            )
+            # self.unconformityTypeComboBox.setCurrentIndex(
+            #     self.unconformityTypeComboBox.findText(self.unconformity_type)
+            # )

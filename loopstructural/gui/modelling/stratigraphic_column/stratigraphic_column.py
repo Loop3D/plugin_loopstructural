@@ -1,3 +1,4 @@
+from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QListWidget,
@@ -8,7 +9,6 @@ from PyQt5.QtWidgets import (
 )
 
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
-from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .stratigraphic_unit import StratigraphicUnitWidget
 
@@ -27,6 +27,8 @@ class StratColumnWidget(QWidget):
     -----
     The widget updates its display based on the data_manager's stratigraphic column
     and registers a callback via data_manager.set_stratigraphic_column_callback.
+
+    This widget uses efficient incremental updates rather than full rebuilds when possible.
     """
 
     def __init__(self, parent=None, data_manager=None):
@@ -35,6 +37,13 @@ class StratColumnWidget(QWidget):
         if data_manager is None:
             raise ValueError("Data manager must be provided.")
         self.data_manager = data_manager
+
+        # Cache to track current widgets and their UUIDs for efficient updates
+        self._widget_cache = {}  # Maps UUID -> (widget, list_item)
+
+        # Flag to prevent recursive/reentrant callbacks during updates
+        self._updating = False
+
         # Main list widget
         self.unitList = QListWidget()
         self.unitList.setDragDropMode(QAbstractItemView.InternalMove)
@@ -66,22 +75,89 @@ class StratColumnWidget(QWidget):
 
     def clearColumn(self):
         """Clear the stratigraphic column."""
-        self.unitList.clear()
+        # Use the data manager's clear method to ensure callback is triggered
+        # This will notify all listening widgets (including this one and others)
         if self.data_manager:
             self.data_manager._stratigraphic_column.clear()
+            # Trigger callback to notify all listeners
+            if self.data_manager.stratigraphic_column_callback:
+                self.data_manager.stratigraphic_column_callback()
         else:
+            # Fallback: clear locally if no data manager
+            self.unitList.clear()
+            self._widget_cache.clear()
             print("Error: Data manager is not initialized.")
 
     def update_display(self):
-        """Update the widget display based on the data manager's stratigraphic column."""
-        self.unitList.clear()
-        if self.data_manager and self.data_manager._stratigraphic_column:
-            for unit in self.data_manager._stratigraphic_column.order:
-                if unit.element_type == StratigraphicColumnElementType.UNIT:
-                    self.add_unit(unit_data=unit.to_dict(), create_new=False)
-                elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
+        """Update the widget display with efficient incremental updates.
 
-                    self.add_unconformity(unconformity_data=unit.to_dict(), create_new=False)
+        Instead of rebuilding the entire display, this method:
+        1. Identifies items that were added/removed/reordered
+        2. Only updates what changed
+        3. Falls back to full rebuild only when necessary
+
+        This method is protected against recursive/reentrant calls during active updates.
+        """
+        # Prevent reentrant calls during updates
+        if self._updating:
+            return
+
+        self._updating = True
+        try:
+            # Check if the list widget is still valid
+            try:
+                if not self.data_manager or not self.data_manager._stratigraphic_column:
+                    self.unitList.clear()
+                    self._widget_cache.clear()
+                    return
+            except RuntimeError:
+                # Widget was deleted
+                return
+
+            current_order = self.data_manager._stratigraphic_column.order
+            current_uuids = [unit.uuid for unit in current_order]
+            cached_uuids = list(self._widget_cache.keys())
+
+            # Check if the order and content match
+            if current_uuids == cached_uuids:
+                # No changes in order or content, just update data if needed
+                for unit in current_order:
+                    if unit.uuid in self._widget_cache:
+                        widget, _ = self._widget_cache[unit.uuid]
+                        # Update widget data without rebuilding
+                        if hasattr(widget, 'setData'):
+                            widget.setData(unit.to_dict())
+                return
+
+            # If order/content differs, do a full rebuild
+            # but only as a last resort
+            self._full_rebuild_display(current_order)
+        finally:
+            self._updating = False
+
+    def _full_rebuild_display(self, current_order):
+        """Perform a full rebuild of the display (called only when necessary).
+
+        Parameters
+        ----------
+        current_order : list
+            The current order of elements in the stratigraphic column
+        """
+        # Check if the list widget is still valid (could be deleted in some cases)
+        try:
+            # Clear the list and cache
+            self.unitList.clear()
+            self._widget_cache.clear()
+        except RuntimeError:
+            # Widget was deleted, can't rebuild
+            return
+
+        # Rebuild from scratch
+        for unit in current_order:
+            if unit.element_type == StratigraphicColumnElementType.UNIT:
+                self.add_unit(unit_data=unit.to_dict(), create_new=False)
+            elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
+                self.add_unconformity(unconformity_data=unit.to_dict(), create_new=False)
 
     def init_stratigraphic_column_from_basal_contacts(self):
         if self.data_manager:
@@ -102,12 +178,20 @@ class StratColumnWidget(QWidget):
                 unit = self.data_manager._stratigraphic_column.get_element_by_uuid(
                     unit_data['uuid']
                 )
+
+        # Check if widget already exists in cache (avoid duplicates during rebuild)
+        if unit_data['uuid'] in self._widget_cache:
+            widget, _ = self._widget_cache[unit_data['uuid']]
+            # Just update the data, don't recreate the widget
+            if hasattr(widget, 'setData'):
+                widget.setData(unit_data)
+            return
+
         unit_data.pop('type', None)  # Remove type if present
         unit_data.pop('id', None)
         for k in list(unit_data.keys()):
             if unit_data[k] is None:
                 unit_data.pop(k)
-        print(f"Adding unit with data: {unit_data}")
         unit_widget = StratigraphicUnitWidget(**unit_data)
         unit_widget.deleteRequested.connect(self.delete_unit)  # Connect delete signal
         unit_widget.nameChanged.connect(
@@ -117,7 +201,7 @@ class StratColumnWidget(QWidget):
         unit_widget.thicknessChanged.connect(
             lambda: self.update_element(unit_widget)
         )  # Connect thickness change signal
-        
+
         unit_widget.set_thickness(unit_data.get('thickness', 0.0))  # Set initial thickness
         unit_widget.colourChanged.connect(
             lambda: self.update_element(unit_widget)
@@ -127,7 +211,9 @@ class StratColumnWidget(QWidget):
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unit_widget)
         unit_widget.setData(unit_data)  # Set data for the unit widget
-        # Update data manager
+
+        # Cache the widget for efficient updates
+        self._widget_cache[unit_data['uuid']] = (unit_widget, item)
 
     def add_unconformity(self, *, unconformity_data=None, create_new=True):
         if unconformity_data is None:
@@ -139,6 +225,14 @@ class StratColumnWidget(QWidget):
                 unconformity_data['uuid']
             )
 
+        # Check if widget already exists in cache (avoid duplicates during rebuild)
+        if unconformity.uuid in self._widget_cache:
+            widget, _ = self._widget_cache[unconformity.uuid]
+            # Just update the data, don't recreate the widget
+            if hasattr(widget, 'setData'):
+                widget.setData(unconformity_data)
+            return
+
         unconformity_widget = UnconformityWidget(uuid=unconformity.uuid)
         unconformity_widget.deleteRequested.connect(self.delete_unit)
         item = QListWidgetItem()
@@ -146,7 +240,8 @@ class StratColumnWidget(QWidget):
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unconformity_widget)
 
-        # Update data manager
+        # Cache the widget for efficient updates
+        self._widget_cache[unconformity.uuid] = (unconformity_widget, item)
 
     def delete_unit(self, unit_widget):
         for i in range(self.unitList.count()):
@@ -155,9 +250,13 @@ class StratColumnWidget(QWidget):
                 self.unitList.takeItem(i)
                 break
 
-        # Update data manager
+        # Update data manager and cache
         if self.data_manager:
             self.data_manager.remove_from_stratigraphic_column(unit_widget.uuid)
+
+        # Remove from cache
+        if unit_widget.uuid in self._widget_cache:
+            del self._widget_cache[unit_widget.uuid]
 
     def update_order(self, parent, start, end, destination, row):
         """Update the data manager when the order of items changes."""
@@ -173,7 +272,14 @@ class StratColumnWidget(QWidget):
             self.data_manager.update_stratigraphic_column_order(ordered_uuids)
 
     def update_element(self, unit_widget):
-        """Update the data manager with the changes made in the unit widget."""
+        """Update the data manager with the changes made in the unit widget.
+
+        After updating the element, triggers the callback to notify all listeners
+        (including other widgets) that the stratigraphic column has changed.
+        """
         if self.data_manager:
             unit_data = unit_widget.getData()
             self.data_manager._stratigraphic_column.update_element(unit_data)
+            # Trigger callback to notify all listeners of the change
+            if self.data_manager.stratigraphic_column_callback:
+                self.data_manager.stratigraphic_column_callback()

@@ -4,3 +4,4 @@ LoopStructural==1.6.22
 pyqtgraph
 loopsolver
 geopandas
+numpy==1.26.4

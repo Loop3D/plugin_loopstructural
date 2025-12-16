@@ -118,6 +118,17 @@ class PlgOptionsManager:
         return out_value
 
     @classmethod
+    def get_debug_mode(cls) -> bool:
+        """Get the current debug mode setting.
+
+        Returns
+        -------
+        bool
+            True if debug mode is enabled, False otherwise.
+        """
+        return cls.get_value_from_key("debug_mode", default=False, exp_type=bool)
+
+    @classmethod
     def set_value_from_key(cls, key: str, value) -> bool:
         """Set a plugin setting value in QGIS settings.
 

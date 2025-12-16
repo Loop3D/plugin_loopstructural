@@ -90,6 +90,8 @@ class LoopstructuralPlugin:
         """
         import logging
 
+        from map2loop.logging import setLogging as setLogging_m2l
+
         import LoopStructural
         from loopstructural.toolbelt.log_handler import PlgLoggerHandler
 
@@ -97,6 +99,7 @@ class LoopstructuralPlugin:
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
 
         LoopStructural.setLogging(level="warning", handler=handler)
+        setLogging_m2l(level="warning", handler=handler)
 
     def initGui(self):
         """Set up plugin UI elements."""
@@ -140,6 +143,73 @@ class LoopstructuralPlugin:
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
+        self.initProcessing()
+
+        # Map2Loop tool actions
+        self.action_sampler = QAction(
+            "Sampler",
+            self.iface.mainWindow(),
+        )
+        self.action_sampler.triggered.connect(self.show_sampler_dialog)
+
+        self.action_sorter = QAction(
+            "Automatic Stratigraphic Sorter",
+            self.iface.mainWindow(),
+        )
+        self.action_sorter.triggered.connect(self.show_sorter_dialog)
+
+        self.action_user_sorter = QAction(
+            "User-Defined Stratigraphic Column",
+            self.iface.mainWindow(),
+        )
+        self.action_user_sorter.triggered.connect(self.show_user_sorter_dialog)
+
+        self.action_basal_contacts = QAction(
+            QIcon(os.path.dirname(__file__) + "/resources/images/basal_contacts.png"),
+            "Extract Basal Contacts",
+            self.iface.mainWindow(),
+        )
+        self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
+
+        self.action_thickness = QAction(
+            "Thickness Calculator",
+            self.iface.mainWindow(),
+        )
+        self.action_thickness.triggered.connect(self.show_thickness_dialog)
+
+        # Add all map2loop tool actions to the toolbar
+        self.toolbar.addAction(self.action_sampler)
+        self.toolbar.addAction(self.action_sorter)
+        self.toolbar.addAction(self.action_user_sorter)
+        self.toolbar.addAction(self.action_basal_contacts)
+        self.toolbar.addAction(self.action_thickness)
+
+        self.iface.addPluginToMenu(__title__, self.action_sampler)
+        self.iface.addPluginToMenu(__title__, self.action_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_user_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
+        self.iface.addPluginToMenu(__title__, self.action_thickness)
+        self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
+
+        # Add all map2loop tool actions to the toolbar
+        self.toolbar.addAction(self.action_sampler)
+        self.toolbar.addAction(self.action_sorter)
+        self.toolbar.addAction(self.action_user_sorter)
+        self.toolbar.addAction(self.action_basal_contacts)
+        self.toolbar.addAction(self.action_thickness)
+
+        self.action_thickness = QAction(
+            "Thickness Calculator",
+            self.iface.mainWindow(),
+        )
+        self.action_thickness.triggered.connect(self.show_thickness_dialog)
+
+        self.iface.addPluginToMenu(__title__, self.action_sampler)
+        self.iface.addPluginToMenu(__title__, self.action_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_user_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
+        self.iface.addPluginToMenu(__title__, self.action_thickness)
+
         self.initProcessing()
 
         # -- Help menu
@@ -255,6 +325,41 @@ class LoopstructuralPlugin:
             self.modelling_dockwidget = None
             self.visualisation_dockwidget = None
 
+    def show_sampler_dialog(self):
+        """Show the sampler dialog."""
+        from loopstructural.gui.map2loop_tools import SamplerDialog
+
+        dialog = SamplerDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog.exec_()
+
+    def show_sorter_dialog(self):
+        """Show the automatic stratigraphic sorter dialog."""
+        from loopstructural.gui.map2loop_tools import SorterDialog
+
+        dialog = SorterDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog.exec_()
+
+    def show_user_sorter_dialog(self):
+        """Show the user-defined stratigraphic column dialog."""
+        from loopstructural.gui.map2loop_tools import UserDefinedSorterDialog
+
+        dialog = UserDefinedSorterDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog.exec_()
+
+    def show_basal_contacts_dialog(self):
+        """Show the basal contacts extractor dialog."""
+        from loopstructural.gui.map2loop_tools import BasalContactsDialog
+
+        dialog = BasalContactsDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog.exec_()
+
+    def show_thickness_dialog(self):
+        """Show the thickness calculator dialog."""
+        from loopstructural.gui.map2loop_tools import ThicknessCalculatorDialog
+
+        dialog = ThicknessCalculatorDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog.exec_()
+
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.
 
@@ -291,6 +396,11 @@ class LoopstructuralPlugin:
         # -- Clean up menu
         self.iface.removePluginMenu(__title__, self.action_help)
         self.iface.removePluginMenu(__title__, self.action_settings)
+        self.iface.removePluginMenu(__title__, self.action_sampler)
+        self.iface.removePluginMenu(__title__, self.action_sorter)
+        self.iface.removePluginMenu(__title__, self.action_user_sorter)
+        self.iface.removePluginMenu(__title__, self.action_basal_contacts)
+        self.iface.removePluginMenu(__title__, self.action_thickness)
         # self.iface.removeMenu(self.menu)
         # -- Clean up preferences panel in QGIS settings
         self.iface.unregisterOptionsWidgetFactory(self.options_factory)

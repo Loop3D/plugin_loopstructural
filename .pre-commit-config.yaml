@@ -27,6 +27,19 @@ repos:
           - --target-version=py39
 
 
+# Local hook to forbid print statements in Python files (excluding tests)
+- repo: local
+  hooks:
+    - id: forbid-print-statements
+      name: Forbid print statements
+      entry: grep -nH -E '\bprint\s*\('
+      language: system
+      types: [python]
+      exclude: 'tests/'
+      pass_filenames: true
+      description: 'Fail if print statements are found in Python files.'
+
+
 
 ci:
     autoupdate_schedule: quarterly

@@ -30,9 +30,9 @@ class TestSamplerSpacing(unittest.TestCase):
         self.assertGreater(geology_layer.featureCount(), 0, "geology layer should have features")
         
         QgsMessageLog.logMessage(f"geology layer: {geology_layer.featureCount()} features", "TestSampler", Qgis.Critical)
-        QgsMessageLog.logMessage(f"spatial data-  geology layer", "TestSampler", Qgis.Critical)
-        QgsMessageLog.logMessage(f"sampler type: Spacing", "TestSampler", Qgis.Critical)
-        QgsMessageLog.logMessage(f"spacing: 50", "TestSampler", Qgis.Critical)
+        QgsMessageLog.logMessage("spatial data-  geology layer", "TestSampler", Qgis.Critical)
+        QgsMessageLog.logMessage("sampler type: Spacing", "TestSampler", Qgis.Critical)
+        QgsMessageLog.logMessage("spacing: 50", "TestSampler", Qgis.Critical)
         
         algorithm = SamplerAlgorithm()
         algorithm.initAlgorithm()
