@@ -13,7 +13,9 @@ from typing import Any, Optional
 import pandas as pd
 
 # QGIS imports
+from qgis import processing
 from qgis.core import (
+    QgsFeatureSink,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -31,7 +33,9 @@ from qgis.core import (
 # Internal imports
 from ...main.vectorLayerWrapper import (
     qgsLayerToGeoDataFrame, 
+    GeoDataFrameToQgsLayer, 
     qgsLayerToDataFrame, 
+    dataframeToQgsLayer, 
     qgsRasterToGdalDataset,
     matrixToDict,
     dataframeToQgsTable

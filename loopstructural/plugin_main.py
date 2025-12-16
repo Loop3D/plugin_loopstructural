@@ -143,6 +143,7 @@ class LoopstructuralPlugin:
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
+        self.initProcessing()
 
         # Map2Loop tool actions
         self.action_sampler = QAction(

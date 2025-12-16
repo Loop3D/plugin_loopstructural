@@ -1,20 +1,44 @@
+from typing import Any, Optional
+from osgeo import gdal
 import numpy as np
+import json
 
 from PyQt5.QtCore import QVariant
+from qgis import processing
 from qgis.core import (
     QgsFeatureSink,
     QgsFields, 
     QgsField, 
     QgsFeature, 
+    QgsGeometry,
+    QgsRasterLayer,
+    QgsProcessing,
     QgsProcessingAlgorithm,
+    QgsProcessingContext,
+    QgsProcessingException,
+    QgsProcessingFeedback,
+    QgsProcessingParameterEnum,
+    QgsProcessingParameterFileDestination,
     QgsProcessingParameterFeatureSink,
+    QgsProcessingParameterFeatureSource,
+    QgsProcessingParameterField,
+    QgsProcessingParameterRasterLayer,
     QgsProcessingParameterMatrix,
     QgsCoordinateReferenceSystem,
+    QgsVectorLayer,
     QgsWkbTypes,
     QgsSettings
 )
 
 
+from qgis.core import (
+    QgsFields, QgsField, QgsFeature, QgsFeatureSink, QgsWkbTypes,
+    QgsCoordinateReferenceSystem, QgsProcessingAlgorithm, QgsProcessingContext,
+    QgsProcessingFeedback, QgsProcessingParameterFeatureSink, QgsProcessingParameterMatrix,
+    QgsSettings
+)
+from PyQt5.QtCore import QVariant
+import numpy as np
 
 class UserDefinedStratigraphyAlgorithm(QgsProcessingAlgorithm):
     INPUT_STRATI_COLUMN = "INPUT_STRATI_COLUMN"
