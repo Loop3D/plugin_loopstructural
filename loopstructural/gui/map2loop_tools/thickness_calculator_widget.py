@@ -202,7 +202,7 @@ class ThicknessCalculatorWidget(QWidget):
                 'structure': self.structureLayerComboBox.currentLayer(),
                 'calculator_type': calculator_type,
                 'unit_name_field': self.unitNameFieldComboBox.currentField(),
-                'basal_unit_name_field': self.basalUnitNameFieldComboBox.currentField(),
+                'basal_contacts_unit_name': self.basalUnitNameFieldComboBox.currentField(),
                 'dip_field': self.dipFieldComboBox.currentField(),
                 'dipdir_field': self.dipDirFieldComboBox.currentField(),
                 'orientation_type': self.orientationTypeComboBox.currentText(),
