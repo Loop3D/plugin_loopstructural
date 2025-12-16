@@ -132,7 +132,8 @@ class PlgOptionsManager:
     @classmethod
     def get_debug_directory(cls) -> str:
         """Get the configured debug directory path."""
-        return cls.get_value_from_key("debug_directory", default="", exp_type=str) or ""
+        value = cls.get_value_from_key("debug_directory", default="", exp_type=str)
+        return value if value is not None else ""
 
     @classmethod
     def set_debug_directory(cls, path: str) -> bool:

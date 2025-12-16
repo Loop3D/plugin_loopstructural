@@ -24,8 +24,6 @@ class SamplerDialog(QDialog):
 
         layout = QVBoxLayout(self)
         self.widget = SamplerWidget(self, data_manager=self.data_manager, debug_manager=self.debug_manager)
-        if hasattr(self.widget, "set_debug_manager"):
-            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -63,8 +61,6 @@ class SorterDialog(QDialog):
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        if hasattr(self.widget, "set_debug_manager"):
-            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -102,8 +98,6 @@ class UserDefinedSorterDialog(QDialog):
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        if hasattr(self.widget, "set_debug_manager"):
-            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -140,8 +134,6 @@ class BasalContactsDialog(QDialog):
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        if hasattr(self.widget, "set_debug_manager"):
-            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -178,8 +170,6 @@ class ThicknessCalculatorDialog(QDialog):
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        if hasattr(self.widget, "set_debug_manager"):
-            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons

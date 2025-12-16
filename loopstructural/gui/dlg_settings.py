@@ -148,7 +148,14 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         """Open configured debug directory in the system file manager."""
         target = self.plg_settings.get_debug_directory() or ""
         if target:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(target))
+            target_path = Path(target)
+            if target_path.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(target))
+            else:
+                self.log(
+                    message=f"[map2loop] Debug directory does not exist: {target}",
+                    log_level=1,
+                )
         else:
             self.log(message="[map2loop] No debug directory configured.", log_level=1)
 

@@ -127,13 +127,13 @@ class DebugManager:
         """Log parameters and persist them when debug mode is enabled."""
         try:
             self.plugin.log(
-                message=f"[map2loop] {context_label} parameters: {params}",
+                message=f"[map2loop] {context_label} parameters: {str(params)}",
                 log_level=0,
             )
         except Exception as err:
             self.plugin.log(
                 message=(
-                    f"[map2loop] {context_label} parameters (stringified due to {err}): {params}"
+                    f"[map2loop] {context_label} parameters (stringified due to {err}): {str(params)}"
                 ),
                 log_level=0,
             )
