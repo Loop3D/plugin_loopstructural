@@ -45,9 +45,9 @@ class TestSamplerDecimator(unittest.TestCase):
         
         QgsMessageLog.logMessage(f"geology layer: {geology_layer.featureCount()} features", "TestDecimator", Qgis.Critical)
         QgsMessageLog.logMessage(f"structure layer: {structure_layer.featureCount()} features", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"spatial data- structure layer", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"sampler type: Decimator", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"decimation: 1", "TestDecimator", Qgis.Critical)
+        QgsMessageLog.logMessage("spatial data- structure layer", "TestDecimator", Qgis.Critical)
+        QgsMessageLog.logMessage("sampler type: Decimator", "TestDecimator", Qgis.Critical)
+        QgsMessageLog.logMessage("decimation: 1", "TestDecimator", Qgis.Critical)
         QgsMessageLog.logMessage(f"dtm: {self.dtm_file.name}", "TestDecimator", Qgis.Critical)
         
         algorithm = SamplerAlgorithm()

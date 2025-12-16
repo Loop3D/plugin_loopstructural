@@ -6,7 +6,6 @@ from map2loop.sorter import (
     SorterAlpha,
     SorterMaximiseContacts,
     SorterObservationProjections,
-    SorterUseHint,
     SorterUseNetworkX,
 )
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint

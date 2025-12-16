@@ -5,7 +5,6 @@ import os
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
 
-from loopstructural.gui.modelling.model_definition import fault_layers
 
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts

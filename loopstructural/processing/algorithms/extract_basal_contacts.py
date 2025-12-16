@@ -13,9 +13,7 @@
 from typing import Any, Optional
 
 # QGIS imports
-from qgis import processing
 from qgis.core import (
-    QgsFeatureSink,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -26,15 +24,13 @@ from qgis.core import (
     QgsProcessingParameterField,
     QgsProcessingParameterMapLayer,
     QgsProcessingParameterMatrix,
-    QgsProcessingParameterString,
     QgsSettings,
-    QgsVectorLayer,
 )
 
 from ...main.m2l_api import extract_basal_contacts
 
 # Internal imports
-from ...main.vectorLayerWrapper import GeoDataFrameToQgsLayer, qgsLayerToGeoDataFrame
+from ...main.vectorLayerWrapper import GeoDataFrameToQgsLayer
 
 
 class BasalContactsAlgorithm(QgsProcessingAlgorithm):

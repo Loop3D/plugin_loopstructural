@@ -10,13 +10,12 @@
 """
 # Python imports
 from typing import Any, Optional
-from qgis.PyQt.QtCore import QMetaType, QVariant
+from qgis.PyQt.QtCore import QVariant
 from osgeo import gdal
 import pandas as pd
 
 # QGIS imports
 from qgis.core import (
-    QgsFeatureSink,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -32,7 +31,6 @@ from qgis.core import (
     QgsFeature,
     QgsGeometry,
     QgsPointXY,
-    QgsVectorLayer,
     QgsWkbTypes,
     QgsCoordinateReferenceSystem
 )

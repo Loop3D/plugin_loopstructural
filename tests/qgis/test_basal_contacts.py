@@ -4,14 +4,11 @@ from pathlib import Path
 from qgis.core import (
     Qgis,
     QgsApplication,
-    QgsFeature,
-    QgsField,
     QgsMessageLog,
     QgsProcessingContext,
     QgsProcessingFeedback,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QVariant
 from qgis.testing import start_app
 
 from loopstructural.processing.algorithms.extract_basal_contacts import BasalContactsAlgorithm

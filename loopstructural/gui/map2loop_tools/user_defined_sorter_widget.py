@@ -1,9 +1,7 @@
 """Widget for user-defined stratigraphic column."""
 
-import os
 
 from PyQt5.QtWidgets import QMessageBox, QVBoxLayout, QWidget
-from qgis.PyQt import uic
 
 from loopstructural.gui.modelling.stratigraphic_column import StratColumnWidget
 

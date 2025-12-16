@@ -4,14 +4,11 @@ import pandas as pd
 import json
 
 from PyQt5.QtCore import QVariant
-from qgis import processing
 from qgis.core import (
     QgsFeatureSink,
     QgsFields, 
     QgsField, 
     QgsFeature, 
-    QgsGeometry,
-    QgsRasterLayer,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -23,11 +20,8 @@ from qgis.core import (
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterField,
     QgsProcessingParameterRasterLayer,
-    QgsProcessingParameterMatrix,
-    QgsCoordinateReferenceSystem,
     QgsVectorLayer,
-    QgsWkbTypes,
-    QgsSettings
+    QgsWkbTypes
 )
 
 # ────────────────────────────────────────────────
@@ -331,7 +325,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
         try:
             with open(output_file, 'w') as f:
                 json.dump(order, f)
-        except Exception as e:
+        except Exception:
             with open(output_file, 'w') as f:
                 json.dump([], f)
 
