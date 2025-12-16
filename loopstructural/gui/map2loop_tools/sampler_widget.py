@@ -15,7 +15,7 @@ class SamplerWidget(QWidget):
     (Decimator and Spacing).
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sampler widget.
 
         Parameters
@@ -27,6 +27,7 @@ class SamplerWidget(QWidget):
         """
         super().__init__(parent)
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "sampler_widget.ui")
@@ -54,6 +55,17 @@ class SamplerWidget(QWidget):
 
         # Initial state update
         self._on_sampler_type_changed()
+
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _log_params(self, context_label: str):
+        if getattr(self, "_debug", None):
+            try:
+                self._debug.log_params(context_label=context_label, params=self.get_parameters())
+            except Exception:
+                pass
 
     def _on_sampler_type_changed(self):
         """Update UI based on selected sampler type."""
@@ -92,6 +104,8 @@ class SamplerWidget(QWidget):
 
         from ...main.m2l_api import sample_contacts
 
+        self._log_params("sampler_widget_run")
+
         # Validate inputs
         if not self.spatialDataLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a spatial data layer.")
@@ -129,6 +143,17 @@ class SamplerWidget(QWidget):
                     kwargs['geology'] = self.geologyLayerComboBox.currentLayer()
 
             samples = sample_contacts(**kwargs)
+
+            if self._debug and self._debug.is_debug():
+                try:
+                    if samples is not None:
+                        csv_bytes = samples.to_csv(index=False).encode("utf-8")
+                        self._debug.save_debug_file("sampler_contacts.csv", csv_bytes)
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save sampler debug output: {err}",
+                        log_level=2,
+                    )
 
             # Convert result back to QGIS layer and add to project
             if samples is not None and not samples.empty:
@@ -211,6 +236,11 @@ class SamplerWidget(QWidget):
                 QMessageBox.warning(self, "Warning", "No samples were generated.")
 
         except Exception as e:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Sampler run failed: {e}",
+                    log_level=2,
+                )
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

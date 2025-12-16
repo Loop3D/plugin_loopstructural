@@ -18,7 +18,7 @@ class SorterWidget(QWidget):
     sorting algorithms.
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sorter widget.
 
         Parameters
@@ -32,6 +32,7 @@ class SorterWidget(QWidget):
         if data_manager is None:
             raise ValueError("data_manager must be provided")
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "sorter_widget.ui")
@@ -75,6 +76,17 @@ class SorterWidget(QWidget):
 
         # Initial state update
         self._on_algorithm_changed()
+
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _log_params(self, context_label: str):
+        if getattr(self, "_debug", None):
+            try:
+                self._debug.log_params(context_label=context_label, params=self.get_parameters())
+            except Exception:
+                pass
 
     def _guess_layers(self):
         """Automatically detect and set appropriate field names using ColumnMatcher."""
@@ -239,6 +251,8 @@ class SorterWidget(QWidget):
         """Run the stratigraphic sorter algorithm."""
         from ...main.m2l_api import sort_stratigraphic_column
 
+        self._log_params("sorter_widget_run")
+
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
@@ -295,6 +309,15 @@ class SorterWidget(QWidget):
                 kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
 
             result = sort_stratigraphic_column(**kwargs)
+            if self._debug and self._debug.is_debug():
+                try:
+                    payload = "\n".join(result) if result else ""
+                    self._debug.save_debug_file("sorter_result.txt", payload.encode("utf-8"))
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save sorter debug output: {err}",
+                        log_level=2,
+                    )
             if result and len(result) > 0:
                 # Clear and update stratigraphic column in data_manager
                 self.data_manager.clear_stratigraphic_column()
@@ -310,6 +333,11 @@ class SorterWidget(QWidget):
                 QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
 
         except Exception as e:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Sorter run failed: {e}",
+                    log_level=2,
+                )
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

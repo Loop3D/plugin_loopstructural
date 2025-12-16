@@ -17,7 +17,7 @@ class BasalContactsWidget(QWidget):
     from geology layers.
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the basal contacts widget.
 
         Parameters
@@ -29,6 +29,7 @@ class BasalContactsWidget(QWidget):
         """
         super().__init__(parent)
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "basal_contacts_widget.ui")
@@ -61,6 +62,17 @@ class BasalContactsWidget(QWidget):
         self._guess_layers()
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _log_params(self, context_label: str):
+        if getattr(self, "_debug", None):
+            try:
+                self._debug.log_params(context_label=context_label, params=self.get_parameters())
+            except Exception:
+                pass
 
     def _guess_layers(self):
         """Attempt to auto-select layers based on common naming conventions."""
@@ -113,6 +125,8 @@ class BasalContactsWidget(QWidget):
 
     def _run_extractor(self):
         """Run the basal contacts extraction algorithm."""
+        self._log_params("basal_contacts_widget_run")
+
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
@@ -160,6 +174,16 @@ class BasalContactsWidget(QWidget):
                 "Success",
                 f"Successfully extracted {contact_type}!",
             )
+            if self._debug and self._debug.is_debug():
+                try:
+                    self._debug.save_debug_file(
+                        "basal_contacts_result.txt", str(result).encode("utf-8")
+                    )
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save basal contacts debug output: {err}",
+                        log_level=2,
+                    )
 
     def get_parameters(self):
         """Get current widget parameters.

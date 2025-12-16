@@ -18,7 +18,7 @@ class ThicknessCalculatorWidget(QWidget):
     calculation algorithms.
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the thickness calculator widget.
 
         Parameters
@@ -30,6 +30,7 @@ class ThicknessCalculatorWidget(QWidget):
         """
         super().__init__(parent)
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "thickness_calculator_widget.ui")
@@ -67,6 +68,17 @@ class ThicknessCalculatorWidget(QWidget):
 
         # Initial state update
         self._on_calculator_type_changed()
+
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _log_params(self, context_label: str):
+        if getattr(self, "_debug", None):
+            try:
+                self._debug.log_params(context_label=context_label, params=self.get_parameters())
+            except Exception:
+                pass
 
     def _guess_layers(self):
         """Attempt to auto-select layers based on common naming conventions."""
@@ -172,6 +184,8 @@ class ThicknessCalculatorWidget(QWidget):
         """Run the thickness calculator algorithm using the map2loop API."""
         from ...main.m2l_api import calculate_thickness
 
+        self._log_params("thickness_calculator_widget_run")
+
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
@@ -226,6 +240,16 @@ class ThicknessCalculatorWidget(QWidget):
                     kwargs['stratigraphic_order'] = strati_order
 
             result = calculate_thickness(**kwargs)
+            if self._debug and self._debug.is_debug():
+                try:
+                    self._debug.save_debug_file(
+                        "thickness_result.txt", str(result).encode("utf-8")
+                    )
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save thickness debug output: {err}",
+                        log_level=2,
+                    )
 
             for idx in result['thicknesses'].index:
                 u = result['thicknesses'].loc[idx, 'name']
@@ -256,6 +280,11 @@ class ThicknessCalculatorWidget(QWidget):
                 QMessageBox.warning(self, "Error", "No thickness data was calculated.")
 
         except Exception as e:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Thickness calculation failed: {e}",
+                    log_level=2,
+                )
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

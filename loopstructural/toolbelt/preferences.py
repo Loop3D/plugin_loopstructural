@@ -27,6 +27,7 @@ class PlgSettingsStructure:
 
     # global
     debug_mode: bool = False
+    debug_directory: str = ""
     version: str = __version__
     interpolator_type: str = 'FDI'
     interpolator_nelements: int = 10000
@@ -127,6 +128,16 @@ class PlgOptionsManager:
             True if debug mode is enabled, False otherwise.
         """
         return cls.get_value_from_key("debug_mode", default=False, exp_type=bool)
+
+    @classmethod
+    def get_debug_directory(cls) -> str:
+        """Get the configured debug directory path."""
+        return cls.get_value_from_key("debug_directory", default="", exp_type=str) or ""
+
+    @classmethod
+    def set_debug_directory(cls, path: str) -> bool:
+        """Set the debug directory path."""
+        return cls.set_value_from_key("debug_directory", path or "")
 
     @classmethod
     def set_value_from_key(cls, key: str, value) -> bool:

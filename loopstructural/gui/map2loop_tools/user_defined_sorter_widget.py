@@ -13,7 +13,7 @@ class UserDefinedSorterWidget(QWidget):
     and links it to the data manager for integration with the model.
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the user-defined sorter widget.
 
         Parameters
@@ -29,6 +29,7 @@ class UserDefinedSorterWidget(QWidget):
             raise ValueError("data_manager must be provided")
 
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
 
@@ -50,6 +51,17 @@ class UserDefinedSorterWidget(QWidget):
                 main_layout = QVBoxLayout(self)
             main_layout.addWidget(self.strat_column_widget)
 
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _log_params(self, context_label: str, params):
+        if getattr(self, "_debug", None):
+            try:
+                self._debug.log_params(context_label=context_label, params=params)
+            except Exception:
+                pass
+
     def _run_sorter(self):
         """Run the user-defined stratigraphic sorter algorithm.
 
@@ -61,6 +73,7 @@ class UserDefinedSorterWidget(QWidget):
 
         # Get stratigraphic column data from the data manager
         strati_column = self.get_stratigraphic_column()
+        self._log_params("user_defined_sorter_widget_run", {'stratigraphic_column': strati_column})
 
         if not strati_column:
             QMessageBox.warning(
@@ -79,6 +92,16 @@ class UserDefinedSorterWidget(QWidget):
             feedback = QgsProcessingFeedback()
             result = processing.run("plugin_map2loop:loop_sorter_2", params, feedback=feedback)
 
+            if self._debug and self._debug.is_debug():
+                try:
+                    self._debug.save_debug_file(
+                        "user_defined_sorter_result.txt", str(result).encode("utf-8")
+                    )
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save user-defined sorter debug output: {err}",
+                        log_level=2,
+                    )
             if result:
                 QMessageBox.information(
                     self, "Success", "User-defined stratigraphic column created successfully!"
@@ -89,6 +112,11 @@ class UserDefinedSorterWidget(QWidget):
                 )
 
         except Exception as e:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] User-defined sorter run failed: {e}",
+                    log_level=2,
+                )
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def get_stratigraphic_column(self):

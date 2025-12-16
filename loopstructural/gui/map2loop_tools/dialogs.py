@@ -10,11 +10,12 @@ from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 class SamplerDialog(QDialog):
     """Dialog for running samplers using map2loop classes directly."""
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sampler dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Sampler")
         self.data_manager = data_manager
+        self.debug_manager = debug_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -22,7 +23,9 @@ class SamplerDialog(QDialog):
         from .sampler_widget import SamplerWidget
 
         layout = QVBoxLayout(self)
-        self.widget = SamplerWidget(self)
+        self.widget = SamplerWidget(self, data_manager=self.data_manager, debug_manager=self.debug_manager)
+        if hasattr(self.widget, "set_debug_manager"):
+            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -42,11 +45,12 @@ class SamplerDialog(QDialog):
 class SorterDialog(QDialog):
     """Dialog for running stratigraphic sorter using map2loop classes directly."""
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sorter dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Automatic Stratigraphic Sorter")
         self.data_manager = data_manager
+        self.debug_manager = debug_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -54,7 +58,13 @@ class SorterDialog(QDialog):
         from .sorter_widget import SorterWidget
 
         layout = QVBoxLayout(self)
-        self.widget = SorterWidget(self, data_manager=self.data_manager)
+        self.widget = SorterWidget(
+            self,
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        if hasattr(self.widget, "set_debug_manager"):
+            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -73,11 +83,12 @@ class SorterDialog(QDialog):
 class UserDefinedSorterDialog(QDialog):
     """Dialog for user-defined stratigraphic column using map2loop classes directly."""
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the user-defined sorter dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop User-Defined Stratigraphic Column")
         self.data_manager = data_manager
+        self.debug_manager = debug_manager
 
         self.setup_ui()
 
@@ -86,7 +97,13 @@ class UserDefinedSorterDialog(QDialog):
         from .user_defined_sorter_widget import UserDefinedSorterWidget
 
         layout = QVBoxLayout(self)
-        self.widget = UserDefinedSorterWidget(self, data_manager=self.data_manager)
+        self.widget = UserDefinedSorterWidget(
+            self,
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        if hasattr(self.widget, "set_debug_manager"):
+            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -105,11 +122,12 @@ class UserDefinedSorterDialog(QDialog):
 class BasalContactsDialog(QDialog):
     """Dialog for extracting basal contacts using map2loop classes directly."""
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the basal contacts dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Basal Contacts Extractor")
         self.data_manager = data_manager
+        self.debug_manager = debug_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -117,7 +135,13 @@ class BasalContactsDialog(QDialog):
         from .basal_contacts_widget import BasalContactsWidget
 
         layout = QVBoxLayout(self)
-        self.widget = BasalContactsWidget(self, data_manager=self.data_manager)
+        self.widget = BasalContactsWidget(
+            self,
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        if hasattr(self.widget, "set_debug_manager"):
+            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
@@ -136,11 +160,12 @@ class BasalContactsDialog(QDialog):
 class ThicknessCalculatorDialog(QDialog):
     """Dialog for calculating thickness using map2loop classes directly."""
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the thickness calculator dialog."""
         super().__init__(parent)
         self.setWindowTitle("Map2Loop Thickness Calculator")
         self.data_manager = data_manager
+        self.debug_manager = debug_manager
         self.setup_ui()
 
     def setup_ui(self):
@@ -148,7 +173,13 @@ class ThicknessCalculatorDialog(QDialog):
         from .thickness_calculator_widget import ThicknessCalculatorWidget
 
         layout = QVBoxLayout(self)
-        self.widget = ThicknessCalculatorWidget(self,data_manager=self.data_manager)
+        self.widget = ThicknessCalculatorWidget(
+            self,
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        if hasattr(self.widget, "set_debug_manager"):
+            self.widget.set_debug_manager(self.debug_manager)
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
