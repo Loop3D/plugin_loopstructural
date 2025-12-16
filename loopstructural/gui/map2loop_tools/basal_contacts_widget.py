@@ -132,58 +132,31 @@ class BasalContactsWidget(QWidget):
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
             return
 
-        # Parse ignore units
-        ignore_units = []
-        if self.ignoreUnitsLineEdit.text().strip():
-            ignore_units = [
-                unit.strip() for unit in self.ignoreUnitsLineEdit.text().split(',') if unit.strip()
-            ]
-        geology = self.geologyLayerComboBox.currentLayer()
-        unit_name_field = self.unitNameFieldComboBox.currentField()
-        faults = self.faultsLayerComboBox.currentLayer()
-        stratigraphic_order = (
-            self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
-        )
-
-        # Check if user wants all contacts or just basal contacts
-        all_contacts = self.allContactsCheckBox.isChecked()
-        if all_contacts:
-            stratigraphic_order = list({g[unit_name_field] for g in geology.getFeatures()})
-        result = extract_basal_contacts(
-            geology=geology,
-            stratigraphic_order=stratigraphic_order,
-            faults=faults,
-            ignore_units=ignore_units,
-            unit_name_field=unit_name_field,
-            all_contacts=all_contacts,
-            updater=lambda message: QMessageBox.information(self, "Extraction Progress", message),
-        )
-
-        # Show success message based on what was extracted
-        if all_contacts and result:
-            addGeoDataFrameToproject(result['all_contacts'], "All contacts")
-            contact_type = "all contacts and basal contacts"
-        else:
-            addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
-
-            contact_type = "basal contacts"
-
-        if result:
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Successfully extracted {contact_type}!",
-            )
-            if self._debug and self._debug.is_debug():
-                try:
-                    self._debug.save_debug_file(
-                        "basal_contacts_result.txt", str(result).encode("utf-8")
-                    )
-                except Exception as err:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Failed to save basal contacts debug output: {err}",
-                        log_level=2,
-                    )
+        try:
+            result, contact_type = self._extract_contacts()
+            if result:
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Successfully extracted {contact_type}!",
+                )
+                if self._debug and self._debug.is_debug():
+                    try:
+                        self._debug.save_debug_file(
+                            "basal_contacts_result.txt", str(result).encode("utf-8")
+                        )
+                    except Exception as err:
+                        self._debug.plugin.log(
+                            message=f"[map2loop] Failed to save basal contacts debug output: {err}",
+                            log_level=2,
+                        )
+        except Exception as err:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Basal contacts extraction failed: {err}",
+                    log_level=2,
+                )
+            QMessageBox.critical(self, "Error", f"An error occurred: {err}")
 
     def get_parameters(self):
         """Get current widget parameters.
@@ -223,3 +196,41 @@ class BasalContactsWidget(QWidget):
             self.ignoreUnitsLineEdit.setText(', '.join(params['ignore_units']))
         if 'all_contacts' in params:
             self.allContactsCheckBox.setChecked(params['all_contacts'])
+
+    def _extract_contacts(self):
+        """Execute basal contacts extraction."""
+        # Parse ignore units
+        ignore_units = []
+        if self.ignoreUnitsLineEdit.text().strip():
+            ignore_units = [
+                unit.strip() for unit in self.ignoreUnitsLineEdit.text().split(',') if unit.strip()
+            ]
+        geology = self.geologyLayerComboBox.currentLayer()
+        unit_name_field = self.unitNameFieldComboBox.currentField()
+        faults = self.faultsLayerComboBox.currentLayer()
+        stratigraphic_order = (
+            self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
+        )
+
+        # Check if user wants all contacts or just basal contacts
+        all_contacts = self.allContactsCheckBox.isChecked()
+        if all_contacts:
+            stratigraphic_order = list({g[unit_name_field] for g in geology.getFeatures()})
+        result = extract_basal_contacts(
+            geology=geology,
+            stratigraphic_order=stratigraphic_order,
+            faults=faults,
+            ignore_units=ignore_units,
+            unit_name_field=unit_name_field,
+            all_contacts=all_contacts,
+            updater=lambda message: QMessageBox.information(self, "Extraction Progress", message),
+        )
+
+        contact_type = "basal contacts"
+        if result:
+            if all_contacts:
+                addGeoDataFrameToproject(result['all_contacts'], "All contacts")
+                contact_type = "all contacts and basal contacts"
+            else:
+                addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
+        return result, contact_type

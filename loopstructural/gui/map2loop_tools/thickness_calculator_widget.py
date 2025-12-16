@@ -73,10 +73,11 @@ class ThicknessCalculatorWidget(QWidget):
         """Attach a debug manager instance."""
         self._debug = debug_manager
 
-    def _log_params(self, context_label: str):
+    def _log_params(self, context_label: str, params=None):
         if getattr(self, "_debug", None):
             try:
-                self._debug.log_params(context_label=context_label, params=self.get_parameters())
+                payload = params if params is not None else self.get_parameters()
+                self._debug.log_params(context_label=context_label, params=payload)
             except Exception:
                 pass
 
@@ -184,7 +185,7 @@ class ThicknessCalculatorWidget(QWidget):
         """Run the thickness calculator algorithm using the map2loop API."""
         from ...main.m2l_api import calculate_thickness
 
-        self._log_params("thickness_calculator_widget_run")
+        self._log_params("thickness_calculator_widget_run", self.get_parameters())
 
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():

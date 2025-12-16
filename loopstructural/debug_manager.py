@@ -123,6 +123,13 @@ class DebugManager:
         )
         return self._session_dir
 
+    def _sanitize_label(self, context_label: str) -> str:
+        """Sanitize context label for safe filename usage."""
+        return "".join(
+            c if c.isalnum() or c in ("-", "_") else "_"
+            for c in context_label.replace(" ", "_").lower()
+        )
+
     def log_params(self, context_label: str, params: Any):
         """Log parameters and persist them when debug mode is enabled."""
         try:
@@ -141,7 +148,7 @@ class DebugManager:
         if self.is_debug():
             try:
                 debug_dir = self.get_effective_debug_dir()
-                safe_label = context_label.replace(" ", "_").lower()
+                safe_label = self._sanitize_label(context_label)
                 file_path = debug_dir / f"{safe_label}_params.json"
                 payload = params if isinstance(params, dict) else {"_payload": params}
                 with open(file_path, "w", encoding="utf-8") as file_handle:
