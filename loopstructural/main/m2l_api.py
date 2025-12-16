@@ -12,7 +12,7 @@ from map2loop.sorter import (
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
 
-from ..main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+from ..main.vectorLayerWrapper import qgsLayerToDataFrame, qgsLayerToGeoDataFrame
 
 # Mapping of sorter names to sorter classes
 SORTER_LIST = {
@@ -340,8 +340,13 @@ def calculate_thickness(
     geology_gdf = qgsLayerToGeoDataFrame(geology)
     basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
-    structure_gdf = qgsLayerToGeoDataFrame(structure)
-
+    structure_gdf = qgsLayerToDataFrame(structure)
+    bounding_box = {
+        'maxx': geology_gdf.total_bounds[2],
+        'minx': geology_gdf.total_bounds[0],
+        'maxy': geology_gdf.total_bounds[3],
+        'miny': geology_gdf.total_bounds[1],
+    }
     # Rename unit name field if needed
     if unit_name_field and unit_name_field != 'UNITNAME':
         if unit_name_field in geology_gdf.columns:
@@ -371,29 +376,36 @@ def calculate_thickness(
     # Run thickness calculator
     if calculator_type == "InterpolatedStructure":
         calculator = InterpolatedStructure(
-            geology_gdf,
-            basal_contacts_gdf,
-            sampled_contacts_gdf,
-            structure_gdf,
+            bounding_box=bounding_box,
             dtm_data=dtm_gdal,
-            stratigraphic_column=stratigraphic_order,
+            is_strike=orientation_type == 'Strike',
+            max_line_length=max_line_length,
         )
     else:  # StructuralPoint
         if max_line_length is None:
             raise ValueError("max_line_length parameter is required for StructuralPoint calculator")
         calculator = StructuralPoint(
-            geology_gdf,
-            basal_contacts_gdf,
-            sampled_contacts_gdf,
-            structure_gdf,
-            max_line_length=max_line_length,
+            bounding_box=bounding_box,
             dtm_data=dtm_gdal,
-            stratigraphic_column=stratigraphic_order,
+            is_strike=orientation_type == 'Strike',
+            max_line_length=max_line_length,
         )
+    if unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
+        geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
+    units = geology_gdf.copy()
 
-    thickness = calculator.calculate_thickness()
-
+    units_unique = units.drop_duplicates(subset=[unit_name_field]).reset_index(drop=True)
+    units = pd.DataFrame({'name': units_unique[unit_name_field]})
+    basal_contacts_gdf['type'] = 'BASAL'  # required by calculator
+    thickness = calculator.compute(
+        units,
+        stratigraphic_order,
+        basal_contacts_gdf,
+        structure_gdf,
+        geology_gdf,
+        sampled_contacts_gdf,
+    )
     if updater:
         updater(f"Thickness calculation complete: {len(thickness)} records")
-
+    
     return thickness
