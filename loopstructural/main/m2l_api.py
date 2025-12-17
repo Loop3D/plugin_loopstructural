@@ -100,7 +100,6 @@ def sort_stratigraphic_column(
     unitname1_field=None,
     unitname2_field=None,
     structure=None,
-    unit_name_column=None,
     dip_field="DIP",
     dipdir_field="DIPDIR",
     orientation_type="Dip Direction",
@@ -154,22 +153,29 @@ def sort_stratigraphic_column(
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
     contacts_gdf = qgsLayerToGeoDataFrame(contacts)
-    print(geology_gdf.columns)
     # Build units DataFrame
-    units_df = geology_gdf[['UNITNAME']].drop_duplicates().reset_index(drop=True)
-    if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
+    if (
+        unit_name_field
+        and unit_name_field != unit_name_field
+        and unit_name_field in geology_gdf.columns
+    ):
         units_df = geology_gdf[[unit_name_field]].drop_duplicates().reset_index(drop=True)
-        units_df.columns = ['UNITNAME']
+        units_df = units_df.rename(columns={unit_name_field: unit_name_field})
+
+    elif unit_name_field in geology_gdf.columns:
+        units_df = geology_gdf[[unit_name_field]].drop_duplicates().reset_index(drop=True)
+    else:
+        raise ValueError(f"Unit name field '{unit_name_field}' not found in geology data")
     if min_age_field and min_age_field in geology_gdf.columns:
         units_df = units_df.merge(
-            geology_gdf[['UNITNAME', min_age_field]].drop_duplicates(),
-            on='UNITNAME',
+            geology_gdf[[unit_name_field, min_age_field]].drop_duplicates(),
+            on=unit_name_field,
             how='left',
         )
     if max_age_field and max_age_field in geology_gdf.columns:
         units_df = units_df.merge(
-            geology_gdf[['UNITNAME', max_age_field]].drop_duplicates(),
-            on='UNITNAME',
+            geology_gdf[[unit_name_field, max_age_field]].drop_duplicates(),
+            on=unit_name_field,
             how='left',
         )
     # Build relationships DataFrame (contacts without geometry)
@@ -195,7 +201,7 @@ def sort_stratigraphic_column(
         'orientation_type': orientation_type,
         'dtm': dtm,
         'updater': updater,
-        'unit_name_column': unit_name_column,
+        'unit_name_column': unit_name_field,
     }
 
     # Only pass required arguments to the sorter
@@ -399,10 +405,10 @@ def calculate_thickness(
         geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
     units = geology_gdf.copy()
 
-    units_unique = units.drop_duplicates(subset=[unit_name_field]).reset_index(drop=True)
-    units = pd.DataFrame({'name': units_unique[unit_name_field]})
+    units_unique = units.drop_duplicates(subset=['UNITNAME']).reset_index(drop=True)
+    units = pd.DataFrame({'name': units_unique['UNITNAME']})
     basal_contacts_gdf['type'] = 'BASAL'  # required by calculator
-
+  
     thickness = calculator.compute(
         units,
         stratigraphic_order,

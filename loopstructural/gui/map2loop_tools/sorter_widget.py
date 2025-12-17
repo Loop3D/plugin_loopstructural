@@ -286,7 +286,7 @@ class SorterWidget(QWidget):
                 'geology': self.geologyLayerComboBox.currentLayer(),
                 'contacts': self.contactsLayerComboBox.currentLayer(),
                 'sorting_algorithm': algorithm_name,
-                'unit_name_column': self.unitNameFieldComboBox.currentField(),
+                'unit_name_field': self.unitNameFieldComboBox.currentField(),
                 'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
             }
 

@@ -47,6 +47,13 @@ from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
 
 class LoopstructuralPlugin:
+    def show_fault_topology_dialog(self):
+        """Show the fault topology calculator dialog."""
+        from loopstructural.gui.map2loop_tools.fault_topology_widget import FaultTopologyWidget
+
+        dialog = FaultTopologyWidget(self.iface.mainWindow())
+        dialog.exec_()
+
     """QGIS plugin entrypoint for LoopStructural.
 
     This class initializes plugin resources, UI elements and data/model managers
@@ -113,6 +120,11 @@ class LoopstructuralPlugin:
         self.iface.registerOptionsWidgetFactory(self.options_factory)
 
         # -- Actions
+        self.action_fault_topology = QAction(
+            "Fault Topology Calculator",
+            self.iface.mainWindow(),
+        )
+        self.action_fault_topology.triggered.connect(self.show_fault_topology_dialog)
         self.action_help = QAction(
             QgsApplication.getThemeIcon("mActionHelpContents.svg"),
             self.tr("Help"),
@@ -142,6 +154,7 @@ class LoopstructuralPlugin:
         )
 
         self.toolbar.addAction(self.action_modelling)
+        self.toolbar.addAction(self.action_fault_topology)
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
@@ -185,12 +198,14 @@ class LoopstructuralPlugin:
         self.toolbar.addAction(self.action_user_sorter)
         self.toolbar.addAction(self.action_basal_contacts)
         self.toolbar.addAction(self.action_thickness)
+        self.toolbar.addAction(self.action_fault_topology)
 
         self.iface.addPluginToMenu(__title__, self.action_sampler)
         self.iface.addPluginToMenu(__title__, self.action_sorter)
         self.iface.addPluginToMenu(__title__, self.action_user_sorter)
         self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
         self.iface.addPluginToMenu(__title__, self.action_thickness)
+        self.iface.addPluginToMenu(__title__, self.action_fault_topology)
         self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
 
         # Add all map2loop tool actions to the toolbar
@@ -403,58 +418,90 @@ class LoopstructuralPlugin:
         QgsApplication.processingRegistry().addProvider(self.provider)
 
     def unload(self):
-        """Clean up when plugin is disabled or uninstalled."""
-        # -- Clean up dock widgets
-        if self.loop_dockwidget:
-            self.iface.removeDockWidget(self.loop_dockwidget)
-            del self.loop_dockwidget
-        if self.modelling_dockwidget:
-            self.iface.removeDockWidget(self.modelling_dockwidget)
-            del self.modelling_dockwidget
-        if self.visualisation_dockwidget:
-            self.iface.removeDockWidget(self.visualisation_dockwidget)
-            del self.visualisation_dockwidget
+        """Clean up when plugin is disabled or uninstalled.
 
-        # -- Clean up menu
-        self.iface.removePluginMenu(__title__, self.action_help)
-        self.iface.removePluginMenu(__title__, self.action_settings)
-        self.iface.removePluginMenu(__title__, self.action_sampler)
-        self.iface.removePluginMenu(__title__, self.action_sorter)
-        self.iface.removePluginMenu(__title__, self.action_user_sorter)
-        self.iface.removePluginMenu(__title__, self.action_basal_contacts)
-        self.iface.removePluginMenu(__title__, self.action_thickness)
-        # self.iface.removeMenu(self.menu)
+        This implementation is defensive: initGui may not have been run when
+        QGIS asks the plugin to unload (plugin reloader), so attributes may be
+        missing. Use getattr to check for presence and guard removals/deletions.
+        """
+        # -- Clean up dock widgets
+        for dock_attr in ("loop_dockwidget", "modelling_dockwidget", "visualisation_dockwidget"):
+            dock = getattr(self, dock_attr, None)
+            if dock:
+                try:
+                    self.iface.removeDockWidget(dock)
+                except Exception:
+                    # ignore errors during unload
+                    pass
+                try:
+                    delattr(self, dock_attr)
+                except Exception:
+                    pass
+
+        # -- Clean up menu/actions (only remove if they exist)
+        for attr in (
+            "action_help",
+            "action_settings",
+            "action_sampler",
+            "action_sorter",
+            "action_user_sorter",
+            "action_basal_contacts",
+            "action_thickness",
+            "action_fault_topology",
+            "action_modelling",
+            "action_visualisation",
+        ):
+            act = getattr(self, attr, None)
+            if act:
+                try:
+                    self.iface.removePluginMenu(__title__, act)
+                except Exception:
+                    pass
+                try:
+                    delattr(self, attr)
+                except Exception:
+                    pass
+
         # -- Clean up preferences panel in QGIS settings
-        self.iface.unregisterOptionsWidgetFactory(self.options_factory)
-        # -- Unregister processing
-        QgsApplication.processingRegistry().removeProvider(self.provider)
+        options_factory = getattr(self, "options_factory", None)
+        if options_factory:
+            try:
+                self.iface.unregisterOptionsWidgetFactory(options_factory)
+            except Exception:
+                pass
+            try:
+                delattr(self, "options_factory")
+            except Exception:
+                pass
+
+        # -- Unregister processing provider
+        provider = getattr(self, "provider", None)
+        if provider:
+            try:
+                QgsApplication.processingRegistry().removeProvider(provider)
+            except Exception:
+                pass
+            try:
+                delattr(self, "provider")
+            except Exception:
+                pass
 
         # remove from QGIS help/extensions menu
-        if self.action_help_plugin_menu_documentation:
-            self.iface.pluginHelpMenu().removeAction(self.action_help_plugin_menu_documentation)
+        help_action = getattr(self, "action_help_plugin_menu_documentation", None)
+        if help_action:
+            try:
+                self.iface.pluginHelpMenu().removeAction(help_action)
+            except Exception:
+                pass
+            try:
+                delattr(self, "action_help_plugin_menu_documentation")
+            except Exception:
+                pass
 
-        # remove actions
-        del self.action_settings
-        del self.action_help
-        del self.toolbar
-
-    def run(self):
-        """Run main process.
-
-        Raises
-        ------
-        Exception
-            If there is no item in the feed.
-        """
-        try:
-            self.log(
-                message=self.tr("Everything ran OK."),
-                log_level=3,
-                push=False,
-            )
-        except Exception as err:
-            self.log(
-                message=self.tr("Houston, we've got a problem: {}".format(err)),
-                log_level=2,
-                push=True,
-            )
+        # remove toolbar if present
+        if getattr(self, "toolbar", None):
+            try:
+                # There's no explicit removeToolbar API; deleting reference is fine.
+                delattr(self, "toolbar")
+            except Exception:
+                pass
