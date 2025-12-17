@@ -67,10 +67,33 @@ class BasalContactsWidget(QWidget):
         """Attach a debug manager instance."""
         self._debug = debug_manager
 
+    def _serialize_layer(self, layer):
+        try:
+            return {
+                "name": layer.name(),
+                "id": layer.id(),
+                "provider": layer.providerType() if hasattr(layer, "providerType") else None,
+                "source": layer.source() if hasattr(layer, "source") else None,
+            }
+        except Exception:
+            return str(layer)
+
+    def _serialize_params_for_logging(self, params):
+        serialized = {}
+        for key, value in params.items():
+            if hasattr(value, "source") or hasattr(value, "id"):
+                serialized[key] = self._serialize_layer(value)
+            else:
+                serialized[key] = value
+        return serialized
+
     def _log_params(self, context_label: str):
         if getattr(self, "_debug", None):
             try:
-                self._debug.log_params(context_label=context_label, params=self.get_parameters())
+                self._debug.log_params(
+                    context_label=context_label,
+                    params=self._serialize_params_for_logging(self.get_parameters()),
+                )
             except Exception:
                 pass
 
