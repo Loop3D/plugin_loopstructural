@@ -2,7 +2,7 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
 from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
@@ -231,8 +231,14 @@ class ThicknessCalculatorWidget(QWidget):
                 u = result['thicknesses'].loc[idx, 'name']
                 thick = result['thicknesses'].loc[idx, 'ThicknessStdDev']
                 if thick > 0:
-
-                    self.data_manager._stratigraphic_column.get_unit_by_name(u).thickness = thick
+                    unit = self.data_manager._stratigraphic_column.get_unit_by_name(u)
+                    if unit:
+                        unit.thickness = thick
+                    else:
+                        self.data_manager.logger(
+                            f"Warning: Unit '{u}' not found in stratigraphic column.",
+                            level=QLabel.Warning,
+                        )
             # Save debugging files if checkbox is checked
             if self.saveDebugCheckBox.isChecked():
                 if 'lines' in result:
