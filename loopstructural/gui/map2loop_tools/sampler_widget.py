@@ -4,6 +4,7 @@ import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.PyQt import uic
+from qgis.core import QgsProject, QgsVectorFileWriter
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -60,22 +61,50 @@ class SamplerWidget(QWidget):
         """Attach a debug manager instance."""
         self._debug = debug_manager
 
-    def _serialize_layer(self, layer):
+    def _export_layer_for_debug(self, layer, name_prefix: str):
+        if not (self._debug and self._debug.is_debug()):
+            return None
         try:
+            debug_dir = self._debug.get_effective_debug_dir()
+            out_path = debug_dir / f"{name_prefix}.gpkg"
+            options = QgsVectorFileWriter.SaveVectorOptions()
+            options.driverName = "GPKG"
+            options.layerName = layer.name()
+            res = QgsVectorFileWriter.writeAsVectorFormatV3(
+                layer,
+                str(out_path),
+                QgsProject.instance().transformContext(),
+                options,
+            )
+            if res[0] == QgsVectorFileWriter.NoError:
+                return str(out_path)
+        except Exception as err:
+            self._debug.plugin.log(
+                message=f"[map2loop] Failed to export layer '{name_prefix}': {err}",
+                log_level=2,
+            )
+        return None
+
+    def _serialize_layer(self, layer, name_prefix: str):
+        try:
+            export_path = self._export_layer_for_debug(layer, name_prefix)
             return {
                 "name": layer.name(),
                 "id": layer.id(),
                 "provider": layer.providerType() if hasattr(layer, "providerType") else None,
                 "source": layer.source() if hasattr(layer, "source") else None,
+                "export_path": export_path,
             }
         except Exception:
             return str(layer)
 
-    def _serialize_params_for_logging(self, params):
+    def _serialize_params_for_logging(self, params, context_label: str):
         serialized = {}
         for key, value in params.items():
             if hasattr(value, "source") or hasattr(value, "id"):
-                serialized[key] = self._serialize_layer(value)
+                serialized[key] = self._serialize_layer(
+                    value, f"{context_label}_{key}"
+                )
             else:
                 serialized[key] = value
         return serialized
@@ -85,7 +114,9 @@ class SamplerWidget(QWidget):
             try:
                 self._debug.log_params(
                     context_label=context_label,
-                    params=self._serialize_params_for_logging(self.get_parameters()),
+                    params=self._serialize_params_for_logging(
+                        self.get_parameters(), context_label
+                    ),
                 )
             except Exception:
                 pass

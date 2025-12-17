@@ -157,6 +157,7 @@ class DebugManager:
                     message=f"[map2loop] Params saved to: {file_path}",
                     log_level=0,
                 )
+                self._ensure_runner_script()
             except Exception as err:
                 self.plugin.log(
                     message=f"[map2loop] Failed to save params for {context_label}: {err}",
@@ -183,3 +184,78 @@ class DebugManager:
                 log_level=2,
             )
             return None
+
+    def _ensure_runner_script(self):
+        """Create a reusable runner script in the debug directory."""
+        try:
+            debug_dir = self.get_effective_debug_dir()
+            script_path = debug_dir / "run_map2loop.py"
+            if script_path.exists():
+                return
+            script_content = """#!/usr/bin/env python3
+import argparse
+import json
+from pathlib import Path
+
+import geopandas as gpd
+
+from loopstructural.main import m2l_api
+
+
+def load_layer(layer_info):
+    if isinstance(layer_info, dict):
+        export_path = layer_info.get("export_path")
+        if export_path:
+            return gpd.read_file(export_path)
+    return layer_info
+
+
+def load_params(path):
+    params = json.loads(Path(path).read_text())
+    # convert exported layers to GeoDataFrames
+    for key, value in list(params.items()):
+        params[key] = load_layer(value)
+    return params
+
+
+def run(params):
+    if "sampler_type" in params:
+        result = m2l_api.sample_contacts(**params)
+        print("Sampler result:", result)
+    elif "sorting_algorithm" in params:
+        result = m2l_api.sort_stratigraphic_column(**params)
+        print("Sorter result:", result)
+    elif "calculator_type" in params:
+        result = m2l_api.calculate_thickness(**params)
+        print("Thickness result:", result)
+    elif "geology_layer" in params and "unit_name_field" in params:
+        result = m2l_api.extract_basal_contacts(**params)
+        print("Basal contacts result:", result)
+    else:
+        print("Unknown params shape; inspect manually:", params.keys())
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "params",
+        nargs="?",
+        default=None,
+        help="Path to params JSON (defaults to first *_params.json in this folder)",
+    )
+    args = parser.parse_args()
+    base = Path(__file__).parent
+    params_path = Path(args.params) if args.params else next(base.glob("*_params.json"))
+    params = load_params(params_path)
+    run(params)
+
+
+if __name__ == "__main__":
+    main()
+"""
+            script_path.write_text(script_content, encoding="utf-8")
+        except Exception as err:
+            self.plugin.log(
+                message=f"[map2loop] Failed to create runner script: {err}",
+                log_level=1,
+            )
