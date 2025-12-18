@@ -27,6 +27,7 @@ class DebugManager:
         self._session_id = uuid.uuid4().hex
         self._project_name = self._get_project_name()
         self._debug_state_logged = False
+        self.logger = self.plugin.log
 
     def _get_settings(self):
         return plg_prefs_hdlr.PlgOptionsManager.get_plg_settings()
