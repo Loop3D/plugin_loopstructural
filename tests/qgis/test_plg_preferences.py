@@ -31,6 +31,9 @@ class TestPlgPreferences(unittest.TestCase):
         self.assertTrue(hasattr(settings, "debug_mode"))
         self.assertIsInstance(settings.debug_mode, bool)
         self.assertEqual(settings.debug_mode, False)
+        self.assertTrue(hasattr(settings, "debug_directory"))
+        self.assertIsInstance(settings.debug_directory, str)
+        self.assertEqual(settings.debug_directory, "")
 
         self.assertTrue(hasattr(settings, "version"))
         self.assertIsInstance(settings.version, str)

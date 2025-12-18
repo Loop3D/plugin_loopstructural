@@ -78,9 +78,9 @@
       <bool>false</bool>
      </property>
      <layout class="QGridLayout" name="gridLayout">
-      <item row="8" column="0" colspan="2">
-       <widget class="QPushButton" name="btn_reset">
-        <property name="minimumSize">
+       <item row="9" column="0" colspan="2">
+        <widget class="QPushButton" name="btn_reset">
+         <property name="minimumSize">
          <size>
           <width>200</width>
           <height>25</height>
@@ -100,8 +100,8 @@
         </property>
        </widget>
       </item>
-      <item row="7" column="1">
-       <widget class="QLabel" name="lbl_version_saved_value">
+       <item row="7" column="1">
+        <widget class="QLabel" name="lbl_version_saved_value">
         <property name="minimumSize">
          <size>
           <width>0</width>
@@ -147,8 +147,36 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="0">
-       <widget class="QPushButton" name="btn_help">
+       <item row="8" column="0">
+        <widget class="QLabel" name="lbl_debug_directory">
+         <property name="text">
+          <string>Debug directory</string>
+         </property>
+        </widget>
+       </item>
+       <item row="8" column="1">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QLineEdit" name="le_debug_directory"/>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btn_browse_debug_directory">
+           <property name="text">
+            <string>Browse...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btn_open_debug_directory">
+           <property name="text">
+            <string>Open Folder</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="0" column="0">
+        <widget class="QPushButton" name="btn_help">
         <property name="minimumSize">
          <size>
           <width>200</width>
