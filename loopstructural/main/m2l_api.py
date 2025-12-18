@@ -1,3 +1,5 @@
+from unittest import runner
+
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -10,8 +12,12 @@ from map2loop.sorter import (
 )
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
+from pkg_resources import run_main
+
+from loopstructural.main.debug import export
 
 from ..main.vectorLayerWrapper import qgsLayerToDataFrame, qgsLayerToGeoDataFrame
+from .debug.export import export_debug_package
 
 # Mapping of sorter names to sorter classes
 SORTER_LIST = {
@@ -38,6 +44,7 @@ def extract_basal_contacts(
     unit_name_field=None,
     all_contacts=False,
     updater=None,
+    debug_manager=None,
 ):
     """Extract basal contacts from geological data.
 
@@ -76,9 +83,40 @@ def extract_basal_contacts(
     faults = qgsLayerToGeoDataFrame(faults) if faults else None
     if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology.columns:
         geology = geology.rename(columns={unit_name_field: 'UNITNAME'})
+    # Log parameters via DebugManager if provided
+    if debug_manager:
+        debug_manager.log_params(
+            "extract_basal_contacts",
+            {
+                "stratigraphic_order": stratigraphic_order,
+                "ignore_units": ignore_units,
+                "unit_name_field": unit_name_field,
+                "all_contacts": all_contacts,
+                "geology": geology,
+                "faults": faults,
+            },
+        )
     if updater:
         updater("Extracting Basal Contacts...")
     contact_extractor = ContactExtractor(geology, faults)
+    # If debug_manager present and debug mode enabled, export tool, layers and params
+    try:
+        if debug_manager and getattr(debug_manager, "is_debug", lambda: False)():
+
+            layers = {"geology": geology, "faults": faults}
+            pickles = {"contact_extractor": contact_extractor}
+            # export layers and pickles first to get the actual filenames used
+            exported = export_debug_package(
+                debug_manager,
+                runner_script_name="run_extract_basal_contacts.py",
+                m2l_object=contact_extractor,
+                params={'stratigraphic_order': stratigraphic_order},
+            )
+
+    except Exception as e:
+        print("Failed to save sampler debug info")
+        print(e)
+
     all_contacts_result = contact_extractor.extract_all_contacts()
     basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
 
@@ -104,6 +142,7 @@ def sort_stratigraphic_column(
     dipdir_field="DIPDIR",
     orientation_type="Dip Direction",
     dtm=None,
+    debug_manager=None,
     updater=None,
     contacts=None,
 ):
@@ -153,6 +192,23 @@ def sort_stratigraphic_column(
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
     contacts_gdf = qgsLayerToGeoDataFrame(contacts)
+
+    # Log parameters via DebugManager if provided
+    if debug_manager:
+        debug_manager.log_params(
+            "sort_stratigraphic_column",
+            {
+                "sorting_algorithm": sorting_algorithm,
+                "unit_name_field": unit_name_field,
+                "min_age_field": min_age_field,
+                "max_age_field": max_age_field,
+                "orientation_type": orientation_type,
+                "dtm": dtm,
+                "geology": geology_gdf,
+                "contacts": contacts_gdf,
+            },
+        )
+
     # Build units DataFrame
     if (
         unit_name_field
@@ -208,6 +264,21 @@ def sort_stratigraphic_column(
     sorter_args = {k: v for k, v in all_args.items() if k in required_args}
     print(f'Calling sorter with args: {sorter_args.keys()}')
     sorter = sorter_cls(**sorter_args)
+    # If debugging, pickle sorter and write a small runner script
+    try:
+        if debug_manager and getattr(debug_manager, "is_debug", lambda: False)():
+
+            _exported = export_debug_package(
+                debug_manager,
+                m2l_object=sorter,
+                params={'units_df': units_df},
+                runner_script_name="run_sort_stratigraphic_column.py",
+            )
+
+    except Exception as e:
+        print("Failed to save sampler debug info")
+        print(e)
+
     order = sorter.sort(units_df)
     if updater:
         updater(f"Sorting complete: {len(order)} units ordered")
@@ -222,6 +293,7 @@ def sample_contacts(
     spacing=None,
     dtm=None,
     geology=None,
+    debug_manager=None,
     updater=None,
 ):
     """Sample spatial data using map2loop samplers.
@@ -267,6 +339,20 @@ def sample_contacts(
     if geology is not None:
         geology_gdf = qgsLayerToGeoDataFrame(geology)
 
+    # Log parameters via DebugManager if provided
+    if debug_manager:
+        debug_manager.log_params(
+            "sample_contacts",
+            {
+                "sampler_type": sampler_type,
+                "decimation": decimation,
+                "spacing": spacing,
+                "dtm": dtm,
+                "geology": geology_gdf,
+                "spatial_data": spatial_gdf,
+            },
+        )
+
     # Run sampler
     if sampler_type == "Decimator":
         if decimation is None:
@@ -281,8 +367,19 @@ def sample_contacts(
 
     samples = sampler.sample(spatial_gdf)
 
-    if updater:
-        updater(f"Sampling complete: {len(samples)} samples generated")
+    try:
+        if debug_manager and getattr(debug_manager, "is_debug", lambda: False)():
+            _exported = export_debug_package(
+                debug_manager,
+                m2l_object=sampler,
+                params={'spatial_data': spatial_gdf},
+                runner_script_name='run_sample_contacts.py',
+            )
+
+    except Exception as e:
+        print("Failed to save sampler debug info")
+        print(e)
+        pass
 
     return samples
 
@@ -300,6 +397,7 @@ def calculate_thickness(
     orientation_type="Dip Direction",
     max_line_length=None,
     stratigraphic_order=None,
+    debug_manager=None,
     updater=None,
     basal_contacts_unit_name=None,
 ):
@@ -352,6 +450,24 @@ def calculate_thickness(
     )
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
     structure_gdf = qgsLayerToDataFrame(structure)
+
+    # Log parameters via DebugManager if provided
+    if debug_manager:
+        debug_manager.log_params(
+            "calculate_thickness",
+            {
+                "calculator_type": calculator_type,
+                "unit_name_field": unit_name_field,
+                "orientation_type": orientation_type,
+                "max_line_length": max_line_length,
+                "stratigraphic_order": stratigraphic_order,
+                "geology": geology_gdf,
+                "basal_contacts": basal_contacts_gdf,
+                "sampled_contacts": sampled_contacts_gdf,
+                "structure": structure_gdf,
+            },
+        )
+
     bounding_box = {
         'maxx': geology_gdf.total_bounds[2],
         'minx': geology_gdf.total_bounds[0],
@@ -408,7 +524,30 @@ def calculate_thickness(
     units_unique = units.drop_duplicates(subset=['UNITNAME']).reset_index(drop=True)
     units = pd.DataFrame({'name': units_unique['UNITNAME']})
     basal_contacts_gdf['type'] = 'BASAL'  # required by calculator
-  
+
+    # No local export path placeholders required; export_debug_package handles exports
+    try:
+        if debug_manager and getattr(debug_manager, "is_debug", lambda: False)():
+            # Export layers and pickled objects first to get their exported filenames
+
+            _exported = export_debug_package(
+                debug_manager,
+                runner_script_name="run_calculate_thickness.py",
+                m2l_object=calculator,
+                params={
+                    'units': units,
+                    'stratigraphic_order': stratigraphic_order,
+                    'basal_contacts': basal_contacts_gdf,
+                    'structure': structure_gdf,
+                    'geology': geology_gdf,
+                    'sampled_contacts': sampled_contacts_gdf,
+                },
+            )
+
+    except Exception as e:
+        print("Failed to save sampler debug info")
+        raise e
+
     thickness = calculator.compute(
         units,
         stratigraphic_order,
@@ -417,12 +556,6 @@ def calculate_thickness(
         geology_gdf,
         sampled_contacts_gdf,
     )
+    # Ensure result object exists for return and for any debug export
     res = {'thicknesses': thickness}
-    if updater:
-        updater(f"Thickness calculation complete: {len(thickness)} records")
-    if hasattr(calculator, 'lines'):
-        res['lines'] = calculator.lines
-    if hasattr(calculator, 'location_tracking'):
-        res['location_tracking'] = calculator.location_tracking
-
     return res
