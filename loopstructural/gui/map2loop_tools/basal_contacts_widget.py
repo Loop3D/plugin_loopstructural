@@ -3,8 +3,8 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.PyQt import uic
 from qgis.core import QgsProject, QgsVectorFileWriter
+from qgis.PyQt import uic
 
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
@@ -109,9 +109,7 @@ class BasalContactsWidget(QWidget):
         serialized = {}
         for key, value in params.items():
             if hasattr(value, "source") or hasattr(value, "id"):
-                serialized[key] = self._serialize_layer(
-                    value, f"{context_label}_{key}"
-                )
+                serialized[key] = self._serialize_layer(value, f"{context_label}_{key}")
             else:
                 serialized[key] = value
         return serialized
@@ -121,9 +119,7 @@ class BasalContactsWidget(QWidget):
             try:
                 self._debug.log_params(
                     context_label=context_label,
-                    params=self._serialize_params_for_logging(
-                        self.get_parameters(), context_label
-                    ),
+                    params=self._serialize_params_for_logging(self.get_parameters(), context_label),
                 )
             except Exception:
                 pass
@@ -210,6 +206,7 @@ class BasalContactsWidget(QWidget):
                     message=f"[map2loop] Basal contacts extraction failed: {err}",
                     log_level=2,
                 )
+                raise err
             QMessageBox.critical(self, "Error", f"An error occurred: {err}")
 
     def get_parameters(self):
@@ -270,6 +267,8 @@ class BasalContactsWidget(QWidget):
         all_contacts = self.allContactsCheckBox.isChecked()
         if all_contacts:
             stratigraphic_order = list({g[unit_name_field] for g in geology.getFeatures()})
+            self.data_manager.logger(f"Extracting all contacts for units: {stratigraphic_order}")
+
         result = extract_basal_contacts(
             geology=geology,
             stratigraphic_order=stratigraphic_order,
@@ -278,13 +277,14 @@ class BasalContactsWidget(QWidget):
             unit_name_field=unit_name_field,
             all_contacts=all_contacts,
             updater=lambda message: QMessageBox.information(self, "Extraction Progress", message),
+            debug_manager=self._debug,
         )
-
+        self.data_manager.logger(f'All contacts extracted: {all_contacts}')
         contact_type = "basal contacts"
         if result:
-            if all_contacts:
+            if all_contacts and result['all_contacts'].empty is False:
                 addGeoDataFrameToproject(result['all_contacts'], "All contacts")
                 contact_type = "all contacts and basal contacts"
-            else:
+            elif not all_contacts and result['basal_contacts'].empty is False:
                 addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
         return result, contact_type

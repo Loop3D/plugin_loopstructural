@@ -3,8 +3,8 @@
 import os
 
 from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
-from qgis.PyQt import uic
 from qgis.core import QgsProject, QgsVectorFileWriter
+from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -115,9 +115,7 @@ class ThicknessCalculatorWidget(QWidget):
         serialized = {}
         for key, value in params.items():
             if hasattr(value, "source") or hasattr(value, "id"):
-                serialized[key] = self._serialize_layer(
-                    value, f"{context_label}_{key}"
-                )
+                serialized[key] = self._serialize_layer(value, f"{context_label}_{key}")
             else:
                 serialized[key] = value
         return serialized
@@ -290,12 +288,13 @@ class ThicknessCalculatorWidget(QWidget):
                 if strati_order:
                     kwargs['stratigraphic_order'] = strati_order
 
-            result = calculate_thickness(**kwargs)
+            result = calculate_thickness(
+                **kwargs,
+                debug_manager=self._debug,
+            )
             if self._debug and self._debug.is_debug():
                 try:
-                    self._debug.save_debug_file(
-                        "thickness_result.txt", str(result).encode("utf-8")
-                    )
+                    self._debug.save_debug_file("thickness_result.txt", str(result).encode("utf-8"))
                 except Exception as err:
                     self._debug.plugin.log(
                         message=f"[map2loop] Failed to save thickness debug output: {err}",

@@ -3,9 +3,8 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsRasterLayer
+from qgis.core import QgsProject, QgsRasterLayer, QgsVectorFileWriter
 from qgis.PyQt import uic
-from qgis.core import QgsProject, QgsVectorFileWriter
 
 from loopstructural.main.helpers import get_layer_names
 from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST
@@ -123,9 +122,7 @@ class SorterWidget(QWidget):
         serialized = {}
         for key, value in params.items():
             if hasattr(value, "source") or hasattr(value, "id"):
-                serialized[key] = self._serialize_layer(
-                    value, f"{context_label}_{key}"
-                )
+                serialized[key] = self._serialize_layer(value, f"{context_label}_{key}")
             else:
                 serialized[key] = value
         return serialized
@@ -135,9 +132,7 @@ class SorterWidget(QWidget):
             try:
                 self._debug.log_params(
                     context_label=context_label,
-                    params=self._serialize_params_for_logging(
-                        self.get_parameters(), context_label
-                    ),
+                    params=self._serialize_params_for_logging(self.get_parameters(), context_label),
                 )
             except Exception:
                 pass
@@ -362,7 +357,10 @@ class SorterWidget(QWidget):
                 ]
                 kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
 
-            result = sort_stratigraphic_column(**kwargs)
+            result = sort_stratigraphic_column(
+                **kwargs,
+                debug_manager=self._debug,
+            )
             if self._debug and self._debug.is_debug():
                 try:
                     payload = "\n".join(result) if result else ""
