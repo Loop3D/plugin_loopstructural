@@ -37,6 +37,11 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         self.label.setPos(-self.label.boundingRect().width() / 2, -30)
         self.shape_item.setAcceptedMouseButtons(QtCore.Qt.NoButton)
 
+        # Drag state for moving multiple selected nodes
+        self._dragging = False
+        self._drag_origin = None
+        self._drag_start_positions = {}
+
     def boundingRect(self):
         """Return a bounding rectangle that includes the shape and the label."""
         shape_rect = self.shape_item.boundingRect()
@@ -47,35 +52,72 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         return combined_rect
 
     def mousePressEvent(self, event):
-        scene = self.scene_ref
+        # Allow default selection behavior first so clicking selects the item
         if event.button() == QtCore.Qt.LeftButton:
-            if scene.connecting_from is None:
-                scene.connecting_from = self
-                self.setBrush(QtGui.QBrush(QtCore.Qt.yellow))  # highlight source
-            elif scene.connecting_from == self:
-                # cancel connection
-                scene.connecting_from = None
-                self.setBrush(QtGui.QBrush(QtCore.Qt.lightGray))
-            else:
-                # create edge
-                scene.add_edge_between(scene.connecting_from, self)
-                scene.connecting_from.setBrush(QtGui.QBrush(QtCore.Qt.lightGray))
-                scene.connecting_from = None
-        else:
             super().mousePressEvent(event)
 
+            # If this item is selected, prepare for a possible group drag
+            if self.isSelected():
+                self._dragging = True
+                self._drag_origin = event.scenePos()
+                # store start positions for all selected TopologyNode items
+                self._drag_start_positions = {}
+                for item in self.scene().selectedItems():
+                    if isinstance(item, TopologyNode):
+                        self._drag_start_positions[item] = item.pos()
+            return
+
+        # Fallback to default behavior for other buttons
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        # If we're dragging a selection, move all selected nodes together
+        if self._dragging and (event.buttons() & QtCore.Qt.LeftButton):
+            if self._drag_origin is None:
+                return
+            delta = event.scenePos() - self._drag_origin
+            for item, start_pos in self._drag_start_positions.items():
+                item.setPos(start_pos + delta)
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragging and event.button() == QtCore.Qt.LeftButton:
+            self._dragging = False
+            self._drag_origin = None
+            self._drag_start_positions = {}
+            return
+        super().mouseReleaseEvent(event)
+
     def paint(self, painter, option, widget=None):
-        """Delegate paint to the shape_item."""
-        # No custom painting is needed since the shape_item handles rendering.
-        pass
+        """Draw a selection highlight when selected. The SVG child handles the main rendering."""
+        if self.isSelected():
+            pen = QtGui.QPen(QtGui.QColor(0, 120, 215))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            rect = self.boundingRect()
+            # Slightly expand rect for a nicer outline
+            outline_rect = rect.adjusted(-6, -6, 6, 6)
+            painter.drawRoundedRect(outline_rect, 6, 6)
 
     def add_edge(self, edge):
         self.edges.append(edge)
 
     def itemChange(self, change, value):
+        # When moving, update connected edges
         if change == QtWidgets.QGraphicsItem.ItemPositionChange:
             for edge in self.edges:
                 edge.update_position()
+
+        # Redraw when selection state changes so highlight updates
+        if (
+            change == QtWidgets.QGraphicsItem.ItemSelectedChange
+            or change == QtWidgets.QGraphicsItem.ItemSelectedHasChanged
+        ):
+            self.update()
+
         return super().itemChange(change, value)
 
 
@@ -142,6 +184,11 @@ class TopologyScene(QtWidgets.QGraphicsScene):
         self.connecting_from = None  # <-- store selected node for connecting
         self.temp_line = None  # Temporary line for visual feedback
 
+        # Rubber-band selection state
+        self._rubber_origin = None
+        self._rubber_rect_item = None
+        self._rubber_selecting = False
+
         # self._create_static_graph()
         self.finalize_layout()
 
@@ -182,11 +229,65 @@ class TopologyScene(QtWidgets.QGraphicsScene):
         self.edges.append(edge)
 
     def mouseMoveEvent(self, event):
+        # Update connecting temporary line if active
         if self.connecting_from and self.temp_line:
             # Update the temporary line to follow the cursor
             line = QtCore.QLineF(self.connecting_from.pos(), event.scenePos())
             self.temp_line.setLine(line)
+
+        # Update rubber-band rectangle if we're selecting
+        if self._rubber_selecting and self._rubber_rect_item is not None:
+            rect = QtCore.QRectF(self._rubber_origin, event.scenePos()).normalized()
+            self._rubber_rect_item.setRect(rect)
+            return  # Don't pass to super while drawing rubber band
+
         super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        # Start rubber-band selection when left-clicking empty space
+        if event.button() == QtCore.Qt.LeftButton:
+            if not self.itemAt(event.scenePos(), QtGui.QTransform()):
+                # Optionally clear existing selection unless Ctrl is held
+                if not (event.modifiers() & QtCore.Qt.ControlModifier):
+                    for item in self.selectedItems():
+                        item.setSelected(False)
+
+                # Create the rubber-band rectangle
+                self._rubber_origin = event.scenePos()
+                self._rubber_rect_item = QtWidgets.QGraphicsRectItem()
+                pen = QtGui.QPen(QtGui.QColor(0, 120, 215))
+                pen.setStyle(QtCore.Qt.DashLine)
+                pen.setWidth(1)
+                self._rubber_rect_item.setPen(pen)
+                self._rubber_rect_item.setBrush(QtGui.QBrush(QtGui.QColor(0, 120, 215, 40)))
+                self._rubber_rect_item.setZValue(1000)  # on top
+                self.addItem(self._rubber_rect_item)
+                self._rubber_selecting = True
+                return
+
+        # Otherwise default behavior (e.g., clicking on nodes)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        # Finish rubber-band selection
+        if event.button() == QtCore.Qt.LeftButton and self._rubber_selecting:
+            rect = QtCore.QRectF(self._rubber_origin, event.scenePos()).normalized()
+
+            # Select nodes that intersect the rectangle
+            items_in_rect = self.items(rect)
+            for item in items_in_rect:
+                if isinstance(item, TopologyNode):
+                    item.setSelected(True)
+
+            # Clean up rubber-band rectangle
+            if self._rubber_rect_item:
+                self.removeItem(self._rubber_rect_item)
+                self._rubber_rect_item = None
+            self._rubber_origin = None
+            self._rubber_selecting = False
+            return
+
+        super().mouseReleaseEvent(event)
 
     def start_temporary_line(self, source):
         """Start drawing a temporary line from the source node."""
