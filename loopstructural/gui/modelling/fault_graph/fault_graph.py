@@ -26,12 +26,13 @@ class TopologyNode(QtWidgets.QGraphicsItem):
 
         self.shape_item.setParentItem(self)
         self.shape_item.setScale(0.5)  # Adjust scale if needed
-        # Enable interactivity for the node
+        # Enable interactivity for the node and allow geometry-change notifications
         self.setFlags(
             QtWidgets.QGraphicsItem.ItemIsMovable
             | QtWidgets.QGraphicsItem.ItemIsSelectable
             | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges
         )
+
         self.label = QtWidgets.QGraphicsTextItem(name, self)
         self.label.setDefaultTextColor(QtCore.Qt.black)
         self.label.setPos(-self.label.boundingRect().width() / 2, -30)
@@ -41,20 +42,49 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         self._dragging = False
         self._drag_origin = None
         self._drag_start_positions = {}
+        self._drag_start_scene_rects = {}
+        # View-related state used during dragging
+        self._drag_view = None
+        self._prev_viewport_mode = None
 
     def boundingRect(self):
-        """Return a bounding rectangle that includes the shape and the label."""
+        """Return a bounding rectangle that includes the shape, the label and
+        any selection outline we draw in paint(). We must return a rect that
+        fully contains what paint() draws so Qt can correctly refresh the
+        area when the item changes.
+        """
         shape_rect = self.shape_item.boundingRect()
         label_rect = self.label.boundingRect()
         combined_rect = shape_rect.united(
             label_rect.translated(0, -30)
         )  # Adjust for label position
-        return combined_rect
+        # Expand by the same margin used when drawing the selection outline
+        margin = 8
+        return combined_rect.adjusted(-margin, -margin, margin, margin)
 
     def mousePressEvent(self, event):
-        # Allow default selection behavior first so clicking selects the item
+        # Preserve existing selection when clicking a member of a multi-selection.
+        # If the clicked item was part of the selection before the press, the
+        # default QGraphicsItem behavior can clear other selected items. To
+        # support dragging a group without losing selection, capture the set of
+        # selected items before calling the base implementation and restore them
+        # afterwards when appropriate.
         if event.button() == QtCore.Qt.LeftButton:
+            scene = self.scene()
+            prev_selected = set(scene.selectedItems()) if scene is not None else set()
+            was_selected = self in prev_selected
+
+            # Let the default implementation handle selection/toggle semantics
             super().mousePressEvent(event)
+
+            # If the item was already selected before the press, restore the
+            # previous selection so multi-selection is preserved for dragging.
+            if was_selected:
+                for item in prev_selected:
+                    try:
+                        item.setSelected(True)
+                    except Exception:
+                        pass
 
             # If this item is selected, prepare for a possible group drag
             if self.isSelected():
@@ -62,9 +92,46 @@ class TopologyNode(QtWidgets.QGraphicsItem):
                 self._drag_origin = event.scenePos()
                 # store start positions for all selected TopologyNode items
                 self._drag_start_positions = {}
+                self._drag_start_scene_rects = {}
+                # caching and view-mode state
+                self._drag_view = None
+                self._prev_viewport_mode = None
+
                 for item in self.scene().selectedItems():
                     if isinstance(item, TopologyNode):
                         self._drag_start_positions[item] = item.pos()
+                        # store the scene bounding rect at the start so we can update
+                        # both old and new areas during dragging to avoid trails
+                        try:
+                            self._drag_start_scene_rects[item] = item.sceneBoundingRect()
+                        except Exception:
+                            # fallback: compute from pos + boundingRect
+                            br = item.boundingRect()
+                            self._drag_start_scene_rects[item] = QtCore.QRectF(
+                                item.pos(), br.size()
+                            )
+
+                # Switch view to full-viewport updates for the duration of the drag
+                try:
+                    views = self.scene().views()
+                    if views:
+                        self._drag_view = views[0]
+                        # store previous mode if view is valid
+                        if self._drag_view is not None:
+                            self._prev_viewport_mode = self._drag_view.viewportUpdateMode()
+                            self._drag_view.setViewportUpdateMode(
+                                QtWidgets.QGraphicsView.FullViewportUpdate
+                            )
+                except Exception:
+                    self._drag_view = None
+                    self._prev_viewport_mode = None
+
+                # Enable device-coordinate caching on moved items to avoid redraw trails
+                for item in list(self._drag_start_positions.keys()):
+                    try:
+                        item.setCacheMode(QtWidgets.QGraphicsItem.DeviceCoordinateCache)
+                    except Exception:
+                        pass
             return
 
         # Fallback to default behavior for other buttons
@@ -76,8 +143,26 @@ class TopologyNode(QtWidgets.QGraphicsItem):
             if self._drag_origin is None:
                 return
             delta = event.scenePos() - self._drag_origin
+            scene = self.scene()
             for item, start_pos in self._drag_start_positions.items():
+                old_scene_rect = self._drag_start_scene_rects.get(item, item.sceneBoundingRect())
+                new_scene_rect = old_scene_rect.translated(delta)
+
+                # Move the item to the new position
                 item.setPos(start_pos + delta)
+
+                # Force update of the union of old and new areas to avoid visual trails
+                try:
+                    scene.update(old_scene_rect.united(new_scene_rect))
+                except Exception:
+                    scene.update()
+
+                # Ensure the item's visuals (including selection outline) are redrawn
+                item.update()
+
+                # Update connected edges
+                for edge in item.edges:
+                    edge.update_position()
             return
 
         super().mouseMoveEvent(event)
@@ -86,7 +171,22 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         if self._dragging and event.button() == QtCore.Qt.LeftButton:
             self._dragging = False
             self._drag_origin = None
+            # disable caching and restore view update mode
+            for item in list(self._drag_start_positions.keys()):
+                try:
+                    item.setCacheMode(QtWidgets.QGraphicsItem.NoCache)
+                    item.update()
+                except Exception:
+                    pass
+            if self._drag_view is not None and self._prev_viewport_mode is not None:
+                try:
+                    self._drag_view.setViewportUpdateMode(self._prev_viewport_mode)
+                except Exception:
+                    pass
             self._drag_start_positions = {}
+            self._drag_start_scene_rects = {}
+            self._drag_view = None
+            self._prev_viewport_mode = None
             return
         super().mouseReleaseEvent(event)
 
@@ -106,10 +206,15 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         self.edges.append(edge)
 
     def itemChange(self, change, value):
-        # When moving, update connected edges
-        if change == QtWidgets.QGraphicsItem.ItemPositionChange:
+        # Update connected edges when position is changing or has changed
+        if change in (
+            QtWidgets.QGraphicsItem.ItemPositionChange,
+            QtWidgets.QGraphicsItem.ItemPositionHasChanged,
+        ):
             for edge in self.edges:
                 edge.update_position()
+            # Make sure the highlight redraws in the new position
+            self.update()
 
         # Redraw when selection state changes so highlight updates
         if (
@@ -302,19 +407,36 @@ class TopologyScene(QtWidgets.QGraphicsScene):
             self.temp_line = None
 
     def keyPressEvent(self, event):
-        """Handle key press events for deleting nodes or edges."""
+        """Handle key press events for deleting nodes or edges.
+
+        When deleting, collect items first then remove them so iteration
+        isn't invalidated. Clear selection and update the scene to ensure
+        highlights are refreshed/removed immediately.
+        """
         if event.key() == QtCore.Qt.Key_Delete:
-            for item in self.selectedItems():
+            # Snapshot items to delete
+            to_delete = list(self.selectedItems())
+            for item in to_delete:
                 if isinstance(item, TopologyNode):
                     # Remove all edges connected to the node
                     for edge in item.edges[:]:
                         edge.delete_edge()
                     # Remove the node itself
-                    self.removeItem(item)
-                    del self.nodes[item.name]
+                    if item in self.items():
+                        self.removeItem(item)
+                    if item.name in self.nodes:
+                        try:
+                            del self.nodes[item.name]
+                        except Exception:
+                            pass
                 elif isinstance(item, TopologyEdge):
                     # Remove the edge
                     item.delete_edge()
+
+            # Clear selection and refresh the scene/view
+            self.clearSelection()
+            self.update()
+            return
         elif event.key() == QtCore.Qt.Key_Escape:
             # Deselect all selected items
             for item in self.selectedItems():
@@ -340,6 +462,12 @@ class FaultGraph(QtWidgets.QWidget):
         super().__init__()
         layout = QtWidgets.QVBoxLayout(self)
         self.view = QtWidgets.QGraphicsView()
+        # Use a smarter viewport update mode to reduce painting artifacts
+        try:
+            self.view.setViewportUpdateMode(QtWidgets.QGraphicsView.SmartViewportUpdate)
+        except Exception:
+            # Fallback if the enum isn't available
+            self.view.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
         self.scene = TopologyScene()
         self.view.setScene(self.scene)
         layout.addWidget(self.view)
