@@ -225,6 +225,43 @@ class TopologyNode(QtWidgets.QGraphicsItem):
 
         return super().itemChange(change, value)
 
+    def mouseDoubleClickEvent(self, event):
+        """Open a simple dialog to edit the node name for fault nodes.
+
+        Uses QInputDialog.getText to prompt for a new name. Updates the
+        node's label and the scene's nodes dictionary safely (removing the
+        old key and inserting the new one) so other logic that depends on
+        node names keeps working.
+        """
+        # Only open the dialog for left-button double-clicks and fault nodes
+        if event.button() == QtCore.Qt.LeftButton and self.node_type == "fault":
+            # Use a simple input dialog for editing the name
+            new_name, ok = QtWidgets.QInputDialog.getText(
+                None, "Edit Fault", "Fault name:", QtWidgets.QLineEdit.Normal, self.name
+            )
+            if ok and new_name:
+                new_name = str(new_name).strip()
+                if new_name and new_name != self.name:
+                    # Update scene registry safely
+                    try:
+                        if self.name in self.scene_ref.nodes:
+                            del self.scene_ref.nodes[self.name]
+                    except Exception:
+                        pass
+                    self.name = new_name
+                    self.label.setPlainText(self.name)
+                    # Re-center label
+                    self.label.setPos(-self.label.boundingRect().width() / 2, -30)
+                    try:
+                        self.scene_ref.nodes[self.name] = self
+                    except Exception:
+                        pass
+            # Consume the event so default handlers don't also process it
+            return
+
+        # Fallback to default behavior for other node types or buttons
+        super().mouseDoubleClickEvent(event)
+
 
 class TopologyEdge(QtWidgets.QGraphicsLineItem):
     def __init__(self, source, target):
