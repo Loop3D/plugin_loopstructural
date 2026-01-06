@@ -63,6 +63,25 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         return combined_rect.adjusted(-margin, -margin, margin, margin)
 
     def mousePressEvent(self, event):
+        # Support interactive edge creation: Shift + Left-Click starts/finishes a connection
+        if event.button() == QtCore.Qt.LeftButton and (event.modifiers() & QtCore.Qt.ShiftModifier):
+            scene = self.scene()
+            # If no connection in progress, start one from this node
+            if scene.connecting_from is None:
+                scene.connecting_from = self
+                # Start a temporary visual line
+                scene.start_temporary_line(self)
+            elif scene.connecting_from == self:
+                # Cancel the connection
+                scene.connecting_from = None
+                scene.remove_temporary_line()
+            else:
+                # Create an edge between the nodes
+                scene.add_edge_between(scene.connecting_from, self)
+                scene.connecting_from = None
+                scene.remove_temporary_line()
+            return
+
         # Preserve existing selection when clicking a member of a multi-selection.
         # If the clicked item was part of the selection before the press, the
         # default QGraphicsItem behavior can clear other selected items. To
@@ -135,7 +154,7 @@ class TopologyNode(QtWidgets.QGraphicsItem):
             return
 
         # Fallback to default behavior for other buttons
-        super().mousePressEvent(event)
+        super().mousePressEvent(event)  
 
     def mouseMoveEvent(self, event):
         # If we're dragging a selection, move all selected nodes together
@@ -263,6 +282,58 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         super().mouseDoubleClickEvent(event)
 
 
+class EdgeEditDialog(QtWidgets.QDialog):
+    """Simple dialog to edit an edge's relation type and free-form properties.
+
+    Properties are edited as plain text (JSON recommended). The dialog
+    returns the chosen relation type and the properties text.
+    """
+
+    def __init__(self, parent=None, current_type="unspecified", current_props=""):
+        super().__init__(parent)
+        self.setWindowTitle("Edit Edge")
+        self.setModal(True)
+        layout = QtWidgets.QVBoxLayout(self)
+
+        layout.addWidget(QtWidgets.QLabel("Relation type:"))
+        self._combo = QtWidgets.QComboBox(self)
+        # common relation types for topology graphs
+        self._combo.addItems(
+            [
+                "unspecified",
+                "stops on",
+                "faults",
+                "is above",
+                "is below",
+                "overlies",
+                "contacts",
+            ]
+        )
+        if current_type and current_type not in [
+            self._combo.itemText(i) for i in range(self._combo.count())
+        ]:
+            self._combo.addItem(current_type)
+        if current_type:
+            self._combo.setCurrentText(current_type)
+        layout.addWidget(self._combo)
+
+        layout.addWidget(QtWidgets.QLabel("Properties (JSON or free text):"))
+        self._props_edit = QtWidgets.QPlainTextEdit(self)
+        self._props_edit.setPlainText(current_props)
+        self._props_edit.setMinimumHeight(120)
+        layout.addWidget(self._props_edit)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def getResult(self):
+        return self._combo.currentText(), self._props_edit.toPlainText()
+
+
 class TopologyEdge(QtWidgets.QGraphicsLineItem):
     def __init__(self, source, target):
         super().__init__()
@@ -273,6 +344,10 @@ class TopologyEdge(QtWidgets.QGraphicsLineItem):
             QtWidgets.QGraphicsItem.ItemIsSelectable | QtWidgets.QGraphicsItem.ItemIsFocusable
         )
         self.setAcceptHoverEvents(True)
+
+        # user-editable metadata
+        self.relation_type = "unspecified"
+        self.properties = {}
 
         self.source.add_edge(self)
         self.target.add_edge(self)
@@ -315,6 +390,59 @@ class TopologyEdge(QtWidgets.QGraphicsLineItem):
     def hoverLeaveEvent(self, event):
         self.setPen(QtGui.QPen(QtCore.Qt.darkRed, 2))
         super().hoverLeaveEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        # Open the edit dialog when the edge is double-clicked
+        if event.button() == QtCore.Qt.LeftButton:
+            # Show current properties as pretty-printed JSON if possible
+            current_props_text = ""
+            try:
+                import json
+
+                if isinstance(self.properties, dict):
+                    current_props_text = json.dumps(self.properties, indent=2)
+                else:
+                    current_props_text = str(self.properties)
+            except Exception:
+                current_props_text = str(self.properties)
+
+            dlg = EdgeEditDialog(
+                None,
+                current_type=getattr(self, "relation_type", "unspecified"),
+                current_props=current_props_text,
+            )
+            if dlg.exec_() == QtWidgets.QDialog.Accepted:
+                rel_type, props_text = dlg.getResult()
+                self.relation_type = rel_type
+                # Try to interpret properties as JSON, otherwise store raw text
+                try:
+                    import json
+
+                    parsed = json.loads(props_text) if props_text and props_text.strip() else {}
+                    self.properties = parsed
+                except Exception:
+                    self.properties = {"text": props_text}
+
+                # Update tooltip and visual style based on relation type
+                try:
+                    self.setToolTip(f"{self.relation_type}: {self.properties}")
+                except Exception:
+                    pass
+
+                # Simple visual cue: change color for some types
+                color = QtCore.Qt.darkRed
+                rt = (self.relation_type or "").lower()
+                if "stops" in rt or "above" in rt or "overlies" in rt:
+                    color = QtCore.Qt.darkBlue
+                elif "fault" in rt:
+                    color = QtCore.Qt.darkRed
+                else:
+                    color = QtCore.Qt.darkGray
+
+                self.setPen(QtGui.QPen(color, 2))
+            return
+
+        super().mouseDoubleClickEvent(event)
 
 
 class TopologyScene(QtWidgets.QGraphicsScene):
