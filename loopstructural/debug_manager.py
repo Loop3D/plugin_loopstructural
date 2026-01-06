@@ -131,8 +131,110 @@ class DebugManager:
             for c in context_label.replace(" ", "_").lower()
         )
 
+    def _export_gdf(self, gdf, out_path: Path) -> bool:
+        """Export a GeoPandas GeoDataFrame to GeoJSON if geopandas available."""
+        try:
+            import geopandas as gpd
+
+            if isinstance(gdf, gpd.GeoDataFrame):
+                gdf.to_file(out_path, driver="GeoJSON")
+                return True
+        except Exception as err:
+            # geopandas not available or export failed
+            self.plugin.log(message=f"[map2loop] GeoDataFrame export failed: {err}", log_level=1)
+        return False
+
+    def _export_qgis_layer(self, qgs_layer, out_path: Path) -> bool:
+        """Export a QGIS QgsVectorLayer to GeoJSON if available."""
+        try:
+            from qgis.core import QgsCoordinateTransformContext, QgsVectorFileWriter
+
+            # In QGIS 3, writeAsVectorFormatV2 is preferred, but use writeAsVectorFormat for compatibility
+            err = QgsVectorFileWriter.writeAsVectorFormat(
+                qgs_layer, str(out_path), "utf-8", qgs_layer.crs(), "GeoJSON"
+            )
+            # writeAsVectorFormat returns 0 on success in many QGIS versions
+            if err == 0:
+                return True
+            # Some versions return (error, msg)
+            return False
+        except Exception as err:
+            self.plugin.log(message=f"[map2loop] QGIS layer export failed: {err}", log_level=1)
+            return False
+
+    def _prepare_value_for_export(self, safe_label: str, key: str, value):
+        """If value is an exportable object, export it and return a reference dict.
+
+        Otherwise return the original value. The reference dict has the form
+        {"export_path": <path>} so the runner script can re-load exported layers.
+        """
+        debug_dir = self.get_effective_debug_dir()
+        filename_base = f"{safe_label}_{key}"
+
+        # GeoPandas GeoDataFrame
+        try:
+            import geopandas as gpd
+
+            if isinstance(value, gpd.GeoDataFrame):
+                out_path = debug_dir / f"{filename_base}.geojson"
+                if self._export_gdf(value, out_path):
+                    return {"export_path": str(out_path)}
+        except Exception:
+            pass
+
+        # QGIS vector layer
+        try:
+            from qgis.core import QgsVectorLayer
+
+            if isinstance(value, QgsVectorLayer):
+                out_path = debug_dir / f"{filename_base}.geojson"
+                if self._export_qgis_layer(value, out_path):
+                    return {"export_path": str(out_path)}
+        except Exception:
+            pass
+
+        # Not exportable: return as-is
+        return value
+
+    def _prepare_params_for_export(self, context_label: str, params: Any):
+        """Walk params and export embedded spatial layers where possible.
+
+        Returns a payload safe to JSON-serialize where exported objects are
+        replaced with {"export_path": ...} references.
+        """
+        safe_label = self._sanitize_label(context_label)
+
+        def _recurse(obj, prefix=""):
+            # dict
+            if isinstance(obj, dict):
+                out = {}
+                for k, v in obj.items():
+                    out[k] = _recurse(v, f"{prefix}_{k}" if prefix else k)
+                return out
+            # list/tuple
+            if isinstance(obj, (list, tuple)):
+                return [_recurse(v, f"{prefix}_{i}") for i, v in enumerate(obj)]
+            # try to export known types
+            exported = self._prepare_value_for_export(safe_label, prefix or "item", obj)
+            # If export returns same object, return raw value (may fail JSON later)
+            return exported
+
+        return _recurse(params)
+
+    def export_file(self, filename: str, content_bytes: bytes):
+        """Convenience wrapper so callers can ask DebugManager to export a file.
+
+        This centralizes debug file persistence through DebugManager.
+        """
+        return self.save_debug_file(filename, content_bytes)
+
     def log_params(self, context_label: str, params: Any):
-        """Log parameters and persist them when debug mode is enabled."""
+        """Log parameters and persist them when debug mode is enabled.
+
+        Prior to saving params, attempt to export embedded spatial layers and
+        replace them with file references so the saved JSON can be reloaded by
+        the runner script.
+        """
         try:
             self.plugin.log(
                 message=f"[map2loop] {context_label} parameters: {str(params)}",
@@ -148,12 +250,15 @@ class DebugManager:
 
         if self.is_debug():
             try:
+                # Prepare params by exporting embedded layers where applicable
+                payload = params if isinstance(params, dict) else {"_payload": params}
+                safe_payload = self._prepare_params_for_export(context_label, payload)
+
                 debug_dir = self.get_effective_debug_dir()
                 safe_label = self._sanitize_label(context_label)
                 file_path = debug_dir / f"{safe_label}_params.json"
-                payload = params if isinstance(params, dict) else {"_payload": params}
                 with open(file_path, "w", encoding="utf-8") as file_handle:
-                    json.dump(payload, file_handle, ensure_ascii=False, indent=2, default=str)
+                    json.dump(safe_payload, file_handle, ensure_ascii=False, indent=2, default=str)
                 self.plugin.log(
                     message=f"[map2loop] Params saved to: {file_path}",
                     log_level=0,
@@ -260,3 +365,42 @@ if __name__ == "__main__":
                 message=f"[map2loop] Failed to create runner script: {err}",
                 log_level=1,
             )
+
+    def export_layer(self, layer, name_prefix: str):
+        """Public wrapper to export a layer or GeoDataFrame via the DebugManager.
+
+        Returns the path to the exported file (string) on success, or None on failure.
+        """
+        if not self.is_debug():
+            return None
+        safe_prefix = self._sanitize_label(name_prefix)
+        debug_dir = self.get_effective_debug_dir()
+
+        # Try GeoPandas GeoDataFrame
+        try:
+            import geopandas as gpd
+
+            if isinstance(layer, gpd.GeoDataFrame):
+                out_path = debug_dir / f"{safe_prefix}.geojson"
+                if self._export_gdf(layer, out_path):
+                    return str(out_path)
+        except Exception:
+            pass
+
+        # Try QGIS vector layer
+        try:
+            from qgis.core import QgsVectorLayer
+
+            if isinstance(layer, QgsVectorLayer):
+                out_path = debug_dir / f"{safe_prefix}.geojson"
+                if self._export_qgis_layer(layer, out_path):
+                    return str(out_path)
+        except Exception:
+            pass
+
+        # Unsupported type or export failed
+        self.plugin.log(
+            message=f"[map2loop] export_layer: Could not export object of type {type(layer)}",
+            log_level=1,
+        )
+        return None

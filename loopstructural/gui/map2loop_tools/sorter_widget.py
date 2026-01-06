@@ -82,22 +82,11 @@ class SorterWidget(QWidget):
         self._debug = debug_manager
 
     def _export_layer_for_debug(self, layer, name_prefix: str):
-        if not (self._debug and self._debug.is_debug()):
-            return None
+        # Prefer DebugManager.export_layer
         try:
-            debug_dir = self._debug.get_effective_debug_dir()
-            out_path = debug_dir / f"{name_prefix}.gpkg"
-            options = QgsVectorFileWriter.SaveVectorOptions()
-            options.driverName = "GPKG"
-            options.layerName = layer.name()
-            res = QgsVectorFileWriter.writeAsVectorFormatV3(
-                layer,
-                str(out_path),
-                QgsProject.instance().transformContext(),
-                options,
-            )
-            if res[0] == QgsVectorFileWriter.NoError:
-                return str(out_path)
+            if getattr(self, '_debug', None) and hasattr(self._debug, 'export_layer'):
+                return self._debug.export_layer(layer, name_prefix)
+
         except Exception as err:
             self._debug.plugin.log(
                 message=f"[map2loop] Failed to export layer '{name_prefix}': {err}",
