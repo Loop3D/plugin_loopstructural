@@ -15,7 +15,8 @@ class TopologyNode(QtWidgets.QGraphicsItem):
         # Set shape based on node type
         if node_type == "fault":
             self.shape_item = QGraphicsSvgItem(os.path.join(os.path.dirname(__file__), "fault.svg"))
-        elif node_type == "stratigraphy":
+        elif node_type == "stratigraphic_unit":
+            # keep using the existing SVG asset named 'stratigraphy.svg'
             self.shape_item = QGraphicsSvgItem(
                 os.path.join(os.path.dirname(__file__), "stratigraphy.svg")
             )
@@ -154,7 +155,7 @@ class TopologyNode(QtWidgets.QGraphicsItem):
             return
 
         # Fallback to default behavior for other buttons
-        super().mousePressEvent(event)  
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         # If we're dragging a selection, move all selected nodes together
@@ -657,13 +658,13 @@ class FaultGraph(QtWidgets.QWidget):
         menu = QtWidgets.QMenu(self)
 
         # Add options for different node types
-        fault_action = menu.addAction("Add Fault Node")
-        stratigraphy_action = menu.addAction("Add Stratigraphy Node")
-        unconformity_action = menu.addAction("Add Unconformity Node")
+        fault_action = menu.addAction("Add Fault")
+        stratigraphy_action = menu.addAction("Add Stratigraphic Unit")
+        unconformity_action = menu.addAction("Add Unconformity")
 
         # Connect actions to methods
         fault_action.triggered.connect(lambda: self.add_node("fault"))
-        stratigraphy_action.triggered.connect(lambda: self.add_node("stratigraphy"))
+        stratigraphy_action.triggered.connect(lambda: self.add_node("stratigraphic_unit"))
         unconformity_action.triggered.connect(lambda: self.add_node("unconformity"))
 
         # Show the menu below the button
