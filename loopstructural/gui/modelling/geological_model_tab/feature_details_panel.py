@@ -561,18 +561,8 @@ class BaseFeatureDetailsPanel(QWidget):
             if not hasattr(self, 'feature') or self.feature is None:
                 return
             # StructuralFrame consists of three sub-features
-            if issubclass(type(self.feature), StructuralFrame):
-                for i in range(3):
-                    try:
-                        builder = getattr(self.feature[i], 'builder', None)
-                        if builder is not None:
-                            builder.build()
-                    except Exception:
-                        continue
-            else:
-                builder = getattr(self.feature, 'builder', None)
-                if builder is not None:
-                    builder.build()
+            self.model_manager.update_feature(self.feature.name)
+
         except Exception:
             logger.debug('Debounced rebuild failed', exc_info=True)
 
