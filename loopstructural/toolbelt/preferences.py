@@ -7,6 +7,7 @@ settings used across the UI and background services.
 """
 
 # standard
+import logging
 from dataclasses import asdict, dataclass, fields
 
 # PyQGIS
@@ -45,6 +46,21 @@ class PlgOptionsManager:
     """
 
     @staticmethod
+    def _configure_logging(debug_mode: bool):
+        """Configure Python logging level according to plugin debug setting.
+
+        When debug_mode is True the root logger level is set to DEBUG so that
+        any logger.debug(...) calls in the plugin will be emitted. When False
+        the level is set to INFO to reduce verbosity.
+        """
+        try:
+            root = logging.getLogger()
+            root.setLevel(logging.DEBUG if bool(debug_mode) else logging.INFO)
+        except Exception:
+            # Best-effort: do not raise from logging configuration issues
+            pass
+
+    @staticmethod
     def get_plg_settings() -> PlgSettingsStructure:
         """Load and return plugin settings as a PlgSettingsStructure instance.
 
@@ -73,6 +89,9 @@ class PlgOptionsManager:
         options = PlgSettingsStructure(*li_settings_values)
 
         settings.endGroup()
+
+        # Ensure logging level matches the loaded debug_mode preference
+        PlgOptionsManager._configure_logging(options.debug_mode)
 
         return options
 
@@ -171,6 +190,13 @@ class PlgOptionsManager:
         try:
             settings.setValue(key, value)
             out_value = True
+
+            # If debug mode was toggled, immediately apply logging configuration
+            if key == "debug_mode":
+                try:
+                    PlgOptionsManager._configure_logging(value)
+                except Exception:
+                    pass
         except Exception as err:
             log_hdlr.PlgLogger.log(
                 message="Error occurred trying to set settings: {}.Trace: {}".format(key, err)
