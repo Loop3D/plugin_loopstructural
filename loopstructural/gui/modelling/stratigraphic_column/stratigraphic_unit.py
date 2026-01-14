@@ -130,20 +130,46 @@ class StratigraphicUnitWidget(QWidget):
         data : dict or None
             Dictionary containing 'name' and 'colour' keys. If None, defaults are used.
         """
+        # Safely update internal state first
         if data:
             self.name = str(data.get("name", ""))
             self.colour = data.get("colour", "")
-            self.lineEditName.setText(self.name)
-            self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
-            # self.lineEditColour.setText(self.colour)
         else:
             self.name = ""
             self.colour = ""
-            self.lineEditName.clear()
-            self.setStyleSheet("")
-            # self.lineEditColour.clear()
 
-        self.validateFields()
+        # Guard all direct Qt calls since the wrapped C++ objects may have been deleted
+        try:
+            if data:
+                if hasattr(self, 'lineEditName') and self.lineEditName is not None:
+                    try:
+                        self.lineEditName.setText(self.name)
+                    except RuntimeError:
+                        # Widget has been deleted; abort GUI updates
+                        return
+                try:
+                    self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
+                except RuntimeError:
+                    return
+            else:
+                if hasattr(self, 'lineEditName') and self.lineEditName is not None:
+                    try:
+                        self.lineEditName.clear()
+                    except RuntimeError:
+                        return
+                try:
+                    self.setStyleSheet("")
+                except RuntimeError:
+                    return
+
+            # Validate fields if widgets still exist
+            try:
+                self.validateFields()
+            except RuntimeError:
+                return
+        except RuntimeError:
+            # Catch any unexpected RuntimeError from underlying Qt objects
+            return
 
     def getData(self) -> dict:
         """Return the widget data as a dictionary.

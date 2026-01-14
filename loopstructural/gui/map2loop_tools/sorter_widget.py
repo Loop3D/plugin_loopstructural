@@ -3,7 +3,7 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsRasterLayer
+from qgis.core import QgsProject, QgsRasterLayer, QgsVectorFileWriter
 from qgis.PyQt import uic
 
 from loopstructural.main.helpers import get_layer_names
@@ -18,7 +18,7 @@ class SorterWidget(QWidget):
     sorting algorithms.
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sorter widget.
 
         Parameters
@@ -32,6 +32,7 @@ class SorterWidget(QWidget):
         if data_manager is None:
             raise ValueError("data_manager must be provided")
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "sorter_widget.ui")
@@ -75,6 +76,55 @@ class SorterWidget(QWidget):
 
         # Initial state update
         self._on_algorithm_changed()
+
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _export_layer_for_debug(self, layer, name_prefix: str):
+        # Prefer DebugManager.export_layer
+        try:
+            if getattr(self, '_debug', None) and hasattr(self._debug, 'export_layer'):
+                return self._debug.export_layer(layer, name_prefix)
+
+        except Exception as err:
+            self._debug.plugin.log(
+                message=f"[map2loop] Failed to export layer '{name_prefix}': {err}",
+                log_level=2,
+            )
+        return None
+
+    def _serialize_layer(self, layer, name_prefix: str):
+        try:
+            export_path = self._export_layer_for_debug(layer, name_prefix)
+            return {
+                "name": layer.name(),
+                "id": layer.id(),
+                "provider": layer.providerType() if hasattr(layer, "providerType") else None,
+                "source": layer.source() if hasattr(layer, "source") else None,
+                "export_path": export_path,
+            }
+        except Exception:
+            return str(layer)
+
+    def _serialize_params_for_logging(self, params, context_label: str):
+        serialized = {}
+        for key, value in params.items():
+            if hasattr(value, "source") or hasattr(value, "id"):
+                serialized[key] = self._serialize_layer(value, f"{context_label}_{key}")
+            else:
+                serialized[key] = value
+        return serialized
+
+    def _log_params(self, context_label: str):
+        if getattr(self, "_debug", None):
+            try:
+                self._debug.log_params(
+                    context_label=context_label,
+                    params=self._serialize_params_for_logging(self.get_parameters(), context_label),
+                )
+            except Exception:
+                pass
 
     def _guess_layers(self):
         """Automatically detect and set appropriate field names using ColumnMatcher."""
@@ -239,6 +289,8 @@ class SorterWidget(QWidget):
         """Run the stratigraphic sorter algorithm."""
         from ...main.m2l_api import sort_stratigraphic_column
 
+        self._log_params("sorter_widget_run")
+
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
@@ -272,7 +324,7 @@ class SorterWidget(QWidget):
                 'geology': self.geologyLayerComboBox.currentLayer(),
                 'contacts': self.contactsLayerComboBox.currentLayer(),
                 'sorting_algorithm': algorithm_name,
-                'unit_name_column': self.unitNameFieldComboBox.currentField(),
+                'unit_name_field': self.unitNameFieldComboBox.currentField(),
                 'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
             }
 
@@ -294,7 +346,19 @@ class SorterWidget(QWidget):
                 ]
                 kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
 
-            result = sort_stratigraphic_column(**kwargs)
+            result = sort_stratigraphic_column(
+                **kwargs,
+                debug_manager=self._debug,
+            )
+            if self._debug and self._debug.is_debug():
+                try:
+                    payload = "\n".join(result) if result else ""
+                    self._debug.save_debug_file("sorter_result.txt", payload.encode("utf-8"))
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save sorter debug output: {err}",
+                        log_level=2,
+                    )
             if result and len(result) > 0:
                 # Clear and update stratigraphic column in data_manager
                 self.data_manager.clear_stratigraphic_column()
@@ -310,6 +374,11 @@ class SorterWidget(QWidget):
                 QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
 
         except Exception as e:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Sorter run failed: {e}",
+                    log_level=2,
+                )
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

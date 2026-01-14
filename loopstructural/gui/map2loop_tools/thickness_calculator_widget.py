@@ -2,7 +2,8 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
+from qgis.core import QgsProject, QgsVectorFileWriter
 from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
@@ -18,7 +19,7 @@ class ThicknessCalculatorWidget(QWidget):
     calculation algorithms.
     """
 
-    def __init__(self, parent=None, data_manager=None):
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the thickness calculator widget.
 
         Parameters
@@ -30,6 +31,7 @@ class ThicknessCalculatorWidget(QWidget):
         """
         super().__init__(parent)
         self.data_manager = data_manager
+        self._debug = debug_manager
 
         # Load the UI file
         ui_path = os.path.join(os.path.dirname(__file__), "thickness_calculator_widget.ui")
@@ -67,6 +69,55 @@ class ThicknessCalculatorWidget(QWidget):
 
         # Initial state update
         self._on_calculator_type_changed()
+
+    def set_debug_manager(self, debug_manager):
+        """Attach a debug manager instance."""
+        self._debug = debug_manager
+
+    def _export_layer_for_debug(self, layer, name_prefix: str):
+        # Prefer using DebugManager.export_layer if available
+        try:
+            if getattr(self, '_debug', None) and hasattr(self._debug, 'export_layer'):
+                exported = self._debug.export_layer(layer, name_prefix)
+                return exported
+
+        except Exception as err:
+            self._debug.plugin.log(
+                message=f"[map2loop] Failed to export layer '{name_prefix}': {err}",
+                log_level=2,
+            )
+        return None
+
+    def _serialize_layer(self, layer, name_prefix: str):
+        try:
+            export_path = self._export_layer_for_debug(layer, name_prefix)
+            return {
+                "name": layer.name(),
+                "id": layer.id(),
+                "provider": layer.providerType() if hasattr(layer, "providerType") else None,
+                "source": layer.source() if hasattr(layer, "source") else None,
+                "export_path": export_path,
+            }
+        except Exception:
+            return str(layer)
+
+    def _serialize_params_for_logging(self, params, context_label: str):
+        serialized = {}
+        for key, value in params.items():
+            if hasattr(value, "source") or hasattr(value, "id"):
+                serialized[key] = self._serialize_layer(value, f"{context_label}_{key}")
+            else:
+                serialized[key] = value
+        return serialized
+
+    def _log_params(self, context_label: str, params=None):
+        if getattr(self, "_debug", None):
+            try:
+                payload = params if params is not None else self.get_parameters()
+                payload = self._serialize_params_for_logging(payload, context_label)
+                self._debug.log_params(context_label=context_label, params=payload)
+            except Exception:
+                pass
 
     def _guess_layers(self):
         """Attempt to auto-select layers based on common naming conventions."""
@@ -172,6 +223,8 @@ class ThicknessCalculatorWidget(QWidget):
         """Run the thickness calculator algorithm using the map2loop API."""
         from ...main.m2l_api import calculate_thickness
 
+        self._log_params("thickness_calculator_widget_run", self.get_parameters())
+
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
@@ -225,14 +278,31 @@ class ThicknessCalculatorWidget(QWidget):
                 if strati_order:
                     kwargs['stratigraphic_order'] = strati_order
 
-            result = calculate_thickness(**kwargs)
+            result = calculate_thickness(
+                **kwargs,
+                debug_manager=self._debug,
+            )
+            if self._debug and self._debug.is_debug():
+                try:
+                    self._debug.save_debug_file("thickness_result.txt", str(result).encode("utf-8"))
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save thickness debug output: {err}",
+                        log_level=2,
+                    )
 
             for idx in result['thicknesses'].index:
                 u = result['thicknesses'].loc[idx, 'name']
                 thick = result['thicknesses'].loc[idx, 'ThicknessStdDev']
                 if thick > 0:
-
-                    self.data_manager._stratigraphic_column.get_unit_by_name(u).thickness = thick
+                    unit = self.data_manager._stratigraphic_column.get_unit_by_name(u)
+                    if unit:
+                        unit.thickness = thick
+                    else:
+                        self.data_manager.logger(
+                            f"Warning: Unit '{u}' not found in stratigraphic column.",
+                            level=QLabel.Warning,
+                        )
             # Save debugging files if checkbox is checked
             if self.saveDebugCheckBox.isChecked():
                 if 'lines' in result:
@@ -256,6 +326,11 @@ class ThicknessCalculatorWidget(QWidget):
                 QMessageBox.warning(self, "Error", "No thickness data was calculated.")
 
         except Exception as e:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Thickness calculation failed: {e}",
+                    log_level=2,
+                )
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
