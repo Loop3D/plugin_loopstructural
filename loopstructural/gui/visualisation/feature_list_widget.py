@@ -1,8 +1,11 @@
+import logging
 from typing import Optional, Union
 
 from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from LoopStructural.datatypes import VectorPoints
+
+logger = logging.getLogger(__name__)
 
 
 class FeatureListWidget(QWidget):
@@ -183,22 +186,22 @@ class FeatureListWidget(QWidget):
                     source_feature=feature_name,
                     source_type='feature_data',
                 )
-        print(f"Adding data to feature: {feature_name}")
+        logger.debug(f"Adding data to feature: {feature_name}")
 
     def add_model_bounding_box(self):
         if not self.model_manager:
-            print("Model manager is not set.")
+            logger.debug("Model manager is not set.")
             return
         bb = self.model_manager.model.bounding_box.vtk().outline()
         self.viewer.add_mesh_object(
             bb, name='model_bounding_box', source_feature='__model__', source_type='bounding_box'
         )
         # Logic for adding model bounding box
-        print("Adding model bounding box...")
+        logger.debug("Adding model bounding box...")
 
     def add_fault_surfaces(self):
         if not self.model_manager:
-            print("Model manager is not set.")
+            logger.debug("Model manager is not set.")
             return
         self.model_manager.update_all_features(subset='faults')
         fault_surfaces = self.model_manager.model.get_fault_surfaces()
@@ -210,11 +213,11 @@ class FeatureListWidget(QWidget):
                 source_type='fault_surface',
                 isovalue=0.0,
             )
-        print("Adding fault surfaces...")
+        logger.debug("Adding fault surfaces...")
 
     def add_stratigraphic_surfaces(self):
         if not self.model_manager:
-            print("Model manager is not set.")
+            logger.debug("Model manager is not set.")
             return
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
         for surface in stratigraphic_surfaces:
@@ -238,8 +241,8 @@ class FeatureListWidget(QWidget):
         'model_updated' notifications the previous behaviour (re-add all
         affected feature representations) is preserved.
         """
-        print(f"Model update event received: {event} with args: {args}")
-        print([f"Mesh: {name}, Meta: {meta}" for name, meta in self.viewer.meshes.items()])
+        logger.debug(f"Model update event received: {event} with args: {args}")
+        logger.debug([f"Mesh: {name}, Meta: {meta}" for name, meta in self.viewer.meshes.items()])
         if not self.model_manager or not self.viewer:
             return
         if event not in ('model_updated', 'feature_updated'):
@@ -253,14 +256,14 @@ class FeatureListWidget(QWidget):
             if feature_name is not None:
                 if meta.get('source_feature', None) == feature_name:
                     affected_features.add(feature_name)
-                    print(f"Updating visualisation for feature: {feature_name}")
+                    logger.debug(f"Updating visualisation for feature: {feature_name}")
                     continue
 
             sf = meta.get('source_feature', None)
 
             if sf is not None:
                 affected_features.add(sf)
-        print(f"Affected features to update: {affected_features}")
+        logger.debug(f"Affected features to update: {affected_features}")
         # For each affected feature, only update existing meshes tied to that feature
         for feature_name in affected_features:
             # collect mesh names that belong to this feature (snapshot to avoid mutation while iterating)
@@ -269,7 +272,7 @@ class FeatureListWidget(QWidget):
                 for name, meta in list(self.viewer.meshes.items())
                 if meta.get('source_feature') == feature_name
             ]
-            print(f"Re-adding meshes for feature: {feature_name}: {meshes_for_feature}")
+            logger.debug(f"Re-adding meshes for feature: {feature_name}: {meshes_for_feature}")
 
             for mesh_name in meshes_for_feature:
                 meta = self.viewer.meshes.get(mesh_name, {})
@@ -280,9 +283,9 @@ class FeatureListWidget(QWidget):
                 # remove existing actor/entry so add_mesh_object can recreate with same name
                 try:
                     self.viewer.remove_object(mesh_name)
-                    print(f"Removed existing mesh: {mesh_name}")
+                    logger.debug(f"Removed existing mesh: {mesh_name}")
                 except Exception:
-                    print(f"Failed to remove existing mesh: {mesh_name}")
+                    logger.debug(f"Failed to remove existing mesh: {mesh_name}")
                     pass
 
                 try:
@@ -297,7 +300,7 @@ class FeatureListWidget(QWidget):
 
                             if surfaces:
                                 add_name = mesh_name
-                                print(
+                                logger.debug(
                                     f"Re-adding surface for feature: {feature_name} with isovalue: {isovalue}"
                                 )
                                 self.viewer.add_mesh_object(
@@ -310,7 +313,7 @@ class FeatureListWidget(QWidget):
                                 )
                                 continue
                         except Exception as e:
-                            print(
+                            logger.debug(
                                 f"Failed to find matching surface for feature: {feature_name} with isovalue: {isovalue}, trying all surfaces. Error: {e}"
                             )
 
@@ -323,7 +326,7 @@ class FeatureListWidget(QWidget):
                                 None,
                             )
                             if match is not None:
-                                print(f"Re-adding fault surface for: {feature_name}")
+                                logger.debug(f"Re-adding fault surface for: {feature_name}")
                                 self.viewer.add_mesh_object(
                                     match.vtk(),
                                     name=mesh_name,
@@ -334,7 +337,7 @@ class FeatureListWidget(QWidget):
                                 )
                                 continue
                         except Exception as e:
-                            print(f"Failed to re-add fault surface for {feature_name}: {e}")
+                            logger.debug(f"Failed to re-add fault surface for {feature_name}: {e}")
 
                     # Stratigraphic surfaces (added via add_stratigraphic_surfaces)
                     if source_type == 'stratigraphic_surface':
@@ -345,7 +348,7 @@ class FeatureListWidget(QWidget):
                                 None,
                             )
                             if match is not None:
-                                print(f"Re-adding stratigraphic surface for: {feature_name}")
+                                logger.debug(f"Re-adding stratigraphic surface for: {feature_name}")
                                 self.viewer.add_mesh_object(
                                     match.vtk(),
                                     name=mesh_name,
@@ -356,7 +359,9 @@ class FeatureListWidget(QWidget):
                                 )
                                 continue
                         except Exception as e:
-                            print(f"Failed to re-add stratigraphic surface for {feature_name}: {e}")
+                            logger.debug(
+                                f"Failed to re-add stratigraphic surface for {feature_name}: {e}"
+                            )
 
                     # Vectors, points, scalar fields and other feature related objects
                     if source_type == 'feature_vector' or source_type == 'feature_vectors':
@@ -364,41 +369,43 @@ class FeatureListWidget(QWidget):
                             self.add_vector_field(feature_name)
                             continue
                         except Exception as e:
-                            print(f"Failed to re-add vector field for {feature_name}: {e}")
+                            logger.debug(f"Failed to re-add vector field for {feature_name}: {e}")
 
                     if source_type in ('feature_points', 'feature_data'):
                         try:
                             self.add_data(feature_name)
                             continue
                         except Exception as e:
-                            print(f"Failed to re-add data for {feature_name}: {e}")
+                            logger.debug(f"Failed to re-add data for {feature_name}: {e}")
 
                     if source_type == 'feature_scalar':
                         try:
                             self.add_scalar_field(feature_name)
                             continue
                         except Exception as e:
-                            print(f"Failed to re-add scalar field for {feature_name}: {e}")
+                            logger.debug(f"Failed to re-add scalar field for {feature_name}: {e}")
 
                     if source_type == 'bounding_box' or mesh_name == 'model_bounding_box':
                         try:
                             self.add_model_bounding_box()
                             continue
                         except Exception as e:
-                            print(f"Failed to re-add bounding box: {e}")
+                            logger.debug(f"Failed to re-add bounding box: {e}")
 
                     # Fallback: if nothing matched, attempt to re-add by using viewer metadata
                     # Many viewer entries store the vtk source under meta['vtk'] or similar; try best-effort
                     try:
                         vtk_src = meta.get('vtk')
                         if vtk_src is not None:
-                            print(f"Fallback re-add for mesh {mesh_name}")
+                            logger.debug(f"Fallback re-add for mesh {mesh_name}")
                             self.viewer.add_mesh_object(vtk_src, name=mesh_name, **kwargs)
                     except Exception:
                         pass
 
                 except Exception as e:
-                    print(f"Failed to update visualisation for feature: {feature_name}. Error: {e}")
+                    logger.debug(
+                        f"Failed to update visualisation for feature: {feature_name}. Error: {e}"
+                    )
 
         # Refresh the viewer
         try:
