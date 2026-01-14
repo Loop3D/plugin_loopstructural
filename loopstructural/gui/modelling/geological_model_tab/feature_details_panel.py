@@ -553,6 +553,7 @@ class BaseFeatureDetailsPanel(QWidget):
             self._rebuild_timer.setInterval(delay_ms)
             self._rebuild_timer.start()
         except Exception:
+            logger.debug('Failed to schedule debounced rebuild', exc_info=True)
             pass
 
     def _perform_rebuild(self):
@@ -577,7 +578,7 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
             raise ValueError("Fault must be provided.")
         self.fault = fault
         dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
-        print('fault dip:', dip)
+        
         pitch = 0
         self.fault_parameters = {
             'displacement': fault.displacement,

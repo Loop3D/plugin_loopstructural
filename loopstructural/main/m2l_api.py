@@ -1,5 +1,3 @@
-from unittest import runner
-
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -12,7 +10,6 @@ from map2loop.sorter import (
 )
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
-from pkg_resources import run_main
 
 from loopstructural.main.debug import export
 
@@ -106,7 +103,7 @@ def extract_basal_contacts(
             layers = {"geology": geology, "faults": faults}
             pickles = {"contact_extractor": contact_extractor}
             # export layers and pickles first to get the actual filenames used
-            exported = export_debug_package(
+            _exported = export_debug_package(
                 debug_manager,
                 runner_script_name="run_extract_basal_contacts.py",
                 m2l_object=contact_extractor,

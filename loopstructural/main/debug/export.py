@@ -1,8 +1,6 @@
-import json
 import pickle
-from doctest import debug
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def export_debug_package(
@@ -30,12 +28,10 @@ def export_debug_package(
                 exported[name] = pkl_name
             except Exception as e:
                 debug_manager.logger(f"Failed to save debug file '{pkl_name}': {e}")
+    with open(Path(__file__).parent / 'template.txt', 'r') as f:
+        template = f.read()
+        template = template.format(runner_name=runner_script_name.replace('.py', ''))
 
-    script = (
-        open(Path(__file__).parent / 'template.txt')
-        .read()
-        .format(runner_name=runner_script_name.replace('.py', ''))
-    )
-    debug_manager.save_debug_file(runner_script_name, script.encode("utf-8"))
+    debug_manager.save_debug_file(runner_script_name, template.encode("utf-8"))
     debug_manager.logger(f"Exported debug package with runner script '{runner_script_name}'")
     return exported
