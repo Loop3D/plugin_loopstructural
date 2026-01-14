@@ -1,3 +1,5 @@
+from unittest import runner
+
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -10,6 +12,9 @@ from map2loop.sorter import (
 )
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
+from pkg_resources import run_main
+
+from loopstructural.main.debug import export
 
 from loopstructural.main.debug import export
 
