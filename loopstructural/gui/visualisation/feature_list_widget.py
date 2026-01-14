@@ -33,7 +33,31 @@ class FeatureListWidget(QWidget):
 
         # Populate the feature list
         self.update_feature_list()
-        self.model_manager.observers.append(self.update_feature_list)
+        # register observer to refresh list and viewer when model changes
+        if self.model_manager is not None:
+            # Attach to specific model events using the Observable framework
+            try:
+                # listeners will receive (observable, event, *args)
+                # attach wrappers that match the Observable callback signature
+                self._disp_update = self.model_manager.attach(
+                    lambda _obs, _event, *a, **k: self.update_feature_list(), 'model_updated'
+                )
+                # also listen for model and feature updates so visualisation can refresh
+                # forward event and args into the handler so it can act on specific surfaces
+                self._disp_feature = self.model_manager.attach(
+                    lambda _obs, _event, *a, **k: self._on_model_update(_event, *a), 'model_updated'
+                )
+                self._disp_feature2 = self.model_manager.attach(
+                    lambda _obs, _event, *a, **k: self._on_model_update(_event, *a),
+                    'feature_updated',
+                )
+            except Exception:
+                # Fall back to legacy observers list if available
+                try:
+                    self.model_manager.observers.append(self.update_feature_list)
+                    self.model_manager.observers.append(self._on_model_update)
+                except Exception:
+                    pass
 
     def update_feature_list(self):
         if not self.model_manager:
@@ -94,17 +118,50 @@ class FeatureListWidget(QWidget):
 
     def add_scalar_field(self, feature_name):
         scalar_field = self.model_manager.model[feature_name].scalar_field()
-        self.viewer.add_mesh_object(scalar_field.vtk(), name=f'{feature_name}_scalar_field')
+        self.viewer.add_mesh_object(
+            scalar_field.vtk(),
+            name=f'{feature_name}_scalar_field',
+            source_feature=feature_name,
+            source_type='feature_scalar',
+        )
 
     def add_surface(self, feature_name):
         surfaces = self.model_manager.model[feature_name].surfaces()
-        for surface in surfaces:
-            self.viewer.add_mesh_object(surface.vtk(), name=f'{feature_name}_surface')
+        for i, surface in enumerate(surfaces):
+            # ensure unique names for multiple surfaces per feature
+            mesh_name = f'{feature_name}_surface' if i == 0 else f'{feature_name}_surface_{i+1}'
+            # try to determine an isovalue for this surface (may be an attribute or encoded in name)
+            isovalue = None
+            try:
+                isovalue = getattr(surface, 'isovalue', None)
+            except Exception:
+                isovalue = None
+            if isovalue is None:
+                # attempt to parse trailing numeric suffix in the surface name
+                try:
+                    parts = str(surface.name).rsplit('_', 1)
+                    if len(parts) == 2:
+                        isovalue = float(parts[1])
+                except Exception:
+                    isovalue = None
+
+            self.viewer.add_mesh_object(
+                surface.vtk(),
+                name=mesh_name,
+                source_feature=feature_name,
+                source_type='feature_surface',
+                isovalue=isovalue,
+            )
 
     def add_vector_field(self, feature_name):
         vector_field = self.model_manager.model[feature_name].vector_field()
         scale = self._get_vector_scale()
-        self.viewer.add_mesh_object(vector_field.vtk(scale=scale), name=f'{feature_name}_vector_field')
+        self.viewer.add_mesh_object(
+            vector_field.vtk(scale=scale),
+            name=f'{feature_name}_vector_field',
+            source_feature=feature_name,
+            source_type='feature_vector',
+        )
 
     def add_data(self, feature_name):
         data = self.model_manager.model[feature_name].get_data()
@@ -114,10 +171,18 @@ class FeatureListWidget(QWidget):
                 scale = self._get_vector_scale()
                 # tolerance is None means all points are shown
                 self.viewer.add_mesh_object(
-                    d.vtk(scale=scale, tolerance=None), name=f'{feature_name}_{d.name}_points'
+                    d.vtk(scale=scale, tolerance=None),
+                    name=f'{feature_name}_{d.name}_points',
+                    source_feature=feature_name,
+                    source_type='feature_points',
                 )
             else:
-                self.viewer.add_mesh_object(d.vtk(), name=f'{feature_name}_{d.name}')
+                self.viewer.add_mesh_object(
+                    d.vtk(),
+                    name=f'{feature_name}_{d.name}',
+                    source_feature=feature_name,
+                    source_type='feature_data',
+                )
         print(f"Adding data to feature: {feature_name}")
 
     def add_model_bounding_box(self):
@@ -125,7 +190,9 @@ class FeatureListWidget(QWidget):
             print("Model manager is not set.")
             return
         bb = self.model_manager.model.bounding_box.vtk().outline()
-        self.viewer.add_mesh_object(bb, name='model_bounding_box')
+        self.viewer.add_mesh_object(
+            bb, name='model_bounding_box', source_feature='__model__', source_type='bounding_box'
+        )
         # Logic for adding model bounding box
         print("Adding model bounding box...")
 
@@ -133,9 +200,16 @@ class FeatureListWidget(QWidget):
         if not self.model_manager:
             print("Model manager is not set.")
             return
+        self.model_manager.update_all_features(subset='faults')
         fault_surfaces = self.model_manager.model.get_fault_surfaces()
         for surface in fault_surfaces:
-            self.viewer.add_mesh_object(surface.vtk(), name=f'fault_surface_{surface.name}')
+            self.viewer.add_mesh_object(
+                surface.vtk(),
+                name=f'fault_surface_{surface.name}',
+                source_feature=surface.name,
+                source_type='fault_surface',
+                isovalue=0.0,
+            )
         print("Adding fault surfaces...")
 
     def add_stratigraphic_surfaces(self):
@@ -144,5 +218,190 @@ class FeatureListWidget(QWidget):
             return
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
         for surface in stratigraphic_surfaces:
-            self.viewer.add_mesh_object(surface.vtk(), name=surface.name,color=surface.colour)
-        print("Adding stratigraphic surfaces...")
+            self.viewer.add_mesh_object(
+                surface.vtk(),
+                name=surface.name,
+                color=surface.colour,
+                source_feature=surface.name,
+                source_type='stratigraphic_surface',
+            )
+
+    def _on_model_update(self, event: str, *args):
+        """Called when the underlying model_manager notifies observers.
+
+        We remove any meshes that were created from model features and re-add
+        them from the current model so visualisation follows model changes.
+
+        If the notification is for a specific feature (event == 'feature_updated')
+        and an isovalue is provided (either as second arg or stored in viewer
+        metadata), only the matching surface will be re-added. For generic
+        'model_updated' notifications the previous behaviour (re-add all
+        affected feature representations) is preserved.
+        """
+        print(f"Model update event received: {event} with args: {args}")
+        print([f"Mesh: {name}, Meta: {meta}" for name, meta in self.viewer.meshes.items()])
+        if not self.model_manager or not self.viewer:
+            return
+        if event not in ('model_updated', 'feature_updated'):
+            return
+        feature_name = None
+        if event == 'feature_updated' and len(args) >= 1:
+            feature_name = args[0]
+        # Build a set of features that currently have viewer meshes
+        affected_features = set()
+        for _, meta in list(self.viewer.meshes.items()):
+            if feature_name is not None:
+                if meta.get('source_feature', None) == feature_name:
+                    affected_features.add(feature_name)
+                    print(f"Updating visualisation for feature: {feature_name}")
+                    continue
+
+            sf = meta.get('source_feature', None)
+
+            if sf is not None:
+                affected_features.add(sf)
+        print(f"Affected features to update: {affected_features}")
+        # For each affected feature, only update existing meshes tied to that feature
+        for feature_name in affected_features:
+            # collect mesh names that belong to this feature (snapshot to avoid mutation while iterating)
+            meshes_for_feature = [
+                name
+                for name, meta in list(self.viewer.meshes.items())
+                if meta.get('source_feature') == feature_name
+            ]
+            print(f"Re-adding meshes for feature: {feature_name}: {meshes_for_feature}")
+
+            for mesh_name in meshes_for_feature:
+                meta = self.viewer.meshes.get(mesh_name, {})
+                source_type = meta.get('source_type')
+                kwargs = meta.get('kwargs', {}) or {}
+                isovalue = meta.get('isovalue', None)
+
+                # remove existing actor/entry so add_mesh_object can recreate with same name
+                try:
+                    self.viewer.remove_object(mesh_name)
+                    print(f"Removed existing mesh: {mesh_name}")
+                except Exception:
+                    print(f"Failed to remove existing mesh: {mesh_name}")
+                    pass
+
+                try:
+                    # Surfaces associated with individual features
+                    if source_type == 'feature_surface':
+                        surfaces = []
+                        try:
+                            if isovalue is not None:
+                                surfaces = self.model_manager.model[feature_name].surfaces(isovalue)
+                            else:
+                                surfaces = self.model_manager.model[feature_name].surfaces()
+
+                            if surfaces:
+                                add_name = mesh_name
+                                print(
+                                    f"Re-adding surface for feature: {feature_name} with isovalue: {isovalue}"
+                                )
+                                self.viewer.add_mesh_object(
+                                    surfaces[0].vtk(),
+                                    name=add_name,
+                                    source_feature=feature_name,
+                                    source_type='feature_surface',
+                                    isovalue=isovalue,
+                                    **kwargs,
+                                )
+                                continue
+                        except Exception as e:
+                            print(
+                                f"Failed to find matching surface for feature: {feature_name} with isovalue: {isovalue}, trying all surfaces. Error: {e}"
+                            )
+
+                    # Fault surfaces (added via add_fault_surfaces)
+                    if source_type == 'fault_surface':
+                        try:
+                            fault_surfaces = self.model_manager.model.get_fault_surfaces()
+                            match = next(
+                                (s for s in fault_surfaces if str(s.name) == str(feature_name)),
+                                None,
+                            )
+                            if match is not None:
+                                print(f"Re-adding fault surface for: {feature_name}")
+                                self.viewer.add_mesh_object(
+                                    match.vtk(),
+                                    name=mesh_name,
+                                    source_feature=feature_name,
+                                    source_type='fault_surface',
+                                    isovalue=meta.get('isovalue', 0.0),
+                                    **kwargs,
+                                )
+                                continue
+                        except Exception as e:
+                            print(f"Failed to re-add fault surface for {feature_name}: {e}")
+
+                    # Stratigraphic surfaces (added via add_stratigraphic_surfaces)
+                    if source_type == 'stratigraphic_surface':
+                        try:
+                            strat_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
+                            match = next(
+                                (s for s in strat_surfaces if str(s.name) == str(feature_name)),
+                                None,
+                            )
+                            if match is not None:
+                                print(f"Re-adding stratigraphic surface for: {feature_name}")
+                                self.viewer.add_mesh_object(
+                                    match.vtk(),
+                                    name=mesh_name,
+                                    color=getattr(match, 'colour', None),
+                                    source_feature=feature_name,
+                                    source_type='stratigraphic_surface',
+                                    **kwargs,
+                                )
+                                continue
+                        except Exception as e:
+                            print(f"Failed to re-add stratigraphic surface for {feature_name}: {e}")
+
+                    # Vectors, points, scalar fields and other feature related objects
+                    if source_type == 'feature_vector' or source_type == 'feature_vectors':
+                        try:
+                            self.add_vector_field(feature_name)
+                            continue
+                        except Exception as e:
+                            print(f"Failed to re-add vector field for {feature_name}: {e}")
+
+                    if source_type in ('feature_points', 'feature_data'):
+                        try:
+                            self.add_data(feature_name)
+                            continue
+                        except Exception as e:
+                            print(f"Failed to re-add data for {feature_name}: {e}")
+
+                    if source_type == 'feature_scalar':
+                        try:
+                            self.add_scalar_field(feature_name)
+                            continue
+                        except Exception as e:
+                            print(f"Failed to re-add scalar field for {feature_name}: {e}")
+
+                    if source_type == 'bounding_box' or mesh_name == 'model_bounding_box':
+                        try:
+                            self.add_model_bounding_box()
+                            continue
+                        except Exception as e:
+                            print(f"Failed to re-add bounding box: {e}")
+
+                    # Fallback: if nothing matched, attempt to re-add by using viewer metadata
+                    # Many viewer entries store the vtk source under meta['vtk'] or similar; try best-effort
+                    try:
+                        vtk_src = meta.get('vtk')
+                        if vtk_src is not None:
+                            print(f"Fallback re-add for mesh {mesh_name}")
+                            self.viewer.add_mesh_object(vtk_src, name=mesh_name, **kwargs)
+                    except Exception:
+                        pass
+
+                except Exception as e:
+                    print(f"Failed to update visualisation for feature: {feature_name}. Error: {e}")
+
+        # Refresh the viewer
+        try:
+            self.viewer.update()
+        except Exception:
+            pass
