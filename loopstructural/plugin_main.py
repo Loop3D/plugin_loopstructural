@@ -38,6 +38,7 @@ from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.processing import (
     Map2LoopProvider,
 )
+from loopstructural.debug_manager import DebugManager
 from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
 # ############################################################################
@@ -70,6 +71,7 @@ class LoopstructuralPlugin:
         """
         self.iface = iface
         self.log = PlgLogger().log
+        self.debug_manager = DebugManager(plugin=self)
 
         # translation
         # initialize the locale
@@ -344,35 +346,55 @@ class LoopstructuralPlugin:
         """Show the sampler dialog."""
         from loopstructural.gui.map2loop_tools import SamplerDialog
 
-        dialog = SamplerDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog = SamplerDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
         dialog.exec_()
 
     def show_sorter_dialog(self):
         """Show the automatic stratigraphic sorter dialog."""
         from loopstructural.gui.map2loop_tools import SorterDialog
 
-        dialog = SorterDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog = SorterDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
         dialog.exec_()
 
     def show_user_sorter_dialog(self):
         """Show the user-defined stratigraphic column dialog."""
         from loopstructural.gui.map2loop_tools import UserDefinedSorterDialog
 
-        dialog = UserDefinedSorterDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog = UserDefinedSorterDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
         dialog.exec_()
 
     def show_basal_contacts_dialog(self):
         """Show the basal contacts extractor dialog."""
         from loopstructural.gui.map2loop_tools import BasalContactsDialog
 
-        dialog = BasalContactsDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog = BasalContactsDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
         dialog.exec_()
 
     def show_thickness_dialog(self):
         """Show the thickness calculator dialog."""
         from loopstructural.gui.map2loop_tools import ThicknessCalculatorDialog
 
-        dialog = ThicknessCalculatorDialog(self.iface.mainWindow(), data_manager=self.data_manager)
+        dialog = ThicknessCalculatorDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
         dialog.exec_()
 
     def tr(self, message: str) -> str:

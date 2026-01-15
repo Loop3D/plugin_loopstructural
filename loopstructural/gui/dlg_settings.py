@@ -76,6 +76,11 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.btn_reset.setIcon(QIcon(QgsApplication.iconPath("mActionUndo.svg")))
         self.btn_reset.pressed.connect(self.reset_settings)
 
+        if hasattr(self, "btn_browse_debug_directory"):
+            self.btn_browse_debug_directory.pressed.connect(self._browse_debug_directory)
+        if hasattr(self, "btn_open_debug_directory"):
+            self.btn_open_debug_directory.pressed.connect(self._open_debug_directory)
+
         # load previously saved settings
         self.load_settings()
 
@@ -91,6 +96,9 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         settings.interpolator_cpw = self.cpw_spin_box.value()
         settings.interpolator_regularisation = self.regularisation_spin_box.value()
         settings.version = __version__
+        debug_dir_text = (self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else "") or ""
+        self.plg_settings.set_debug_directory(debug_dir_text)
+        settings.debug_directory = debug_dir_text
 
         # dump new settings into QgsSettings
         self.plg_settings.save_from_object(settings)
@@ -114,6 +122,8 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.regularisation_spin_box.setValue(settings.interpolator_regularisation)
         self.cpw_spin_box.setValue(settings.interpolator_cpw)
         self.npw_spin_box.setValue(settings.interpolator_npw)
+        if hasattr(self, "le_debug_directory"):
+            self.le_debug_directory.setText(settings.debug_directory or "")
 
     def reset_settings(self):
         """Reset settings in the UI and persisted settings to plugin defaults."""
@@ -124,6 +134,35 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 
         # update the form
         self.load_settings()
+
+    def _browse_debug_directory(self):
+        """Open a directory selector for debug directory."""
+        from qgis.PyQt.QtWidgets import QFileDialog
+
+        start_dir = (self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else "") or ""
+        chosen = QFileDialog.getExistingDirectory(self, "Select Debug Files Directory", start_dir)
+        if chosen and hasattr(self, "le_debug_directory"):
+            self.le_debug_directory.setText(chosen)
+
+    def _open_debug_directory(self):
+        """Open configured debug directory in the system file manager."""
+        logger = getattr(self, "log", PlgLogger().log)
+        target = (
+            self.le_debug_directory.text()
+            if hasattr(self, "le_debug_directory")
+            else self.plg_settings.get_debug_directory()
+        ) or ""
+        if target:
+            target_path = Path(target)
+            if target_path.exists():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(target_path)))
+            else:
+                logger(
+                    message=f"[map2loop] Debug directory does not exist: {target}",
+                    log_level=1,
+                )
+        else:
+            logger(message="[map2loop] No debug directory configured.", log_level=1)
 
 
 class PlgOptionsFactory(QgsOptionsWidgetFactory):
