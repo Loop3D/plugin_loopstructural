@@ -3,7 +3,6 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsProject, QgsVectorFileWriter
 from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
@@ -141,7 +140,6 @@ class SamplerWidget(QWidget):
             QgsFields,
             QgsGeometry,
             QgsPointXY,
-            QgsProject,
             QgsVectorLayer,
         )
         from qgis.PyQt.QtCore import QVariant

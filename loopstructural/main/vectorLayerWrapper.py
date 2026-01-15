@@ -26,7 +26,6 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QDateTime, QVariant
 from shapely.geometry import LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon
-from shapely.wkb import loads as wkb_loads
 
 
 def qgsRasterToGdalDataset(rlayer: QgsRasterLayer):

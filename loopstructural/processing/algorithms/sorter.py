@@ -4,14 +4,11 @@ import pandas as pd
 import json
 
 from PyQt5.QtCore import QVariant
-from qgis import processing
 from qgis.core import (
     QgsFeatureSink,
-    QgsFields, 
-    QgsField, 
-    QgsFeature, 
-    QgsGeometry,
-    QgsRasterLayer,
+    QgsFields,
+    QgsField,
+    QgsFeature,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -23,11 +20,8 @@ from qgis.core import (
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterField,
     QgsProcessingParameterRasterLayer,
-    QgsProcessingParameterMatrix,
-    QgsCoordinateReferenceSystem,
     QgsVectorLayer,
-    QgsWkbTypes,
-    QgsSettings
+    QgsWkbTypes
 )
 
 # ────────────────────────────────────────────────
@@ -81,7 +75,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
 
     def groupId(self) -> str:
         return "Stratigraphy_Column"
-    
+
     def updateParameters(self, parameters):
         selected_method = parameters.get(self.METHOD, 0)
         selected_algorithm = parameters.get(self.SORTING_ALGORITHM, 0)
@@ -94,7 +88,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             self.parameterDefinition(self.INPUT_GEOLOGY).setMetadata({'widget_wrapper': {'visible': True}})
             self.parameterDefinition(self.SORTING_ALGORITHM).setMetadata({'widget_wrapper': {'visible': True}})
             self.parameterDefinition(self.INPUT_STRATI_COLUMN).setMetadata({'widget_wrapper': {'visible': False}})
-            
+
             # observation projects
             is_observation_projections = selected_algorithm == 5
             self.parameterDefinition(self.INPUT_STRUCTURE).setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
@@ -102,7 +96,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             self.parameterDefinition('DIP_FIELD').setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
             self.parameterDefinition('DIPDIR_FIELD').setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
             self.parameterDefinition('ORIENTATION_TYPE').setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
-                
+
         return super().updateParameters(parameters)
 
     # ----------------------------------------------------------
@@ -150,7 +144,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 optional=True
             )
         )
-    
+
         self.addParameter(
             QgsProcessingParameterField(
                 'MAX_AGE_FIELD',
@@ -161,7 +155,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 optional=True
             )
         )
-        
+
         self.addParameter(
             QgsProcessingParameterField(
                 'GROUP_FIELD',
@@ -228,7 +222,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 optional=False,
             )
         )
-        
+
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
@@ -259,7 +253,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
         contacts_layer = self.parameterAsVectorLayer(parameters, self.CONTACTS_LAYER, context)
         in_layer = self.parameterAsVectorLayer(parameters, self.INPUT_GEOLOGY, context)
         output_file = self.parameterAsFileOutput(parameters, 'JSON_OUTPUT', context)
-        
+
         units_df, relationships_df, contacts_df= build_input_frames(in_layer,contacts_layer, feedback,parameters)
 
         if sorter_cls == SorterObservationProjections:
@@ -331,7 +325,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
         try:
             with open(output_file, 'w') as f:
                 json.dump(order, f)
-        except Exception as e:
+        except Exception:
             with open(output_file, 'w') as f:
                 json.dump([], f)
 
@@ -389,7 +383,7 @@ def build_input_frames(layer: QgsVectorLayer,contacts_layer: QgsVectorLayer, fee
             units_records.append(
                 dict(
                     layerId=f.id(),
-                    name=f[unit_name_field],          
+                    name=f[unit_name_field],
                     minAge=qvariantToFloat(f, min_age_field),
                     maxAge=qvariantToFloat(f, max_age_field),
                     group=f[group_field],

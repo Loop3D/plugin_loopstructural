@@ -25,7 +25,7 @@ class DEMWidget(QWidget):
         else:
             self.demLayerQgsMapLayerComboBox.setCurrentIndex(-1)
             self.useDEMCheckBox.setChecked(False)
-        
+
 
     def onUseDEMClicked(self):
         if self.useDEMCheckBox.isChecked():

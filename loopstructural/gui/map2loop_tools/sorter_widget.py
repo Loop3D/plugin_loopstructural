@@ -3,7 +3,7 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsProject, QgsRasterLayer, QgsVectorFileWriter
+from qgis.core import QgsRasterLayer
 from qgis.PyQt import uic
 
 from loopstructural.main.helpers import get_layer_names

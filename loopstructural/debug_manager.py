@@ -147,7 +147,7 @@ class DebugManager:
     def _export_qgis_layer(self, qgs_layer, out_path: Path) -> bool:
         """Export a QGIS QgsVectorLayer to GeoJSON if available."""
         try:
-            from qgis.core import QgsCoordinateTransformContext, QgsVectorFileWriter
+            from qgis.core import QgsVectorFileWriter
 
             # In QGIS 3, writeAsVectorFormatV2 is preferred, but use writeAsVectorFormat for compatibility
             err = QgsVectorFileWriter.writeAsVectorFormat(

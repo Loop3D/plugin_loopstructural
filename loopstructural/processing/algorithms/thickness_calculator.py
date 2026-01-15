@@ -16,9 +16,7 @@ import pandas as pd
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 
 # QGIS imports
-from qgis import processing
 from qgis.core import (
-    QgsFeatureSink,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
@@ -36,8 +34,6 @@ from qgis.core import (
 
 # Internal imports
 from ...main.vectorLayerWrapper import (
-    GeoDataFrameToQgsLayer,
-    dataframeToQgsLayer,
     dataframeToQgsTable,
     matrixToDict,
     qgsLayerToDataFrame,

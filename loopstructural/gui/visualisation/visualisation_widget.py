@@ -78,7 +78,7 @@ class VisualisationWidget(QWidget):
             # collapse properties to 0 width
             self._main_splitter.setSizes([sizes[0], sizes[1], 0])
             self._previous_splitter_sizes = [sizes[0], sizes[1], 0]
-        
+
     def is_properties_panel_visible(self) -> bool:
         if not hasattr(self, '_main_splitter'):
             return False

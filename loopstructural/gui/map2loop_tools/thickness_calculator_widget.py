@@ -3,7 +3,6 @@
 import os
 
 from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
-from qgis.core import QgsProject, QgsVectorFileWriter
 from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager

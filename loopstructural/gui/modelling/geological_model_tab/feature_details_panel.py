@@ -578,7 +578,7 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
             raise ValueError("Fault must be provided.")
         self.fault = fault
         dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
-        
+
         pitch = 0
         self.fault_parameters = {
             'displacement': fault.displacement,
