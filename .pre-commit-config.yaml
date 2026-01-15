@@ -28,8 +28,8 @@ repos:
 
 
 # Local hook to forbid print statements in Python files (excluding tests)
-- repo: local
-  hooks:
+  - repo: local
+    hooks:
     - id: forbid-print-statements
       name: Forbid print statements
       entry: grep -nH -E '\bprint\s*\('
