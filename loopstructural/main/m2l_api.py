@@ -1,4 +1,3 @@
-
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -11,8 +10,6 @@ from map2loop.sorter import (
 )
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
-
-
 
 from ..main.vectorLayerWrapper import qgsLayerToDataFrame, qgsLayerToGeoDataFrame
 from .debug.export import export_debug_package
@@ -101,8 +98,8 @@ def extract_basal_contacts(
     try:
         if debug_manager and getattr(debug_manager, "is_debug", lambda: False)():
 
-            layers = {"geology": geology, "faults": faults}
-            pickles = {"contact_extractor": contact_extractor}
+            _layers = {"geology": geology, "faults": faults}
+            _pickles = {"contact_extractor": contact_extractor}
             # export layers and pickles first to get the actual filenames used
             _exported = export_debug_package(
                 debug_manager,
