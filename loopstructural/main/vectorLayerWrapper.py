@@ -825,8 +825,8 @@ def geodataframeToMemoryLayer(geodataframe, layer_name: str = "GeoDataFrame Laye
                 # z?
                 try:
                     has_z = has_z or bool(getattr(geom, "has_z", False))
-                except Exception:
-                    pass
+                except Exception as e:
+                    print("Error checking geometry Z value", e)
                 if base:
                     break
 
@@ -858,7 +858,8 @@ def geodataframeToMemoryLayer(geodataframe, layer_name: str = "GeoDataFrame Laye
                 epsg = geodataframe.crs.to_epsg()
                 if epsg:
                     crs = QgsCoordinateReferenceSystem.fromEpsgId(int(epsg))
-            except Exception:
+            except Exception as e:
+                print("Error building CRS from EPSG", e)
                 pass
 
     # --- Build QGIS fields from pandas dtypes
@@ -920,6 +921,7 @@ def geodataframeToMemoryLayer(geodataframe, layer_name: str = "GeoDataFrame Laye
                 try:
                     val = val.item()
                 except Exception:
+                    # don't crash UI on conversion failure
                     pass
             if pd.api.types.is_datetime64_any_dtype(geodataframe[col].dtype):
                 if pd.isna(val):

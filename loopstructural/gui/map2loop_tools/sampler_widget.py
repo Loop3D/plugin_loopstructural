@@ -70,13 +70,10 @@ class SamplerWidget(QWidget):
 
         except Exception as err:
             if getattr(self, '_debug', None):
-                try:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Failed to export layer '{name_prefix}': {err}",
-                        log_level=2,
-                    )
-                except Exception:
-                    pass
+                self._debug.plugin.log(
+                    message=f"[map2loop] Failed to export layer '{name_prefix}': {err}",
+                    log_level=2,
+                )
         return None
 
     def _serialize_layer(self, layer, name_prefix: str):

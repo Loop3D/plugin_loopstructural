@@ -152,10 +152,7 @@ class BasalContactsWidget(QWidget):
             self.unitNameFieldComboBox.setLayer(geology)
         else:
             # Ensure combo boxes are cleared if no geology layer selected
-            try:
-                self.unitNameFieldComboBox.setLayer(None)
-            except Exception:
-                pass
+            self.unitNameFieldComboBox.setLayer(None)
 
     def _on_geology_layer_changed(self):
         """Update field combo boxes when geology layer changes."""

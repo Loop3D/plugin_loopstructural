@@ -4,6 +4,8 @@ import os
 
 from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
 from qgis.PyQt import uic
+from qgis.core import QgsMapLayerProxyModel
+
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -37,16 +39,12 @@ class ThicknessCalculatorWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid enum values in .ui)
-        try:
-            from qgis.core import QgsMapLayerProxyModel
 
-            self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
-            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.basalContactsComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-            self.sampledContactsComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
-            self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
-        except Exception:
-            pass
+        self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.basalContactsComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        self.sampledContactsComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
 
         # Initialize calculator types
         self.calculator_types = ["InterpolatedStructure", "StructuralPoint"]
@@ -111,12 +109,9 @@ class ThicknessCalculatorWidget(QWidget):
 
     def _log_params(self, context_label: str, params=None):
         if getattr(self, "_debug", None):
-            try:
-                payload = params if params is not None else self.get_parameters()
-                payload = self._serialize_params_for_logging(payload, context_label)
-                self._debug.log_params(context_label=context_label, params=payload)
-            except Exception:
-                pass
+            payload = params if params is not None else self.get_parameters()
+            payload = self._serialize_params_for_logging(payload, context_label)
+            self._debug.log_params(context_label=context_label, params=payload)
 
     def _guess_layers(self):
         """Attempt to auto-select layers based on common naming conventions."""
