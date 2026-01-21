@@ -35,7 +35,7 @@ def extract_basal_contacts(
     geology,
     stratigraphic_order,
     faults=None,
-    ignore_units=None,
+    ignore_units=[],
     unit_name_field=None,
     all_contacts=False,
     updater=None,
@@ -79,6 +79,7 @@ def extract_basal_contacts(
     if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology.columns:
         geology = geology.rename(columns={unit_name_field: 'UNITNAME'})
     # Log parameters via DebugManager if provided
+    ignore_units += [None]
     if debug_manager:
         debug_manager.log_params(
             "extract_basal_contacts",
@@ -112,12 +113,16 @@ def extract_basal_contacts(
         print("Failed to save sampler debug info")
         print(e)
 
-    all_contacts_result = contact_extractor.extract_all_contacts()
-    basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
-
-    if ignore_units:
+    try:
+        all_contacts_result = contact_extractor.extract_all_contacts()
+        basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
+    except Exception as e:
+        print(f"Error during contact extraction: {e}")
+        basal_contacts = pd.DataFrame()
+        all_contacts_result = pd.DataFrame()
+    if ignore_units and basal_contacts.empty is False:
         basal_contacts = basal_contacts[
-            ~basal_contacts['UNITNAME'].astype(str).str.strip().isin(ignore_units)
+            ~basal_contacts['basal_unit'].astype(str).str.strip().isin(ignore_units)
         ].reset_index(drop=True)
     if all_contacts:
         return {'basal_contacts': basal_contacts, 'all_contacts': all_contacts_result}

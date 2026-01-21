@@ -266,7 +266,33 @@ class BasalContactsWidget(QWidget):
         # Check if user wants all contacts or just basal contacts
         all_contacts = self.allContactsCheckBox.isChecked()
         if all_contacts:
-            stratigraphic_order = list({g[unit_name_field] for g in geology.getFeatures()})
+
+            def _is_null_like(v):
+                # Python None
+                if v is None:
+                    return True
+                # PyQGIS QVariant null check
+                if hasattr(v, "isNull") and callable(getattr(v, "isNull")) and v.isNull():
+                    return True
+                # Empty strings or literal "NULL" (case-insensitive)
+                if isinstance(v, str):
+                    s = v.strip()
+                    if s == "" or s.upper() == "NULL":
+                        return True
+                return False
+
+            values = []
+            for feat in geology.getFeatures():
+                try:
+                    val = feat[unit_name_field]
+                except Exception:
+                    val = None
+                if _is_null_like(val):
+                    continue
+                if val not in values:
+                    values.append(val)
+            stratigraphic_order = values 
+            print(f"Extracting all contacts for units: {stratigraphic_order}")
             self.data_manager.logger(f"Extracting all contacts for units: {stratigraphic_order}")
 
         result = extract_basal_contacts(
