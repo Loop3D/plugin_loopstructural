@@ -31,6 +31,7 @@ if importlib.util.find_spec("LoopStructural") is None:
     raise ImportError(
         "LoopStructural is not installed. Please install it using the requirements.txt file in the plugin directory."
     )
+from loopstructural.debug_manager import DebugManager
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
@@ -38,7 +39,6 @@ from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.processing import (
     Map2LoopProvider,
 )
-from loopstructural.debug_manager import DebugManager
 from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
 # ############################################################################
@@ -168,12 +168,16 @@ class LoopstructuralPlugin:
         self.action_sampler.triggered.connect(self.show_sampler_dialog)
 
         self.action_sorter = QAction(
+            QIcon(
+                os.path.dirname(__file__) + "/resources/images/automatic_stratigraphic_column.png"
+            ),
             "Automatic Stratigraphic Sorter",
             self.iface.mainWindow(),
         )
         self.action_sorter.triggered.connect(self.show_sorter_dialog)
 
         self.action_user_sorter = QAction(
+            QIcon(os.path.dirname(__file__) + "/resources/images/stratigraphic_column.png"),
             "User-Defined Stratigraphic Column",
             self.iface.mainWindow(),
         )
