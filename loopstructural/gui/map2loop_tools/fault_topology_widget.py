@@ -5,6 +5,7 @@ import os
 import geopandas as gpd
 from PyQt5.QtWidgets import QDialog, QMessageBox
 from qgis.PyQt import uic
+from qgis.core import QgsMapLayerProxyModel
 
 
 class FaultTopologyWidget(QDialog):
@@ -41,13 +42,9 @@ class FaultTopologyWidget(QDialog):
         ui_path = os.path.join(os.path.dirname(__file__), "fault_topology_widget.ui")
         uic.loadUi(ui_path, self)
         # Set filter for fault layer selection
-        try:
-            from qgis.core import QgsMapLayerProxyModel
 
-            self.faultLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-            self.faultLayerComboBox.layerChanged.connect(self._on_fault_layer_changed)
-        except Exception:
-            pass
+        self.faultLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        self.faultLayerComboBox.layerChanged.connect(self._on_fault_layer_changed)
         self.runButton.clicked.connect(self._run_topology)
         self._guess_fault_layer_and_field()
 

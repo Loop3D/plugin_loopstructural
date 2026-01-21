@@ -126,6 +126,7 @@ class BaseFeatureDetailsPanel(QWidget):
         group_box.setLayout(form_layout)
         self.layout.addWidget(group_box)
         self.layout.addWidget(table_group_box)
+        # this will call the addMidBlock and addExportBlock methods
         self.addMidBlock()
         self.addExportBlock()
 

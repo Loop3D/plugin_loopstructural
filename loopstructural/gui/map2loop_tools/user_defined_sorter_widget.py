@@ -1,6 +1,5 @@
 """Widget for user-defined stratigraphic column."""
 
-
 from typing import Any
 from PyQt5.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 
@@ -58,10 +57,7 @@ class UserDefinedSorterWidget(QWidget):
 
     def _log_params(self, context_label: str, params: Any):
         if getattr(self, "_debug", None):
-            try:
-                self._debug.log_params(context_label=context_label, params=params)
-            except Exception:
-                pass
+            self._debug.log_params(context_label=context_label, params=params)
 
     def _run_sorter(self):
         """Run the user-defined stratigraphic sorter algorithm.

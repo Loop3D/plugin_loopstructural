@@ -51,7 +51,7 @@ class GeologicalModelTab(QWidget):
                 try:
                     self.model_manager.observers.append(self.update_feature_list)
                 except Exception:
-                    pass
+                    raise RuntimeError("Failed to register model update observer")
         # Main layout
         mainLayout = QVBoxLayout(self)
 
@@ -169,8 +169,8 @@ class GeologicalModelTab(QWidget):
                     for obs in getattr(self.model_manager, 'observers', []):
                         try:
                             obs()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            self._debug.log_error("Error notifying observer", e)
             finally:
                 try:
                     progress.close()
@@ -282,7 +282,6 @@ class GeologicalModelTab(QWidget):
 
     def _on_model_update_finished(self):
         """Close the progress dialog shown for model updates."""
-        print("Model update finished - closing progress dialog")
         try:
             if getattr(self, '_progress_dialog', None) is not None:
                 try:

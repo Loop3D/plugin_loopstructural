@@ -379,7 +379,6 @@ def sample_contacts(
     except Exception as e:
         print("Failed to save sampler debug info")
         print(e)
-        pass
 
     return samples
 

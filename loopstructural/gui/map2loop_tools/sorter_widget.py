@@ -4,6 +4,8 @@ import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsRasterLayer
+from qgis.core import QgsMapLayerProxyModel
+
 from qgis.PyQt import uic
 
 from loopstructural.main.helpers import get_layer_names
@@ -39,16 +41,11 @@ class SorterWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid QGIS enums in UI)
-        try:
-            from qgis.core import QgsMapLayerProxyModel
 
-            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.contactsLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-            self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
-            self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
-            # preserve allowEmptyLayer where UI set it
-        except Exception:
-            pass
+        self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.contactsLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
 
         # Initialize sorting algorithms
         self.sorting_algorithms = list(SORTER_LIST.keys())
@@ -118,13 +115,10 @@ class SorterWidget(QWidget):
 
     def _log_params(self, context_label: str):
         if getattr(self, "_debug", None):
-            try:
-                self._debug.log_params(
-                    context_label=context_label,
-                    params=self._serialize_params_for_logging(self.get_parameters(), context_label),
-                )
-            except Exception:
-                pass
+            self._debug.log_params(
+                context_label=context_label,
+                params=self._serialize_params_for_logging(self.get_parameters(), context_label),
+            )
 
     def _guess_layers(self):
         """Automatically detect and set appropriate field names using ColumnMatcher."""
