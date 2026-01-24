@@ -448,7 +448,7 @@ def calculate_thickness(
         else basal_contacts_gdf
     )
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
-    structure_gdf = qgsLayerToDataFrame(structure)
+    structure_gdf = qgsLayerToGeoDataFrame(structure)
 
     # Log parameters via DebugManager if provided
     if debug_manager:
@@ -546,6 +546,8 @@ def calculate_thickness(
     except Exception as e:
         print("Failed to save sampler debug info")
         raise e
+    structure_gdf['X'] = structure_gdf.geometry.x
+    structure_gdf['Y'] = structure_gdf.geometry.y
 
     thickness = calculator.compute(
         units,

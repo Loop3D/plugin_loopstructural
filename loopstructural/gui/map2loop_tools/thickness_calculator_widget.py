@@ -3,9 +3,8 @@
 import os
 
 from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
-from qgis.PyQt import uic
 from qgis.core import QgsMapLayerProxyModel
-
+from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -295,7 +294,6 @@ class ThicknessCalculatorWidget(QWidget):
                     else:
                         self.data_manager.logger(
                             f"Warning: Unit '{u}' not found in stratigraphic column.",
-                            level=QLabel.Warning,
                         )
             # Save debugging files if checkbox is checked
             if self.saveDebugCheckBox.isChecked():
