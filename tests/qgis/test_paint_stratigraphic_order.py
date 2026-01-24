@@ -198,19 +198,23 @@ class TestPaintStratigraphicOrder(unittest.TestCase):
         features = list(output_layer.getFeatures())
         
         # Unit_A should have order 0 (youngest)
-        unit_a_feat = [f for f in features if f['UNITNAME'] == 'Unit_A'][0]
+        unit_a_feat = next((f for f in features if f['UNITNAME'] == 'Unit_A'), None)
+        self.assertIsNotNone(unit_a_feat, "Unit_A feature should exist")
         self.assertEqual(unit_a_feat['strat_order'], 0, "Unit_A should have order 0")
 
         # Unit_B should have order 1
-        unit_b_feat = [f for f in features if f['UNITNAME'] == 'Unit_B'][0]
+        unit_b_feat = next((f for f in features if f['UNITNAME'] == 'Unit_B'), None)
+        self.assertIsNotNone(unit_b_feat, "Unit_B feature should exist")
         self.assertEqual(unit_b_feat['strat_order'], 1, "Unit_B should have order 1")
 
         # Unit_C should have order 2 (oldest)
-        unit_c_feat = [f for f in features if f['UNITNAME'] == 'Unit_C'][0]
+        unit_c_feat = next((f for f in features if f['UNITNAME'] == 'Unit_C'), None)
+        self.assertIsNotNone(unit_c_feat, "Unit_C feature should exist")
         self.assertEqual(unit_c_feat['strat_order'], 2, "Unit_C should have order 2")
 
         # Unknown_Unit should have None
-        unknown_feat = [f for f in features if f['UNITNAME'] == 'Unknown_Unit'][0]
+        unknown_feat = next((f for f in features if f['UNITNAME'] == 'Unknown_Unit'), None)
+        self.assertIsNotNone(unknown_feat, "Unknown_Unit feature should exist")
         self.assertIsNone(unknown_feat['strat_order'], "Unknown_Unit should have None order")
 
     def test_paint_cumulative_thickness(self):
@@ -293,15 +297,18 @@ class TestPaintStratigraphicOrder(unittest.TestCase):
         features = list(output_layer.getFeatures())
         
         # Unit_C (oldest) should have cumulative thickness 0
-        unit_c_feat = [f for f in features if f['UNITNAME'] == 'Unit_C'][0]
+        unit_c_feat = next((f for f in features if f['UNITNAME'] == 'Unit_C'), None)
+        self.assertIsNotNone(unit_c_feat, "Unit_C feature should exist")
         self.assertEqual(unit_c_feat['cum_thickness'], 0.0, "Unit_C should have cum_thickness 0")
 
         # Unit_B should have cumulative thickness 150 (thickness of Unit_C)
-        unit_b_feat = [f for f in features if f['UNITNAME'] == 'Unit_B'][0]
+        unit_b_feat = next((f for f in features if f['UNITNAME'] == 'Unit_B'), None)
+        self.assertIsNotNone(unit_b_feat, "Unit_B feature should exist")
         self.assertEqual(unit_b_feat['cum_thickness'], 150.0, "Unit_B should have cum_thickness 150")
 
         # Unit_A (youngest) should have cumulative thickness 350 (150 + 200)
-        unit_a_feat = [f for f in features if f['UNITNAME'] == 'Unit_A'][0]
+        unit_a_feat = next((f for f in features if f['UNITNAME'] == 'Unit_A'), None)
+        self.assertIsNotNone(unit_a_feat, "Unit_A feature should exist")
         self.assertEqual(
             unit_a_feat['cum_thickness'], 350.0, "Unit_A should have cum_thickness 350"
         )
