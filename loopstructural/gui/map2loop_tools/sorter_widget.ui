@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SorterWidget</class>
+ <widget class="QWidget" name="SorterWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Automatic Stratigraphic Sorter</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <item row="0" column="0">
+      <widget class="QLabel" name="sortingAlgorithmLabel">
+       <property name="text">
+        <string>Sorting Algorithm:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QComboBox" name="sortingAlgorithmComboBox"/>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="geologyLayerLabel">
+       <property name="text">
+        <string>Geology Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QgsMapLayerComboBox" name="geologyLayerComboBox">
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="unitNameFieldLabel">
+       <property name="text">
+        <string>Unit Name Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QgsFieldComboBox" name="unitNameFieldComboBox"/>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="minAgeFieldLabel">
+       <property name="text">
+        <string>Min Age Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QgsFieldComboBox" name="minAgeFieldComboBox"/>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="maxAgeFieldLabel">
+       <property name="text">
+        <string>Max Age Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QgsFieldComboBox" name="maxAgeFieldComboBox"/>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="contactsLayerLabel">
+       <property name="text">
+        <string>Contacts Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QgsMapLayerComboBox" name="contactsLayerComboBox">
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="structureLayerLabel">
+       <property name="text">
+        <string>Structure Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QgsMapLayerComboBox" name="structureLayerComboBox">
+       <property name="allowEmptyLayer">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="0">
+      <widget class="QLabel" name="dipFieldLabel">
+       <property name="text">
+        <string>Dip Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="1">
+      <widget class="QgsFieldComboBox" name="dipFieldComboBox"/>
+     </item>
+     <item row="8" column="0">
+      <widget class="QLabel" name="dipDirFieldLabel">
+       <property name="text">
+        <string>Dip Direction Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="1">
+      <widget class="QgsFieldComboBox" name="dipDirFieldComboBox"/>
+     </item>
+     <item row="9" column="0">
+      <widget class="QLabel" name="orientationTypeLabel">
+       <property name="text">
+        <string>Orientation Type:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="1">
+      <widget class="QComboBox" name="orientationTypeComboBox"/>
+     </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="dtmLayerLabel">
+       <property name="text">
+        <string>DTM Layer:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QgsMapLayerComboBox" name="dtmLayerComboBox">
+       <property name="allowEmptyLayer">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="0">
+      <widget class="QLabel" name="unitName1FieldLabel">
+       <property name="text">
+        <string>Unit Name 1 Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="1">
+      <widget class="QgsFieldComboBox" name="unitName1FieldComboBox"/>
+     </item>
+     <item row="12" column="0">
+      <widget class="QLabel" name="unitName2FieldLabel">
+       <property name="text">
+        <string>Unit Name 2 Field:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="1">
+      <widget class="QgsFieldComboBox" name="unitName2FieldComboBox"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="runButton">
+     <property name="text">
+      <string>Run Sorter</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsFieldComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsfieldcombobox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
