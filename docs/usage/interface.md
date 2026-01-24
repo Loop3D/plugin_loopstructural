@@ -44,6 +44,31 @@ The fault-fault relationship table defines the interaction between faults in the
 
 ![Fault Topology](../static/fault_topology_hamersley.png)
 
+## Processing Tools
+
+The plugin provides several QGIS Processing algorithms for working with geological data. These can be accessed through the QGIS Processing Toolbox.
+
+### Paint Stratigraphic Order
+
+The **Paint Stratigraphic Order** algorithm allows you to visualize the stratigraphic order on geology polygons. This tool is useful for:
+- Visually debugging the stratigraphic column
+- Quality checking unit order
+- Creating visualizations of stratigraphic relationships
+
+The algorithm takes:
+- **Input Polygons**: A polygon layer containing geological units (e.g., your geology map)
+- **Unit Name Field**: The field in your polygon layer that contains unit names
+- **Stratigraphic Column**: A table or layer with the stratigraphic column (ordered from youngest to oldest)
+- **Paint Mode**: Choose between:
+  - **Stratigraphic Order** (0 = youngest, N = oldest): Paints a numeric order onto each polygon
+  - **Cumulative Thickness**: Paints the cumulative thickness from the bottom (oldest) unit
+
+The algorithm adds a new field to your polygon layer:
+- `strat_order`: The stratigraphic order (when using Stratigraphic Order mode)
+- `cum_thickness`: The cumulative thickness in the stratigraphic column (when using Cumulative Thickness mode)
+
+Units that don't match the stratigraphic column will have null values, helping you identify data quality issues.
+
 ## Model parameters
 Once the layers have been selected, stratigraphic column defined and the fault topology relationships set, the LoopStructural model can be initialised. 
 
