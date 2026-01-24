@@ -196,12 +196,19 @@ class LoopstructuralPlugin:
         )
         self.action_thickness.triggered.connect(self.show_thickness_dialog)
 
+        self.action_paint_strat_order = QAction(
+            "Paint Stratigraphic Order",
+            self.iface.mainWindow(),
+        )
+        self.action_paint_strat_order.triggered.connect(self.show_paint_strat_order_dialog)
+
         # Add all map2loop tool actions to the toolbar
         self.toolbar.addAction(self.action_sampler)
         self.toolbar.addAction(self.action_sorter)
         self.toolbar.addAction(self.action_user_sorter)
         self.toolbar.addAction(self.action_basal_contacts)
         self.toolbar.addAction(self.action_thickness)
+        self.toolbar.addAction(self.action_paint_strat_order)
         self.toolbar.addAction(self.action_fault_topology)
 
         self.iface.addPluginToMenu(__title__, self.action_sampler)
@@ -209,27 +216,8 @@ class LoopstructuralPlugin:
         self.iface.addPluginToMenu(__title__, self.action_user_sorter)
         self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
         self.iface.addPluginToMenu(__title__, self.action_thickness)
+        self.iface.addPluginToMenu(__title__, self.action_paint_strat_order)
         self.iface.addPluginToMenu(__title__, self.action_fault_topology)
-        self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
-
-        # Add all map2loop tool actions to the toolbar
-        self.toolbar.addAction(self.action_sampler)
-        self.toolbar.addAction(self.action_sorter)
-        self.toolbar.addAction(self.action_user_sorter)
-        self.toolbar.addAction(self.action_basal_contacts)
-        self.toolbar.addAction(self.action_thickness)
-
-        self.action_thickness = QAction(
-            "Thickness Calculator",
-            self.iface.mainWindow(),
-        )
-        self.action_thickness.triggered.connect(self.show_thickness_dialog)
-
-        self.iface.addPluginToMenu(__title__, self.action_sampler)
-        self.iface.addPluginToMenu(__title__, self.action_sorter)
-        self.iface.addPluginToMenu(__title__, self.action_user_sorter)
-        self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
-        self.iface.addPluginToMenu(__title__, self.action_thickness)
 
         self.initProcessing()
 
@@ -401,6 +389,17 @@ class LoopstructuralPlugin:
         )
         dialog.exec_()
 
+    def show_paint_strat_order_dialog(self):
+        """Show the paint stratigraphic order dialog."""
+        from loopstructural.gui.map2loop_tools import PaintStratigraphicOrderDialog
+
+        dialog = PaintStratigraphicOrderDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.
 
@@ -451,6 +450,7 @@ class LoopstructuralPlugin:
             "action_user_sorter",
             "action_basal_contacts",
             "action_thickness",
+            "action_paint_strat_order",
             "action_fault_topology",
             "action_modelling",
             "action_visualisation",

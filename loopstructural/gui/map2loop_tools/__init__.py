@@ -6,6 +6,7 @@ accessed from the plugin menu.
 
 from .dialogs import (
     BasalContactsDialog,
+    PaintStratigraphicOrderDialog,
     SamplerDialog,
     SorterDialog,
     ThicknessCalculatorDialog,
@@ -14,6 +15,7 @@ from .dialogs import (
 
 __all__ = [
     'BasalContactsDialog',
+    'PaintStratigraphicOrderDialog',
     'SamplerDialog',
     'SorterDialog',
     'ThicknessCalculatorDialog',
