@@ -249,7 +249,6 @@ class ModellingDataManager:
         for u in self._stratigraphic_column.order:
             if u.element_type == StratigraphicColumnElementType.UNIT:
                 units.append(u.name)
-                print(f"Unit: {u.name}")
         return units
 
     def add_to_stratigraphic_column(self, unit_data):

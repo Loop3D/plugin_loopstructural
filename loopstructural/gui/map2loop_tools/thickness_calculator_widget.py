@@ -358,12 +358,11 @@ class ThicknessCalculatorWidget(QWidget):
             'sampled_contacts': self.sampledContactsComboBox.currentLayer(),
             'structure': self.structureLayerComboBox.currentLayer(),
             'orientation_type': self.orientationTypeComboBox.currentText(),
-            'unitname_field': self.unitNameFieldComboBox.currentField(),
+            'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'dip_field': self.dipFieldComboBox.currentField(),
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
-            'basal_unitname_field': self.basalUnitNameFieldComboBox.currentField(),
+            'basal_contacts_unit_name': self.basalUnitNameFieldComboBox.currentField(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
-            'search_radius': self.searchRadiusSpinBox.value(),
             'updater': (lambda msg: QMessageBox.information(self, "Progress", msg)),
             'stratigraphic_order': (
                 self.data_manager.get_stratigraphic_unit_names()
