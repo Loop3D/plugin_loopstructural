@@ -61,15 +61,27 @@ class FaultAdjacencyTab(QWidget):
         self.data_manager._stratigraphic_column.attach(self.update)
         self.data_manager._fault_topology.attach(self.update)
 
-    def _update(self, event, *args, **kwargs):
-        if (
-            args[0] == "fault_relationship_updated"
-            or args[0] == "stratigraphy_fault_relationship_updated"
-        ):
-            return
+    def _update(self, observable, event, *args, **kwargs):
+        """Observer callback invoked by Observable.notify.
 
-        self.update_fault_adjacency_table()
-        self.update_stratigraphic_units_table()
+        Parameters follow the Observable.notify signature: (observable, event, *args, **kwargs)
+        Always refresh the tables when a topology or stratigraphy event occurs.
+        """
+        # event is a string describing what changed
+        try:
+            ev = event
+        except Exception:
+            # defensive: if call used different ordering, try to recover
+            ev = None
+
+        # Refresh the UI for any relevant event
+        if ev is None or ev.startswith('fault') or 'stratigraphy' in (ev or ''):
+            self.update_fault_adjacency_table()
+            self.update_stratigraphic_units_table()
+        else:
+            # fallback: update anyway to keep UI in sync
+            self.update_fault_adjacency_table()
+            self.update_stratigraphic_units_table()
 
     def change_button_color(self, button, row, col):
         """Cycle the button color and update the fault relationship."""

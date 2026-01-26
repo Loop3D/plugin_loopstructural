@@ -2,10 +2,10 @@ import json
 from collections import defaultdict
 
 import numpy as np
-from LoopStructural.datatypes import BoundingBox
 from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
 
 from LoopStructural import FaultTopology, StratigraphicColumn
+from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
@@ -299,7 +299,10 @@ class ModellingDataManager:
         """Get the unique faults from the fault traces."""
         if self._fault_traces is None or self._fault_traces['layer'] is None:
             return []
+        if self._fault_traces['fault_name_field'] is None:
+            return []
         unique_faults = set()
+
         for feature in self._fault_traces['layer'].getFeatures():
             fault_name = feature[self._fault_traces['fault_name_field']]
             unique_faults.add(str(fault_name))
