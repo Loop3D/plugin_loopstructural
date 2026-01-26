@@ -85,9 +85,6 @@ jobs:
           python3 -m pip install -U pip setuptools wheel
           python3 -m pip install -U -r requirements/testing.txt
           python3 -m pip install -U -r /tests_directory/loopstructural/requirements.txt
-      - name: Install map2loop
-        run: |
-          python3 -m pip install git+https://github.com/Loop3D/map2loop.git@main
 
       - name: Run Unit tests
         run: |
