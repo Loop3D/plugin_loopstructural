@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  qgis_test:
+    image: qgis/qgis:release-3_28
+    environment:
+      - CI=true
+      - DISPLAY=:99
+      - MUTE_LOGS=true
+      - NO_MODALS=1
+      - PYTHONPATH=/usr/share/qgis/python/plugins:/usr/share/qgis/python:.
+      - QT_QPA_PLATFORM=offscreen
+      - WITH_PYTHON_PEP=false
+    volumes:
+      - ./:/tests_directory
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    tty: true
+    entrypoint: ["tail", "-f", "/dev/null"]
