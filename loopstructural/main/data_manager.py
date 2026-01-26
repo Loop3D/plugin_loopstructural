@@ -169,7 +169,6 @@ class ModellingDataManager:
         """Get the current bounding box."""
         return self._bounding_box
 
-
     def set_elevation(self, elevation):
         """Set the elevation for the model."""
         self.elevation = elevation

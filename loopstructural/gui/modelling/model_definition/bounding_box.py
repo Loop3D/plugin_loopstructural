@@ -32,12 +32,36 @@ class BoundingBoxWidget(QWidget):
         bounding_box : object
             BoundingBox-like object with `origin` and `maximum` sequences of length 3.
         """
-        self.originXSpinBox.setValue(bounding_box.origin[0])
-        self.maxXSpinBox.setValue(bounding_box.maximum[0])
-        self.originYSpinBox.setValue(bounding_box.origin[1])
-        self.maxYSpinBox.setValue(bounding_box.maximum[1])
-        self.originZSpinBox.setValue(bounding_box.origin[2])
-        self.maxZSpinBox.setValue(bounding_box.maximum[2])
+        # Block spinbox signals to avoid emitting valueChanged while setting values
+        spinboxes = (
+            self.originXSpinBox,
+            self.maxXSpinBox,
+            self.originYSpinBox,
+            self.maxYSpinBox,
+            self.originZSpinBox,
+            self.maxZSpinBox,
+        )
+        for sb in spinboxes:
+            try:
+                sb.blockSignals(True)
+            except Exception:
+                pass
+
+        try:
+            self.originXSpinBox.setValue(bounding_box.origin[0])
+            self.maxXSpinBox.setValue(bounding_box.maximum[0])
+            self.originYSpinBox.setValue(bounding_box.origin[1])
+            self.maxYSpinBox.setValue(bounding_box.maximum[1])
+            self.originZSpinBox.setValue(bounding_box.origin[2])
+            self.maxZSpinBox.setValue(bounding_box.maximum[2])
+        finally:
+            # Ensure signals are unblocked even if setting values raises
+            for sb in spinboxes:
+                try:
+                    sb.blockSignals(False)
+                except Exception:
+                    pass
+
         self._update_bounding_box_styles()
 
     def useCurrentViewExtent(self):
