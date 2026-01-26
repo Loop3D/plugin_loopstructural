@@ -169,7 +169,8 @@ class SorterWidget(QWidget):
         ):
             if layer_name := settings.get(key):
                 layer = self.data_manager.find_layer_by_name(layer_name)
-                combo.setLayer(layer)
+                if layer:
+                    combo.setLayer(layer)
         if 'sorting_algorithm' in settings:
             self.sortingAlgorithmComboBox.setCurrentIndex(settings['sorting_algorithm'])
         if 'orientation_type' in settings:

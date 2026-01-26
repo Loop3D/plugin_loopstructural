@@ -155,10 +155,12 @@ class BasalContactsWidget(QWidget):
             return
         if layer_name := settings.get('geology_layer'):
             layer = self.data_manager.find_layer_by_name(layer_name)
-            self.geologyLayerComboBox.setLayer(layer)
+            if layer:
+                self.geologyLayerComboBox.setLayer(layer)
         if layer_name := settings.get('faults_layer'):
             layer = self.data_manager.find_layer_by_name(layer_name)
-            self.faultsLayerComboBox.setLayer(layer)
+            if layer:
+                self.faultsLayerComboBox.setLayer(layer)
         if field := settings.get('unit_name_field'):
             self.unitNameFieldComboBox.setField(field)
 

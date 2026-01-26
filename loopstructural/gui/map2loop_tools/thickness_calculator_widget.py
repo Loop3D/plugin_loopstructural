@@ -229,7 +229,8 @@ class ThicknessCalculatorWidget(QWidget):
         ):
             if layer_name := settings.get(key):
                 layer = self.data_manager.find_layer_by_name(layer_name)
-                combo.setLayer(layer)
+                if layer:
+                    combo.setLayer(layer)
         if 'calculator_type_index' in settings:
             self.calculatorTypeComboBox.setCurrentIndex(settings['calculator_type_index'])
         if 'orientation_type_index' in settings:
@@ -348,4 +349,3 @@ class ThicknessCalculatorWidget(QWidget):
             'search_radius': self.searchRadiusSpinBox.value(),
         }
         return params
-

@@ -143,13 +143,16 @@ class SamplerWidget(QWidget):
             return
         if layer_name := settings.get('dtm_layer'):
             layer = self.data_manager.find_layer_by_name(layer_name)
-            self.dtmLayerComboBox.setLayer(layer)
+            if layer:
+                self.dtmLayerComboBox.setLayer(layer)
         if layer_name := settings.get('geology_layer'):
             layer = self.data_manager.find_layer_by_name(layer_name)
-            self.geologyLayerComboBox.setLayer(layer)
+            if layer:
+                self.geologyLayerComboBox.setLayer(layer)
         if layer_name := settings.get('spatial_data_layer'):
             layer = self.data_manager.find_layer_by_name(layer_name)
-            self.spatialDataLayerComboBox.setLayer(layer)
+            if layer:
+                self.spatialDataLayerComboBox.setLayer(layer)
         sampler_index = settings.get('sampler_type_index')
         if sampler_index is not None:
             self.samplerTypeComboBox.setCurrentIndex(sampler_index)
