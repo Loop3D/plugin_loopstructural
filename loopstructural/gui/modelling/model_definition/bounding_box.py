@@ -118,9 +118,15 @@ class BoundingBoxWidget(QWidget):
             return False
         
         if crs.isGeographic():
+            # Safely get CRS description
+            try:
+                crs_desc = crs.description() or crs.authid() or "Unknown"
+            except Exception:
+                crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+            
             self.crsWarningLabel.setText(
                 f"⚠ CRS must be projected (in meters), not geographic.\n"
-                f"Selected: {crs.description()}"
+                f"Selected: {crs_desc}"
             )
             return False
         

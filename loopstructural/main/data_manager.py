@@ -524,6 +524,22 @@ class ModellingDataManager:
         self._fault_traces = None
         self._structural_orientations = None
 
+    def _get_model_crs_authid(self):
+        """Get the model CRS authid string for serialization.
+        
+        Returns
+        -------
+        str or None
+            CRS authid string (e.g., 'EPSG:32633') or None if CRS is not valid.
+        """
+        if not self._model_crs:
+            return None
+        if not isinstance(self._model_crs, QgsCoordinateReferenceSystem):
+            return None
+        if not self._model_crs.isValid():
+            return None
+        return self._model_crs.authid()
+
     def to_dict(self):
         """Convert the data manager to a dictionary."""
         # Create copies of the dictionaries to avoid modifying the originals
@@ -563,11 +579,7 @@ class ModellingDataManager:
             'use_dem': self.use_dem,
             'elevation': self.elevation,
             'widget_settings': self.widget_settings,
-            'model_crs': (
-                self._model_crs.authid() 
-                if self._model_crs and isinstance(self._model_crs, QgsCoordinateReferenceSystem) and self._model_crs.isValid() 
-                else None
-            ),
+            'model_crs': self._get_model_crs_authid(),
             'use_project_crs': self._use_project_crs,
         }
 
