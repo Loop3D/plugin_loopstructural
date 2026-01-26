@@ -198,14 +198,14 @@ class BasalContactsWidget(QWidget):
                             log_level=2,
                         )
                 return True
-            except Exception as err:
-                if self._debug:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Basal contacts extraction failed: {err}",
-                        log_level=2,
-                    )
-                    raise err
-                QMessageBox.critical(self, "Error", f"An error occurred: {err}")
+        except Exception as err:
+            if self._debug:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Basal contacts extraction failed: {err}",
+                    log_level=2,
+                )
+                raise err
+            QMessageBox.critical(self, "Error", f"An error occurred: {err}")
         return False
 
     def get_parameters(self):

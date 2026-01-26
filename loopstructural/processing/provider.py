@@ -16,7 +16,6 @@ from loopstructural.__about__ import (
 
 from .algorithms import (
     BasalContactsAlgorithm,
-    PaintStratigraphicOrderAlgorithm,
     SamplerAlgorithm,
     StratigraphySorterAlgorithm,
     ThicknessCalculatorAlgorithm,
