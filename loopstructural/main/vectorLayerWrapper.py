@@ -88,25 +88,67 @@ def qgsRasterToGdalDataset(rlayer: QgsRasterLayer):
     return ds
 
 
-def qgsLayerToGeoDataFrame(layer) -> gpd.GeoDataFrame:
+def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
+    """Convert a QgsVectorLayer to a GeoDataFrame, optionally transforming to a target CRS.
+    
+    Parameters
+    ----------
+    layer : QgsVectorLayer
+        The vector layer to convert
+    target_crs : QgsCoordinateReferenceSystem, optional
+        If provided, all geometries will be transformed to this CRS.
+        If None, the layer's source CRS is used.
+    
+    Returns
+    -------
+    gpd.GeoDataFrame
+        GeoDataFrame with geometries in the specified CRS
+    """
     if layer is None:
         return None
+    
     features = layer.getFeatures()
     fields = layer.fields()
     data = {'geometry': []}
     for f in fields:
         data[f.name()] = []
+    
+    # Set up coordinate transformation if needed
+    transform = None
+    source_crs = layer.sourceCrs()
+    output_crs = source_crs
+    
+    if target_crs is not None and target_crs.isValid():
+        if source_crs.isValid() and source_crs != target_crs:
+            transform = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
+            output_crs = target_crs
+    
     for feature in features:
         geom = feature.geometry()
         if geom.isEmpty():
             continue
-        data['geometry'].append(geom)
+        
+        # Transform geometry if needed
+        if transform is not None:
+            geom_copy = QgsGeometry(geom)
+            try:
+                geom_copy.transform(transform)
+                data['geometry'].append(geom_copy)
+            except Exception:
+                # If transformation fails, skip this feature
+                continue
+        else:
+            data['geometry'].append(geom)
+        
+        # Copy field values
         for f in fields:
             if f.type() == QVariant.String:
                 data[f.name()].append(str(feature[f.name()]))
             else:
                 data[f.name()].append(feature[f.name()])
-    return gpd.GeoDataFrame(data, crs=layer.sourceCrs().authid())
+    
+    return gpd.GeoDataFrame(data, crs=output_crs.authid())
+
 
 
 def qgsLayerToDataFrame(src, dtm=None) -> pd.DataFrame:

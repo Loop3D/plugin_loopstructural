@@ -2,7 +2,7 @@ import json
 from collections import defaultdict
 
 import numpy as np
-from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsPointXY, QgsProject, QgsVectorLayer
 
 from LoopStructural import FaultTopology, StratigraphicColumn
 from LoopStructural.datatypes import BoundingBox
@@ -69,6 +69,9 @@ class ModellingDataManager:
         self.dem_callback = None
         self.widget_settings = {}
         self.feature_data = defaultdict(dict)
+        self._model_crs = None
+        self._use_project_crs = True
+        self.model_crs_callback = None
 
     def onSaveProject(self):
         """Save project data."""
@@ -170,6 +173,88 @@ class ModellingDataManager:
     def get_bounding_box(self):
         """Get the current bounding box."""
         return self._bounding_box
+
+    def set_model_crs(self, crs, use_project_crs=False):
+        """Set the model CRS.
+        
+        Parameters
+        ----------
+        crs : QgsCoordinateReferenceSystem or None
+            The CRS to use for the model. If None and use_project_crs is True, 
+            will use the project CRS.
+        use_project_crs : bool
+            If True, use the project CRS instead of a custom CRS.
+        
+        Returns
+        -------
+        tuple
+            (success: bool, message: str)
+        """
+        self._use_project_crs = use_project_crs
+        
+        if use_project_crs:
+            crs = self.project.crs()
+        
+        # Validate CRS
+        if crs is None or not crs.isValid():
+            self._model_crs = None
+            msg = "Model CRS is not valid."
+            self.logger(message=msg, log_level=2)
+            if self.model_crs_callback:
+                self.model_crs_callback(self._model_crs, self._use_project_crs)
+            return False, msg
+        
+        # Check if CRS is projected (not geographic)
+        if crs.isGeographic():
+            self._model_crs = None
+            msg = f"Model CRS must be projected (in meters), not geographic. Selected CRS: {crs.description()}"
+            self.logger(message=msg, log_level=2)
+            if self.model_crs_callback:
+                self.model_crs_callback(self._model_crs, self._use_project_crs)
+            return False, msg
+        
+        self._model_crs = crs
+        msg = f"Model CRS set to: {crs.description()} ({crs.authid()})"
+        self.logger(message=msg, log_level=3)
+        
+        if self.model_crs_callback:
+            self.model_crs_callback(self._model_crs, self._use_project_crs)
+        
+        return True, msg
+
+    def get_model_crs(self):
+        """Get the model CRS.
+        
+        Returns
+        -------
+        QgsCoordinateReferenceSystem or None
+            The model CRS, or None if not set.
+        """
+        if self._use_project_crs:
+            return self.project.crs()
+        return self._model_crs
+    
+    def is_model_crs_valid(self):
+        """Check if the model CRS is valid and projected.
+        
+        Returns
+        -------
+        bool
+            True if the model CRS is valid and projected, False otherwise.
+        """
+        crs = self.get_model_crs()
+        if crs is None or not crs.isValid():
+            return False
+        if crs.isGeographic():
+            return False
+        return True
+    
+    def set_model_crs_callback(self, callback):
+        """Set the callback for when the model CRS is updated."""
+        self.model_crs_callback = callback
+        # Trigger callback with current values
+        if self.model_crs_callback:
+            self.model_crs_callback(self.get_model_crs(), self._use_project_crs)
 
     def set_elevation(self, elevation):
         """Set the elevation for the model."""
@@ -378,15 +463,16 @@ class ModellingDataManager:
         """Update the foliation features in the model manager."""
         print("Updating stratigraphy...")
         if self._model_manager is not None:
+            model_crs = self.get_model_crs()
             if self._basal_contacts is not None:
                 self._model_manager.update_contact_traces(
-                    qgsLayerToGeoDataFrame(self._basal_contacts['layer']),
+                    qgsLayerToGeoDataFrame(self._basal_contacts['layer'], target_crs=model_crs),
                     unit_name_field=self._basal_contacts['unitname_field'],
                 )
             if self._structural_orientations is not None:
                 print("Updating structural orientations...")
                 self._model_manager.update_structural_data(
-                    qgsLayerToGeoDataFrame(self._structural_orientations['layer']),
+                    qgsLayerToGeoDataFrame(self._structural_orientations['layer'], target_crs=model_crs),
                     strike_field=self._structural_orientations['strike_field'],
                     dip_field=self._structural_orientations['dip_field'],
                     unit_name_field=self._structural_orientations['unitname_field'],
@@ -412,8 +498,9 @@ class ModellingDataManager:
             self._fault_topology.remove_fault(fault)
         self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:
+            model_crs = self.get_model_crs()
             self._model_manager.update_fault_points(
-                qgsLayerToGeoDataFrame(self._fault_traces['layer']),
+                qgsLayerToGeoDataFrame(self._fault_traces['layer'], target_crs=model_crs),
                 fault_name_field=self._fault_traces['fault_name_field'],
                 fault_dip_field=self._fault_traces['fault_dip_field'],
                 fault_pitch_field=self._fault_traces.get('fault_pitch_field', None),
@@ -476,6 +563,8 @@ class ModellingDataManager:
             'use_dem': self.use_dem,
             'elevation': self.elevation,
             'widget_settings': self.widget_settings,
+            'model_crs': self._model_crs.authid() if self._model_crs and self._model_crs.isValid() else None,
+            'use_project_crs': self._use_project_crs,
         }
 
     def from_dict(self, data):
@@ -514,6 +603,14 @@ class ModellingDataManager:
             self.stratigraphic_column_callback()
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']
+        
+        # Load model CRS settings
+        if 'use_project_crs' in data:
+            self._use_project_crs = data['use_project_crs']
+        if 'model_crs' in data and data['model_crs'] is not None:
+            crs = QgsCoordinateReferenceSystem(data['model_crs'])
+            if crs.isValid():
+                self.set_model_crs(crs, use_project_crs=self._use_project_crs)
 
     def update_from_dict(self, data):
         """Update the data manager from a dictionary."""
@@ -590,6 +687,17 @@ class ModellingDataManager:
             self.widget_settings = data['widget_settings']
         else:
             self.widget_settings = {}
+        
+        # Load model CRS settings
+        if 'use_project_crs' in data:
+            self._use_project_crs = data['use_project_crs']
+        else:
+            self._use_project_crs = True
+            
+        if 'model_crs' in data and data['model_crs'] is not None:
+            crs = QgsCoordinateReferenceSystem(data['model_crs'])
+            if crs.isValid():
+                self.set_model_crs(crs, use_project_crs=self._use_project_crs)
 
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
@@ -644,9 +752,10 @@ class ModellingDataManager:
         if foliation_name not in self.feature_data:
             raise ValueError(f"Foliation '{foliation_name}' does not exist in the data manager.")
         foliation_data = self.feature_data[foliation_name]
+        model_crs = self.get_model_crs()
         for layer in foliation_data.values():
             layer['df'] = qgsLayerToGeoDataFrame(
-                layer['layer']
+                layer['layer'], target_crs=model_crs
             )  # Convert QgsVectorLayer to GeoDataFrame
         if self._model_manager:
             self._model_manager.add_foliation(

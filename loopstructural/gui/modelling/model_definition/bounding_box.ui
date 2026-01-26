@@ -163,6 +163,52 @@
     </layout>
    </item>
    <item>
+    <widget class="QGroupBox" name="crsGroupBox">
+     <property name="title">
+      <string>Coordinate Reference System (CRS)</string>
+     </property>
+     <layout class="QVBoxLayout" name="crsVerticalLayout">
+      <item>
+       <widget class="QRadioButton" name="useProjectCrsRadioButton">
+        <property name="text">
+         <string>Use Project CRS</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="useCustomCrsRadioButton">
+        <property name="text">
+         <string>Use Custom CRS</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QgsProjectionSelectionWidget" name="crsSelector">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="crsWarningLabel">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="styleSheet">
+         <string>color: red; font-weight: bold;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QPushButton" name="selectFromCurrentLayerButton">
      <property name="text">
       <string>Select from layer current</string>
@@ -185,6 +231,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsProjectionSelectionWidget</class>
+   <extends>QWidget</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

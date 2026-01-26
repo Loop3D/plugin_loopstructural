@@ -150,6 +150,21 @@ class GeologicalModelTab(QWidget):
                     "Please set the bounding box before initializing the model.",
                 )
                 return
+            
+            # Validate model CRS
+            if not self.data_manager.is_model_crs_valid():
+                crs = self.data_manager.get_model_crs()
+                if crs is None or not crs.isValid():
+                    msg = "Model CRS is not set or invalid. Please select a valid projected CRS in the Model Definition tab."
+                else:
+                    msg = f"Model CRS must be projected (in meters), not geographic.\nSelected CRS: {crs.description()}\n\nPlease select a valid projected CRS in the Model Definition tab."
+                
+                QMessageBox.critical(
+                    self,
+                    "Invalid Model CRS",
+                    msg,
+                )
+                return
 
         # create progress dialog (indeterminate)
         progress = QProgressDialog("Updating geological model...", "Cancel", 0, 0, self)
