@@ -4,6 +4,8 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 
+from ...main.helpers import ColumnMatcher, get_layer_names
+
 
 class FaultLayersWidget(QWidget):
     def __init__(self, parent=None, data_manager=None):
@@ -26,6 +28,8 @@ class FaultLayersWidget(QWidget):
         self.useZCoordinateCheckBox.stateChanged.connect(self.onUseZCoordinateClicked)
         self.useZCoordinateCheckBox.stateChanged.connect(self.onFaultFieldChanged)
         self.useZCoordinate = False
+        self._guess_layer_and_fields()
+        self._restore_selection()
 
     def enableZCheckbox(self, enable):
         """Enable or disable the Z coordinate checkbox."""
@@ -80,6 +84,7 @@ class FaultLayersWidget(QWidget):
                 fault_displacement_field=None,
                 use_z_coordinate=self.useZCoordinate,
             )
+        self._persist_selection()
 
     def onFaultFieldChanged(self):
         self.data_manager.set_fault_trace_layer(
@@ -89,3 +94,60 @@ class FaultLayersWidget(QWidget):
             fault_displacement_field=self.faultDisplacementField.currentField(),
             use_z_coordinate=self.useZCoordinate,
         )
+        self._persist_selection()
+
+    def _guess_layer_and_fields(self):
+        if not self.data_manager:
+            return
+        layer_names = get_layer_names(self.faultTraceLayer)
+        matcher = ColumnMatcher(layer_names)
+        match = matcher.find_match('FAULT')
+        if match:
+            layer = self.data_manager.find_layer_by_name(match)
+            if layer:
+                self.faultTraceLayer.setLayer(layer)
+                fields = [field.name() for field in layer.fields()]
+                field_matcher = ColumnMatcher(fields)
+                if name_match := field_matcher.find_match('FAULT_NAME') or field_matcher.find_match('NAME'):
+                    self.faultNameField.setField(name_match)
+                if dip_match := field_matcher.find_match('DIP'):
+                    self.faultDipField.setField(dip_match)
+                if disp_match := field_matcher.find_match('DISPLACEMENT') or field_matcher.find_match(
+                    'SLIP'
+                ):
+                    self.faultDisplacementField.setField(disp_match)
+
+    def _persist_selection(self):
+        if not self.data_manager:
+            return
+        settings = {
+            'fault_layer': (
+                self.faultTraceLayer.currentLayer().name()
+                if self.faultTraceLayer.currentLayer()
+                else None
+            ),
+            'fault_name_field': self.faultNameField.currentField(),
+            'fault_dip_field': self.faultDipField.currentField(),
+            'fault_displacement_field': self.faultDisplacementField.currentField(),
+            'use_z': self.useZCoordinateCheckBox.isChecked(),
+        }
+        self.data_manager.set_widget_settings('fault_layers_widget', settings)
+
+    def _restore_selection(self):
+        if not self.data_manager:
+            return
+        settings = self.data_manager.get_widget_settings('fault_layers_widget', {})
+        if not settings:
+            return
+        if layer_name := settings.get('fault_layer'):
+            layer = self.data_manager.find_layer_by_name(layer_name)
+            if layer:
+                self.faultTraceLayer.setLayer(layer)
+        if field := settings.get('fault_name_field'):
+            self.faultNameField.setField(field)
+        if field := settings.get('fault_dip_field'):
+            self.faultDipField.setField(field)
+        if field := settings.get('fault_displacement_field'):
+            self.faultDisplacementField.setField(field)
+        if 'use_z' in settings:
+            self.useZCoordinateCheckBox.setChecked(settings['use_z'])
