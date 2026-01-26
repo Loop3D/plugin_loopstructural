@@ -8,6 +8,8 @@ from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
+from ...main.m2l_api import paint_stratigraphic_order
+
 
 class PaintStratigraphicOrderWidget(QWidget):
     """Widget for painting stratigraphic order or cumulative thickness onto polygons.
@@ -39,7 +41,8 @@ class PaintStratigraphicOrderWidget(QWidget):
         # Configure layer filters programmatically
         try:
             self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.stratColumnLayerComboBox.setFilters(QgsMapLayerProxyModel.NoGeometry)
+            # stratigraphic column layer removed from UI
+            pass
         except Exception:
             # If QGIS isn't available, skip filter setup
             pass
@@ -48,9 +51,27 @@ class PaintStratigraphicOrderWidget(QWidget):
         self.paint_modes = ["Stratigraphic Order (0=youngest)", "Cumulative Thickness"]
         self.paintModeComboBox.addItems(self.paint_modes)
 
+        # New UI: duplicate layer and color ramp
+        try:
+            # Populate colour ramps from default style
+            from qgis.core import QgsStyle
+
+            ramps = QgsStyle().defaultStyle().colorRampNames()
+            self.colorRampComboBox.addItems(sorted(ramps))
+        except Exception as e:
+            if self._debug.is_debug():
+                raise e
+            # if QGIS unavailable, leave empty
+            pass
+
+        # Default: no duplication
+        try:
+            self.duplicateLayerCheckBox.setChecked(False)
+        except Exception:
+            pass
+
         # Connect signals
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
-        self.stratColumnLayerComboBox.layerChanged.connect(self._on_strat_column_layer_changed)
         self.runButton.clicked.connect(self._run_painter)
 
         # Set up field combo boxes
@@ -112,7 +133,8 @@ class PaintStratigraphicOrderWidget(QWidget):
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes based on current layers."""
         self._on_geology_layer_changed()
-        self._on_strat_column_layer_changed()
+        # stratigraphic column layer removed from UI
+        pass
 
     def _on_geology_layer_changed(self):
         """Update unit name field combo box when geology layer changes."""
@@ -127,147 +149,189 @@ class PaintStratigraphicOrderWidget(QWidget):
                     self.unitNameFieldComboBox.setField(common_name)
                     break
 
-    def _on_strat_column_layer_changed(self):
-        """Update stratigraphic column field combo boxes when layer changes."""
-        strat_layer = self.stratColumnLayerComboBox.currentLayer()
-        self.stratUnitFieldComboBox.setLayer(strat_layer)
-        self.stratThicknessFieldComboBox.setLayer(strat_layer)
-
-        # Try to auto-select common field names
-        if strat_layer:
-            field_names = [field.name() for field in strat_layer.fields()]
-            
-            # Unit name field
-            for common_name in ['unit_name', 'name', 'UNITNAME', 'unitname']:
-                if common_name in field_names:
-                    self.stratUnitFieldComboBox.setField(common_name)
-                    break
-            
-            # Thickness field
-            for common_name in ['thickness', 'THICKNESS', 'thick']:
-                if common_name in field_names:
-                    self.stratThicknessFieldComboBox.setField(common_name)
-                    break
-
     def _run_painter(self):
         """Run the paint stratigraphic order algorithm."""
-        from qgis import processing
 
-        self._log_params("paint_strat_order_widget_run")
+        geology_layer = self.geologyLayerComboBox.currentLayer()
+        unit_name_field = self.unitNameFieldComboBox.currentField()
+        stratigraphic_order = self.data_manager.stratigraphic_order = (
+            self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
+        )
+        paint_stratigraphic_order(
+            geology_layer, stratigraphic_order, unit_name_field, debug_manager=self._debug
+        )
 
-        # Validate inputs
-        if not self.geologyLayerComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a geology polygon layer.")
-            return
-
-        if not self.stratColumnLayerComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a stratigraphic column layer.")
-            return
-
-        if not self.unitNameFieldComboBox.currentField():
-            QMessageBox.warning(self, "Missing Input", "Please select the unit name field.")
-            return
-
-        if not self.stratUnitFieldComboBox.currentField():
-            QMessageBox.warning(
-                self, "Missing Input", "Please select the stratigraphic column unit name field."
-            )
-            return
-
-        # Run the processing algorithm
+        # If requested, duplicate layer and apply style using selected colour ramp
         try:
-            params = {
-                'INPUT_POLYGONS': self.geologyLayerComboBox.currentLayer(),
-                'UNIT_NAME_FIELD': self.unitNameFieldComboBox.currentField(),
-                'INPUT_STRAT_COLUMN': self.stratColumnLayerComboBox.currentLayer(),
-                'STRAT_UNIT_NAME_FIELD': self.stratUnitFieldComboBox.currentField(),
-                'STRAT_THICKNESS_FIELD': self.stratThicknessFieldComboBox.currentField() or '',
-                'PAINT_MODE': self.paintModeComboBox.currentIndex(),
-                'OUTPUT': 'TEMPORARY_OUTPUT',
-            }
+            duplicate = (
+                getattr(self, 'duplicateLayerCheckBox', None)
+                and self.duplicateLayerCheckBox.isChecked()
+            )
+        except Exception:
+            duplicate = False
 
-            if self._debug and self._debug.is_debug():
-                try:
-                    import json
+        if duplicate:
+            # Get chosen ramp name
+            try:
+                ramp_name = self.colorRampComboBox.currentText()
+            except Exception:
+                ramp_name = None
 
-                    params_json = json.dumps(
-                        self._serialize_params_for_logging(params, "paint_strat_order"),
-                        indent=2,
-                    ).encode("utf-8")
-                    self._debug.save_debug_file("paint_strat_order_params.json", params_json)
-                except Exception as err:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Failed to save paint strat order params: {err}",
-                        log_level=2,
-                    )
+            # Step 1: create a memory copy of the geology layer and copy attributes/geometry
+            try:
+                from PyQt5.QtCore import QVariant
+                from qgis.core import (
+                    QgsFeature,
+                    QgsField,
+                    QgsGraduatedSymbolRenderer,
+                    QgsProject,
+                    QgsRendererRange,
+                    QgsStyle,
+                    QgsSymbol,
+                    QgsVectorLayer,
+                    QgsWkbTypes,
+                )
 
-            result = processing.run("plugin_map2loop:paint_stratigraphic_order", params)
+                geom_type = QgsWkbTypes.displayString(geology_layer.wkbType())
+                crs_auth = geology_layer.crs().authid() if hasattr(geology_layer, 'crs') else None
+                uri = f"{geom_type}?crs={crs_auth}" if crs_auth else f"{geom_type}"
+                mem_layer = QgsVectorLayer(uri, f"{geology_layer.name()}_strat", "memory")
 
-            if result and 'OUTPUT' in result:
-                output_layer = result['OUTPUT']
-                if output_layer:
-                    QgsProject.instance().addMapLayer(output_layer)
-                    
-                    field_name = (
-                        'strat_order' if self.paintModeComboBox.currentIndex() == 0 
-                        else 'cum_thickness'
-                    )
-                    
+                mem_dp = mem_layer.dataProvider()
+                mem_dp.addAttributes(list(geology_layer.fields()))
+                mem_layer.updateFields()
+
+                # copy each feature and its attributes explicitly
+                src_field_names = [f.name() for f in geology_layer.fields()]
+                new_feats = []
+                for src_feat in geology_layer.getFeatures():
+                    nf = QgsFeature()
+                    nf.setGeometry(src_feat.geometry())
+                    nf.setFields(mem_layer.fields())
+                    attrs = []
+                    for f in mem_layer.fields():
+                        fname = f.name()
+                        if fname in src_field_names:
+                            try:
+                                attrs.append(src_feat[fname])
+                            except Exception:
+                                attrs.append(None)
+                        else:
+                            attrs.append(None)
+                    nf.setAttributes(attrs)
+                    new_feats.append(nf)
+                mem_dp.addFeatures(new_feats)
+                mem_layer.updateExtents()
+                QgsProject.instance().addMapLayer(mem_layer)
+            except Exception as e:
+                QMessageBox.warning(self, 'Duplicate Layer', f'Failed to create copy: {e}')
+                return
+
+            # Step 2: ensure 'strat_order' exists on memory layer and populate numeric values by matching geometries
+            field_name = 'strat_order'
+            try:
+                if field_name not in [f.name() for f in mem_layer.fields()]:
+                    mem_layer.startEditing()
+                    mem_dp.addAttributes([QgsField(field_name, QVariant.Int)])
+                    mem_layer.updateFields()
+                    mem_layer.commitChanges()
+
+                # build mapping from geometry WKB -> numeric strat value from original layer
+                geom_to_val = {}
+                for of in geology_layer.getFeatures():
+                    try:
+                        raw = of[field_name]
+                    except Exception:
+                        raw = None
+                    if raw is None:
+                        continue
+                    try:
+                        val = int(raw)
+                    except Exception:
+                        try:
+                            val = int(float(raw))
+                        except Exception:
+                            continue
+                    try:
+                        geom_to_val[of.geometry().asWkb()] = val
+                    except Exception:
+                        # fallback to WKT if asWkb unavailable
+                        try:
+                            geom_to_val[of.geometry().asWkt()] = val
+                        except Exception:
+                            continue
+
+                if geom_to_val:
+                    mem_layer.startEditing()
+                    strat_idx = mem_layer.fields().indexFromName(field_name)
+                    for mf in mem_layer.getFeatures():
+                        try:
+                            key = mf.geometry().asWkb()
+                        except Exception:
+                            try:
+                                key = mf.geometry().asWkt()
+                            except Exception:
+                                key = None
+                        if key is None:
+                            continue
+                        val = geom_to_val.get(key, None)
+                        if val is not None:
+                            mem_layer.changeAttributeValue(mf.id(), strat_idx, int(val))
+                    mem_layer.commitChanges()
+            except Exception:
+                # continue; styling will fallback if numeric data missing
+                pass
+
+            # Step 3: build graduated renderer using explicit ranges per unique strat value
+            try:
+                vals = set()
+                for f in mem_layer.getFeatures():
+                    try:
+                        v = f[field_name]
+                    except Exception:
+                        v = None
+                    if v is None:
+                        continue
+                    try:
+                        vals.add(float(v))
+                    except Exception:
+                        continue
+                unique_vals = sorted(vals)
+
+                if not unique_vals:
                     QMessageBox.information(
                         self,
-                        "Success",
-                        f"Stratigraphic order painted successfully!\n"
-                        f"Output layer added with '{field_name}' field.",
+                        'Styling',
+                        "No 'strat_order' values found on duplicated layer; leaving default styling.",
                     )
                 else:
-                    QMessageBox.warning(self, "Warning", "No output layer was generated.")
-            else:
-                QMessageBox.warning(self, "Warning", "Algorithm did not produce expected output.")
+                    from qgis.core import QgsRendererRange
 
-        except Exception as e:
-            if self._debug:
-                self._debug.plugin.log(
-                    message=f"[map2loop] Paint stratigraphic order failed: {e}",
-                    log_level=2,
+                    ramp = QgsStyle().defaultStyle().colorRamp(ramp_name) if ramp_name else None
+                    ranges = []
+                    n = len(unique_vals)
+                    for i, v in enumerate(unique_vals):
+                        lower = v - 0.5
+                        upper = v + 0.5
+                        symbol = QgsSymbol.defaultSymbol(mem_layer.geometryType())
+                        if ramp:
+                            try:
+                                color = ramp.color(i / (n - 1) if n > 1 else 0)
+                                symbol.setColor(color)
+                            except Exception:
+                                pass
+                        label = str(int(v)) if float(v).is_integer() else str(v)
+                        ranges.append(QgsRendererRange(lower, upper, symbol, label))
+                    renderer = QgsGraduatedSymbolRenderer(field_name, ranges)
+                    mem_layer.setRenderer(renderer)
+                    mem_layer.triggerRepaint()
+            except Exception as e:
+                QMessageBox.warning(
+                    self, 'Duplicate Layer', f'Failed to apply graduated styling: {e}'
                 )
-            if PlgOptionsManager.get_debug_mode():
-                raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
-    def get_parameters(self):
-        """Get current widget parameters.
-
-        Returns
-        -------
-        dict
-            Dictionary of current widget parameters.
-        """
-        return {
-            'geology_layer': self.geologyLayerComboBox.currentLayer(),
-            'unit_name_field': self.unitNameFieldComboBox.currentField(),
-            'strat_column_layer': self.stratColumnLayerComboBox.currentLayer(),
-            'strat_unit_field': self.stratUnitFieldComboBox.currentField(),
-            'strat_thickness_field': self.stratThicknessFieldComboBox.currentField(),
-            'paint_mode': self.paintModeComboBox.currentIndex(),
-        }
-
-    def set_parameters(self, params):
-        """Set widget parameters.
-
-        Parameters
-        ----------
-        params : dict
-            Dictionary of parameters to set.
-        """
-        if 'geology_layer' in params and params['geology_layer']:
-            self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if 'unit_name_field' in params and params['unit_name_field']:
-            self.unitNameFieldComboBox.setField(params['unit_name_field'])
-        if 'strat_column_layer' in params and params['strat_column_layer']:
-            self.stratColumnLayerComboBox.setLayer(params['strat_column_layer'])
-        if 'strat_unit_field' in params and params['strat_unit_field']:
-            self.stratUnitFieldComboBox.setField(params['strat_unit_field'])
-        if 'strat_thickness_field' in params and params['strat_thickness_field']:
-            self.stratThicknessFieldComboBox.setField(params['strat_thickness_field'])
-        if 'paint_mode' in params:
-            self.paintModeComboBox.setCurrentIndex(params['paint_mode'])
+            # QMessageBox.information(
+            #     self,
+            #     "Paint Stratigraphic Order",
+            #     "Stratigraphic order has been painted onto the geology layer.",
+            # )

@@ -1,5 +1,4 @@
 from .extract_basal_contacts import BasalContactsAlgorithm
-from .paint_stratigraphic_order import PaintStratigraphicOrderAlgorithm
 from .sampler import SamplerAlgorithm
 from .sorter import StratigraphySorterAlgorithm
 from .thickness_calculator import ThicknessCalculatorAlgorithm
