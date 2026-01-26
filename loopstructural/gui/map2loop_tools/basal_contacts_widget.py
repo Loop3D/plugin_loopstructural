@@ -177,7 +177,7 @@ class BasalContactsWidget(QWidget):
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
-            return
+            return False
 
         try:
             result, contact_type = self._extract_contacts()
@@ -197,6 +197,7 @@ class BasalContactsWidget(QWidget):
                             message=f"[map2loop] Failed to save basal contacts debug output: {err}",
                             log_level=2,
                         )
+                return True
         except Exception as err:
             if self._debug:
                 self._debug.plugin.log(
@@ -205,6 +206,7 @@ class BasalContactsWidget(QWidget):
                 )
                 raise err
             QMessageBox.critical(self, "Error", f"An error occurred: {err}")
+        return False
 
     def get_parameters(self):
         """Get current widget parameters.

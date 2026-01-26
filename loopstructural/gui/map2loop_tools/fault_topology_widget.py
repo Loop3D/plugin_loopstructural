@@ -90,3 +90,4 @@ class FaultTopologyWidget(QDialog):
         # addGeoDataFrameToproject(gdf, "Input Faults")
         # addGeoDataFrameToproject(df, "Fault Topology Table")
         QMessageBox.information(self, "Success", f"Calculated fault topology for {len(df)} pairs.")
+        return True

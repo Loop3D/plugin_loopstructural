@@ -149,7 +149,7 @@ class SamplerWidget(QWidget):
         # Validate inputs
         if not self.spatialDataLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a spatial data layer.")
-            return
+            return False
 
         sampler_type = self.samplerTypeComboBox.currentText()
 
@@ -158,10 +158,10 @@ class SamplerWidget(QWidget):
                 QMessageBox.warning(
                     self, "Missing Input", "Geology layer is required for Decimator."
                 )
-                return
+                return False
             if not self.dtmLayerComboBox.currentLayer():
                 QMessageBox.warning(self, "Missing Input", "DTM layer is required for Decimator.")
-                return
+                return False
 
         # Run the sampler API
         try:
@@ -274,6 +274,8 @@ class SamplerWidget(QWidget):
                 )
             else:
                 QMessageBox.warning(self, "Warning", "No samples were generated.")
+                return False
+            return True
 
         except Exception as e:
             if self._debug:
@@ -284,6 +286,7 @@ class SamplerWidget(QWidget):
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            return False
 
     def get_parameters(self):
         """Get current widget parameters.
