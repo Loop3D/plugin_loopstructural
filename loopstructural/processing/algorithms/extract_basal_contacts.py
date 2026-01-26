@@ -8,6 +8,7 @@
 *                                                                         *
 ***************************************************************************
 """
+
 # Python imports
 from typing import Any, Optional
 
@@ -131,6 +132,8 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
         geology = self.parameterAsVectorLayer(parameters, self.INPUT_GEOLOGY, context)
         faults = self.parameterAsVectorLayer(parameters, self.INPUT_FAULTS, context)
         strati_column = self.parameterAsSource(parameters, self.INPUT_STRATI_COLUMN, context)
+        # ensure we always have a stratigraphic order list defined
+        strati_order = []
         ignore_units = self.parameterAsMatrix(parameters, self.INPUT_IGNORE_UNITS, context)
 
         if isinstance(strati_column, QgsProcessingParameterMapLayer):
@@ -151,13 +154,14 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
 
         unit_name_field = self.parameterAsString(parameters, 'UNIT_NAME_FIELD', context)
 
+        # request all_contacts so the returned result contains both basal and all contacts
         result = extract_basal_contacts(
             geology=geology,
             stratigraphic_order=strati_order,
             faults=faults,
             ignore_units=ignore_units,
             unit_name_field=unit_name_field,
-            all_contacts=False,
+            all_contacts=True,
             updater=feedback.pushInfo,
         )
         basal_contacts = result['basal_contacts']
