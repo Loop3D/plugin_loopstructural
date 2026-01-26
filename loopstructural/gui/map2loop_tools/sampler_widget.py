@@ -7,7 +7,6 @@ from qgis.core import QgsProject
 from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
-from ...main.helpers import ColumnMatcher, get_layer_names
 
 
 class SamplerWidget(QWidget):
@@ -57,8 +56,6 @@ class SamplerWidget(QWidget):
 
         # Initial state update
         self._on_sampler_type_changed()
-        self._guess_layers()
-        self._restore_selection()
 
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
@@ -111,73 +108,6 @@ class SamplerWidget(QWidget):
             except Exception:
                 pass
 
-    def _guess_layers(self):
-        """Auto-select layers using ColumnMatcher."""
-        if not self.data_manager:
-            return
-        # DTM
-        dtm_names = get_layer_names(self.dtmLayerComboBox)
-        dtm_matcher = ColumnMatcher(dtm_names)
-        dtm_match = dtm_matcher.find_match('DTM') or dtm_matcher.find_match('DEM')
-        if dtm_match:
-            layer = self.data_manager.find_layer_by_name(dtm_match)
-            self.dtmLayerComboBox.setLayer(layer)
-        # Geology
-        geology_names = get_layer_names(self.geologyLayerComboBox)
-        geology_matcher = ColumnMatcher(geology_names)
-        geology_match = geology_matcher.find_match('GEOLOGY')
-        if geology_match:
-            layer = self.data_manager.find_layer_by_name(geology_match)
-            self.geologyLayerComboBox.setLayer(layer)
-        # Spatial
-        spatial_names = get_layer_names(self.spatialDataLayerComboBox)
-        spatial_matcher = ColumnMatcher(spatial_names)
-        spatial_match = spatial_matcher.find_match('SPATIAL')
-        if spatial_match:
-            layer = self.data_manager.find_layer_by_name(spatial_match)
-            self.spatialDataLayerComboBox.setLayer(layer)
-
-    def _restore_selection(self):
-        """Restore persisted selections from data manager."""
-        if not self.data_manager:
-            return
-        settings = self.data_manager.get_widget_settings('sampler_widget', {})
-        if not settings:
-            return
-        if layer_name := settings.get('dtm_layer'):
-            layer = self.data_manager.find_layer_by_name(layer_name)
-            if layer:
-                self.dtmLayerComboBox.setLayer(layer)
-        if layer_name := settings.get('geology_layer'):
-            layer = self.data_manager.find_layer_by_name(layer_name)
-            if layer:
-                self.geologyLayerComboBox.setLayer(layer)
-        if layer_name := settings.get('spatial_data_layer'):
-            layer = self.data_manager.find_layer_by_name(layer_name)
-            if layer:
-                self.spatialDataLayerComboBox.setLayer(layer)
-        sampler_index = settings.get('sampler_type_index')
-        if sampler_index is not None:
-            self.samplerTypeComboBox.setCurrentIndex(sampler_index)
-        if 'decimation' in settings:
-            self.decimationSpinBox.setValue(settings['decimation'])
-        if 'spacing' in settings:
-            self.spacingSpinBox.setValue(settings['spacing'])
-
-    def _persist_selection(self):
-        """Persist current selections into data manager."""
-        if not self.data_manager:
-            return
-        settings = {
-            'dtm_layer': self.dtmLayerComboBox.currentLayer().name() if self.dtmLayerComboBox.currentLayer() else None,
-            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
-            'spatial_data_layer': self.spatialDataLayerComboBox.currentLayer().name() if self.spatialDataLayerComboBox.currentLayer() else None,
-            'sampler_type_index': self.samplerTypeComboBox.currentIndex(),
-            'decimation': self.decimationSpinBox.value(),
-            'spacing': self.spacingSpinBox.value(),
-        }
-        self.data_manager.set_widget_settings('sampler_widget', settings)
-
     def _on_sampler_type_changed(self):
         """Update UI based on selected sampler type."""
         sampler_type = self.samplerTypeComboBox.currentText()
@@ -201,7 +131,7 @@ class SamplerWidget(QWidget):
 
     def _run_sampler(self):
         """Run the sampler algorithm using the map2loop API."""
-        self._persist_selection()
+
         from qgis.core import (
             QgsCoordinateReferenceSystem,
             QgsFeature,
