@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 from PyQt5.QtWidgets import QWidget
-from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt import uic
 
 from loopstructural.main.data_manager import default_bounding_box
