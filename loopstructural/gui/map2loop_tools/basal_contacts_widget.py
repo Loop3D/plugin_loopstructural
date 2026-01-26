@@ -288,7 +288,7 @@ class BasalContactsWidget(QWidget):
                     continue
                 if val not in values:
                     values.append(val)
-            stratigraphic_order = values 
+            stratigraphic_order = values
             print(f"Extracting all contacts for units: {stratigraphic_order}")
             self.data_manager.logger(f"Extracting all contacts for units: {stratigraphic_order}")
 
@@ -310,4 +310,10 @@ class BasalContactsWidget(QWidget):
                 contact_type = "all contacts and basal contacts"
             elif not all_contacts and result['basal_contacts'].empty is False:
                 addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
+            else:
+                QMessageBox.information(
+                    self,
+                    "No Contacts Found",
+                    "No contacts were found with the given parameters.",
+                )
         return result, contact_type
