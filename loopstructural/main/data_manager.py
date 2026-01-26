@@ -207,14 +207,26 @@ class ModellingDataManager:
         # Check if CRS is projected (not geographic)
         if crs.isGeographic():
             self._model_crs = None
-            msg = f"Model CRS must be projected (in meters), not geographic. Selected CRS: {crs.description()}"
+            # Safely get CRS description
+            try:
+                crs_desc = crs.description() or crs.authid() or "Unknown"
+            except Exception:
+                crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+            msg = f"Model CRS must be projected (in meters), not geographic. Selected CRS: {crs_desc}"
             self.logger(message=msg, log_level=2)
             if self.model_crs_callback:
                 self.model_crs_callback(self._model_crs, self._use_project_crs)
             return False, msg
         
         self._model_crs = crs
-        msg = f"Model CRS set to: {crs.description()} ({crs.authid()})"
+        # Safely get CRS description
+        try:
+            crs_desc = crs.description() or "Unknown"
+            crs_id = crs.authid() or "Unknown"
+        except Exception:
+            crs_desc = "Unknown"
+            crs_id = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+        msg = f"Model CRS set to: {crs_desc} ({crs_id})"
         self.logger(message=msg, log_level=3)
         
         if self.model_crs_callback:

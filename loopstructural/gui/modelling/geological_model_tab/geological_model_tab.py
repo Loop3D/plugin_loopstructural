@@ -157,7 +157,12 @@ class GeologicalModelTab(QWidget):
                 if crs is None or not crs.isValid():
                     msg = "Model CRS is not set or invalid. Please select a valid projected CRS in the Model Definition tab."
                 else:
-                    msg = f"Model CRS must be projected (in meters), not geographic.\nSelected CRS: {crs.description()}\n\nPlease select a valid projected CRS in the Model Definition tab."
+                    # Safely get CRS description
+                    try:
+                        crs_desc = crs.description() or crs.authid() or "Unknown"
+                    except Exception:
+                        crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+                    msg = f"Model CRS must be projected (in meters), not geographic.\nSelected CRS: {crs_desc}\n\nPlease select a valid projected CRS in the Model Definition tab."
                 
                 QMessageBox.critical(
                     self,

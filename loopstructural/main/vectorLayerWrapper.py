@@ -89,6 +89,27 @@ def qgsRasterToGdalDataset(rlayer: QgsRasterLayer):
     return ds
 
 
+def _get_crs_id(crs):
+    """Get a safe string identifier for a CRS.
+    
+    Parameters
+    ----------
+    crs : QgsCoordinateReferenceSystem or None
+        The CRS to get an ID for
+    
+    Returns
+    -------
+    str
+        CRS authid or "Unknown" if unavailable
+    """
+    if crs and crs.isValid():
+        try:
+            return crs.authid() or "Unknown"
+        except Exception:
+            return "Unknown"
+    return "Unknown"
+
+
 def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
     """Convert a QgsVectorLayer to a GeoDataFrame, optionally transforming to a target CRS.
     
@@ -136,11 +157,9 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
                 result = geom_copy.transform(transform)
                 if result != 0:
                     # Transform returned error code
-                    source_id = source_crs.authid() if source_crs and source_crs.isValid() else "Unknown"
-                    target_id = target_crs.authid() if target_crs and target_crs.isValid() else "Unknown"
                     warnings.warn(
                         f"Failed to transform geometry (error code {result}). "
-                        f"Source CRS: {source_id}, Target CRS: {target_id}. "
+                        f"Source CRS: {_get_crs_id(source_crs)}, Target CRS: {_get_crs_id(target_crs)}. "
                         f"Skipping feature.",
                         RuntimeWarning
                     )
@@ -148,11 +167,9 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
                 data['geometry'].append(geom_copy)
             except Exception as e:
                 # If transformation fails, log warning and skip this feature
-                source_id = source_crs.authid() if source_crs and source_crs.isValid() else "Unknown"
-                target_id = target_crs.authid() if target_crs and target_crs.isValid() else "Unknown"
                 warnings.warn(
                     f"Exception during CRS transformation: {e}. "
-                    f"Source CRS: {source_id}, Target CRS: {target_id}. "
+                    f"Source CRS: {_get_crs_id(source_crs)}, Target CRS: {_get_crs_id(target_crs)}. "
                     f"Skipping feature.",
                     RuntimeWarning
                 )
