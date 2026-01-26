@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from PyQt5.QtWidgets import QWidget
+from qgis.core import QgsProject
 from qgis.PyQt import uic
 
 from loopstructural.main.data_manager import default_bounding_box
@@ -13,6 +14,8 @@ class BoundingBoxWidget(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "bounding_box.ui")
         uic.loadUi(ui_path, self)
+
+        # Connect bounding box spinbox signals
         self.originXSpinBox.valueChanged.connect(lambda x: self.onChangeExtent({'xmin': x}))
         self.maxXSpinBox.valueChanged.connect(lambda x: self.onChangeExtent({'xmax': x}))
         self.originYSpinBox.valueChanged.connect(lambda y: self.onChangeExtent({'ymin': y}))
@@ -21,8 +24,147 @@ class BoundingBoxWidget(QWidget):
         self.maxZSpinBox.valueChanged.connect(lambda z: self.onChangeExtent({'zmax': z}))
         self.useCurrentViewExtentButton.clicked.connect(self.useCurrentViewExtent)
         self.selectFromCurrentLayerButton.clicked.connect(self.selectFromCurrentLayer)
+
+        # Connect CRS control signals
+        self.useProjectCrsRadioButton.toggled.connect(self.onCrsSourceChanged)
+        self.useCustomCrsRadioButton.toggled.connect(self.onCrsSourceChanged)
+        self.crsSelector.crsChanged.connect(self.onCrsChanged)
+
+        # Set up callbacks
         self.data_manager.set_bounding_box_update_callback(self.set_bounding_box)
+        self.data_manager.set_model_crs_callback(self.update_crs_ui)
+
+        # Initialize CRS UI
+        self.initialize_crs_ui()
         self._update_bounding_box_styles()
+
+        # Connect to project CRS changes so the widget updates when the project's CRS changes
+        try:
+            project = getattr(self.data_manager, 'project', None) or QgsProject.instance()
+            project.crsChanged.connect(self._onProjectCrsChanged)
+        except Exception:
+            # If the signal isn't available or connection fails, ignore to keep widget functional
+            pass
+
+    def initialize_crs_ui(self):
+        """Initialize CRS controls with current settings."""
+        # Set initial CRS selector value
+        crs = self.data_manager.get_model_crs()
+        if crs is not None and crs.isValid():
+            self.crsSelector.setCrs(crs)
+        else:
+            # Default to project CRS
+            self.crsSelector.setCrs(self.data_manager.project.crs())
+
+        # Set radio button based on use_project_crs setting
+        if self.data_manager._use_project_crs:
+            self.useProjectCrsRadioButton.setChecked(True)
+        else:
+            self.useCustomCrsRadioButton.setChecked(True)
+
+        self.validate_crs()
+
+    def onCrsSourceChanged(self):
+        """Handle change in CRS source (project vs custom)."""
+        use_project_crs = self.useProjectCrsRadioButton.isChecked()
+        self.crsSelector.setEnabled(not use_project_crs)
+
+        if use_project_crs:
+            # Use project CRS
+            success, msg = self.data_manager.set_model_crs(None, use_project_crs=True)
+        else:
+            # Use custom CRS
+            crs = self.crsSelector.crs()
+            success, msg = self.data_manager.set_model_crs(crs, use_project_crs=False)
+
+        self.validate_crs()
+
+    def onCrsChanged(self):
+        """Handle change in custom CRS selection."""
+        if self.useCustomCrsRadioButton.isChecked():
+            crs = self.crsSelector.crs()
+            success, msg = self.data_manager.set_model_crs(crs, use_project_crs=False)
+            self.validate_crs()
+
+    def update_crs_ui(self, crs, use_project_crs):
+        """Update UI when model CRS changes externally.
+
+        Parameters
+        ----------
+        crs : QgsCoordinateReferenceSystem or None
+            The new model CRS
+        use_project_crs : bool
+            Whether to use project CRS
+        """
+        # Block signals to avoid recursive updates
+        self.useProjectCrsRadioButton.blockSignals(True)
+        self.useCustomCrsRadioButton.blockSignals(True)
+        self.crsSelector.blockSignals(True)
+
+        try:
+            if use_project_crs:
+                self.useProjectCrsRadioButton.setChecked(True)
+                self.crsSelector.setEnabled(False)
+                self.crsSelector.setCrs(crs)
+
+            else:
+                self.useCustomCrsRadioButton.setChecked(True)
+                self.crsSelector.setEnabled(True)
+                if crs is not None and crs.isValid():
+                    self.crsSelector.setCrs(crs)
+
+            self.validate_crs()
+        finally:
+            # Unblock signals
+            self.useProjectCrsRadioButton.blockSignals(False)
+            self.useCustomCrsRadioButton.blockSignals(False)
+            self.crsSelector.blockSignals(False)
+
+    def _onProjectCrsChanged(self, crs=None):
+        """Handle project CRS changes and update UI when the widget is using the project CRS.
+
+        Accept an optional `crs` argument because different QGIS versions may emit the
+        new CRS or emit no arguments when the project's CRS changes.
+        """
+        # If the signal didn't provide a CRS, try to obtain it from the project's current CRS
+        if crs is None:
+            try:
+                project = getattr(self.data_manager, 'project', None) or QgsProject.instance()
+                crs = project.crs()
+            except Exception:
+                crs = None
+
+        # Only update the UI if the model is configured to use the project CRS
+        try:
+            if getattr(self.data_manager, '_use_project_crs', False):
+                # Update the UI to reflect the new project CRS
+                self.update_crs_ui(crs, use_project_crs=True)
+        except Exception:
+            pass
+
+    def validate_crs(self):
+        """Validate the selected CRS and update warning label."""
+        crs = self.data_manager.get_model_crs()
+
+        if crs is None or not crs.isValid():
+            self.crsWarningLabel.setText("⚠ Invalid CRS selected. Model cannot be initialized.")
+            return False
+
+        if crs.isGeographic():
+            # Safely get CRS description
+            try:
+                crs_desc = crs.description() or crs.authid() or "Unknown"
+            except Exception:
+                crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+
+            self.crsWarningLabel.setText(
+                f"⚠ CRS must be projected (in meters), not geographic.\n" f"Selected: {crs_desc}"
+            )
+            return False
+
+        # CRS is valid and projected
+        self.crsWarningLabel.setText("")
+        return True
 
     def set_bounding_box(self, bounding_box):
         """Populate UI controls with values from a BoundingBox object.
