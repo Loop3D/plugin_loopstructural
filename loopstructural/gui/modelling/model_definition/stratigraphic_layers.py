@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 
+from ....main.helpers import ColumnMatcher, get_layer_names
+
 
 class StratigraphicLayersWidget(QWidget):
     def __init__(self, parent=None, data_manager=None):
@@ -50,6 +52,8 @@ class StratigraphicLayersWidget(QWidget):
         self.useStructuralPointsZCoordinatesCheckBox.stateChanged.connect(
             self.onStructuralDataFieldChanged
         )
+        self._guess_layers_and_fields()
+        self._restore_selection()
 
     def enableBasalContactsZCheckBox(self, enable):
         self.useBasalContactsZCoordinatesCheckBox.setEnabled(enable)
@@ -116,6 +120,7 @@ class StratigraphicLayersWidget(QWidget):
     def onBasalContactsChanged(self, layer):
         self.unitNameField.setLayer(layer)
         self.data_manager.set_basal_contacts(layer, self.unitNameField.currentField())
+        self._persist_selection()
 
     def onOrientationTypeChanged(self, index):
         if index == 0:
@@ -153,6 +158,7 @@ class StratigraphicLayersWidget(QWidget):
             self.orientationType.currentText(),
             use_z_coordinate=self.structural_points_use_z,
         )
+        self._persist_selection()
         # self.updateDataManager()
 
     def onUnitFieldChanged(self, field):
@@ -161,5 +167,95 @@ class StratigraphicLayersWidget(QWidget):
             field,
             use_z_coordinate=self.basal_contacts_use_z,
         )
+        self._persist_selection()
 
         # self.updateDataManager()
+
+    def _guess_layers_and_fields(self):
+        if not self.data_manager:
+            return
+        # Basal contacts
+        basal_names = get_layer_names(self.basalContactsLayer)
+        basal_matcher = ColumnMatcher(basal_names)
+        basal_match = basal_matcher.find_match('BASAL_CONTACTS')
+        if basal_match:
+            layer = self.data_manager.find_layer_by_name(basal_match)
+            if layer:
+                self.basalContactsLayer.setLayer(layer)
+                fields = [f.name() for f in layer.fields()]
+                fmatcher = ColumnMatcher(fields)
+                if unit_match := fmatcher.find_match('UNITNAME'):
+                    self.unitNameField.setField(unit_match)
+        # Structural data
+        structural_names = get_layer_names(self.structuralDataLayer)
+        structural_matcher = ColumnMatcher(structural_names)
+        structural_match = structural_matcher.find_match(
+            'STRUCTURE'
+        ) or structural_matcher.find_match('ORIENTATION')
+        if structural_match:
+            layer = self.data_manager.find_layer_by_name(structural_match)
+            if layer:
+                self.structuralDataLayer.setLayer(layer)
+                fields = [f.name() for f in layer.fields()]
+                fmatcher = ColumnMatcher(fields)
+                if strike_match := fmatcher.find_match('STRIKE') or fmatcher.find_match('DIPDIR'):
+                    self.orientationField.setField(strike_match)
+                if dip_match := fmatcher.find_match('DIP'):
+                    self.dipField.setField(dip_match)
+                if unit_match := fmatcher.find_match('UNITNAME'):
+                    self.structuralDataUnitName.setField(unit_match)
+
+    def _persist_selection(self):
+        if not self.data_manager:
+            return
+        settings = {
+            'basal_layer': (
+                self.basalContactsLayer.currentLayer().name()
+                if self.basalContactsLayer.currentLayer()
+                else None
+            ),
+            'structural_layer': (
+                self.structuralDataLayer.currentLayer().name()
+                if self.structuralDataLayer.currentLayer()
+                else None
+            ),
+            'unit_name_field': self.unitNameField.currentField(),
+            'orientation_field': self.orientationField.currentField(),
+            'dip_field': self.dipField.currentField(),
+            'structural_unit_field': self.structuralDataUnitName.currentField(),
+            'orientation_type': self.orientationType.currentText(),
+            'use_basal_z': self.useBasalContactsZCoordinatesCheckBox.isChecked(),
+            'use_structural_z': self.useStructuralPointsZCoordinatesCheckBox.isChecked(),
+        }
+        self.data_manager.set_widget_settings('stratigraphic_layers_widget', settings)
+
+    def _restore_selection(self):
+        if not self.data_manager:
+            return
+        settings = self.data_manager.get_widget_settings('stratigraphic_layers_widget', {})
+        if not settings:
+            return
+        if layer_name := settings.get('basal_layer'):
+            layer = self.data_manager.find_layer_by_name(layer_name)
+            if layer:
+                self.basalContactsLayer.setLayer(layer)
+        if layer_name := settings.get('structural_layer'):
+            layer = self.data_manager.find_layer_by_name(layer_name)
+            if layer:
+                self.structuralDataLayer.setLayer(layer)
+        if field := settings.get('unit_name_field'):
+            self.unitNameField.setField(field)
+        if field := settings.get('orientation_field'):
+            self.orientationField.setField(field)
+        if field := settings.get('dip_field'):
+            self.dipField.setField(field)
+        if field := settings.get('structural_unit_field'):
+            self.structuralDataUnitName.setField(field)
+        if 'orientation_type' in settings:
+            idx = self.orientationType.findText(settings['orientation_type'], Qt.MatchFixedString)
+            if idx >= 0:
+                self.orientationType.setCurrentIndex(idx)
+        if 'use_basal_z' in settings:
+            self.useBasalContactsZCoordinatesCheckBox.setChecked(settings['use_basal_z'])
+        if 'use_structural_z' in settings:
+            self.useStructuralPointsZCoordinatesCheckBox.setChecked(settings['use_structural_z'])

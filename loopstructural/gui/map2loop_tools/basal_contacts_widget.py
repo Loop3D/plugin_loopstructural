@@ -63,6 +63,7 @@ class BasalContactsWidget(QWidget):
         self._guess_layers()
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+        self._restore_selection()
 
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
@@ -145,6 +146,35 @@ class BasalContactsWidget(QWidget):
             faults_layer = self.data_manager.find_layer_by_name(fault_layer_match)
             self.faultsLayerComboBox.setLayer(faults_layer)
 
+    def _restore_selection(self):
+        """Restore persisted selections from data manager."""
+        if not self.data_manager:
+            return
+        settings = self.data_manager.get_widget_settings('basal_contacts_widget', {})
+        if not settings:
+            return
+        if layer_name := settings.get('geology_layer'):
+            layer = self.data_manager.find_layer_by_name(layer_name)
+            if layer:
+                self.geologyLayerComboBox.setLayer(layer)
+        if layer_name := settings.get('faults_layer'):
+            layer = self.data_manager.find_layer_by_name(layer_name)
+            if layer:
+                self.faultsLayerComboBox.setLayer(layer)
+        if field := settings.get('unit_name_field'):
+            self.unitNameFieldComboBox.setField(field)
+
+    def _persist_selection(self):
+        """Persist current selections into data manager."""
+        if not self.data_manager:
+            return
+        settings = {
+            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
+            'faults_layer': self.faultsLayerComboBox.currentLayer().name() if self.faultsLayerComboBox.currentLayer() else None,
+            'unit_name_field': self.unitNameFieldComboBox.currentField(),
+        }
+        self.data_manager.set_widget_settings('basal_contacts_widget', settings)
+
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes to link to their respective layers."""
         geology = self.geologyLayerComboBox.currentLayer()
@@ -174,6 +204,7 @@ class BasalContactsWidget(QWidget):
         """Run the basal contacts extraction algorithm."""
         self._log_params("basal_contacts_widget_run")
 
+        self._persist_selection()
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")

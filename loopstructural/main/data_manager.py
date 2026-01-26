@@ -67,6 +67,7 @@ class ModellingDataManager:
         self.dem_layer = None
         self.use_dem = True
         self.dem_callback = None
+        self.widget_settings = {}
         self.feature_data = defaultdict(dict)
 
     def onSaveProject(self):
@@ -90,6 +91,7 @@ class ModellingDataManager:
     def onNewProject(self):
         self.logger(message="New project created, clearing data...", log_level=3)
         self.update_from_dict({})
+        self.widget_settings = {}
 
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
@@ -254,7 +256,6 @@ class ModellingDataManager:
         for u in self._stratigraphic_column.order:
             if u.element_type == StratigraphicColumnElementType.UNIT:
                 units.append(u.name)
-                print(f"Unit: {u.name}")
         return units
 
     def add_to_stratigraphic_column(self, unit_data):
@@ -474,6 +475,7 @@ class ModellingDataManager:
             'dem_layer': dem_layer_name if self.dem_layer else None,
             'use_dem': self.use_dem,
             'elevation': self.elevation,
+            'widget_settings': self.widget_settings,
         }
 
     def from_dict(self, data):
@@ -510,6 +512,8 @@ class ModellingDataManager:
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
             self.stratigraphic_column_callback()
+        if 'widget_settings' in data:
+            self.widget_settings = data['widget_settings']
 
     def update_from_dict(self, data):
         """Update the data manager from a dictionary."""
@@ -582,6 +586,11 @@ class ModellingDataManager:
         else:
             self._stratigraphic_column.clear()
 
+        if 'widget_settings' in data:
+            self.widget_settings = data['widget_settings']
+        else:
+            self.widget_settings = {}
+
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
@@ -600,10 +609,13 @@ class ModellingDataManager:
                     log_level=2,
                 )
             i = 0
+
             while i < len(layers) and not issubclass(type(layers[i]), layer_type):
 
                 i += 1
-
+            if i >= len(layers):
+                self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
+                return None
             if issubclass(type(layers[i]), layer_type):
                 return layers[i]
             else:
@@ -616,6 +628,16 @@ class ModellingDataManager:
             raise ValueError("feature_data must be a dictionary.")
         self.feature_data[feature_name][feature_data['layer_name']] = feature_data
         self.logger(message=f"Updated feature data for '{feature_name}'.")
+
+    def set_widget_settings(self, widget_name: str, settings: dict):
+        """Store widget settings for persistence."""
+        self.widget_settings[widget_name] = settings
+
+    def get_widget_settings(self, widget_name: str, default=None):
+        """Retrieve persisted widget settings."""
+        if widget_name in self.widget_settings:
+            return self.widget_settings[widget_name]
+        return default
 
     def add_foliation_to_model(self, foliation_name: str, *, folded_feature_name=None):
         """Add a foliation to the model."""

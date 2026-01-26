@@ -62,6 +62,7 @@ class ThicknessCalculatorWidget(QWidget):
         self._guess_layers()
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+        self._restore_selection()
 
         # Initial state update
         self._on_calculator_type_changed()
@@ -212,111 +213,122 @@ class ThicknessCalculatorWidget(QWidget):
             self.maxLineLengthLabel.setVisible(False)
             self.maxLineLengthSpinBox.setVisible(False)
 
+    def _restore_selection(self):
+        """Restore persisted selections from data manager."""
+        if not self.data_manager:
+            return
+        settings = self.data_manager.get_widget_settings('thickness_calculator_widget', {})
+        if not settings:
+            return
+        for key, combo in (
+            ('dtm_layer', self.dtmLayerComboBox),
+            ('geology_layer', self.geologyLayerComboBox),
+            ('basal_contacts_layer', self.basalContactsComboBox),
+            ('sampled_contacts_layer', self.sampledContactsComboBox),
+            ('structure_layer', self.structureLayerComboBox),
+        ):
+            if layer_name := settings.get(key):
+                layer = self.data_manager.find_layer_by_name(layer_name)
+                if layer:
+                    combo.setLayer(layer)
+        if 'calculator_type_index' in settings:
+            self.calculatorTypeComboBox.setCurrentIndex(settings['calculator_type_index'])
+        if 'orientation_type_index' in settings:
+            self.orientationTypeComboBox.setCurrentIndex(settings['orientation_type_index'])
+        if 'max_line_length' in settings:
+            self.maxLineLengthSpinBox.setValue(settings['max_line_length'])
+        if 'search_radius' in settings:
+            self.searchRadiusSpinBox.setValue(settings['search_radius'])
+        if field := settings.get('unit_name_field'):
+            self.unitNameFieldComboBox.setField(field)
+        if field := settings.get('dip_field'):
+            self.dipFieldComboBox.setField(field)
+        if field := settings.get('dipdir_field'):
+            self.dipDirFieldComboBox.setField(field)
+        if field := settings.get('basal_unit_field'):
+            self.basalUnitNameFieldComboBox.setField(field)
+
+    def _persist_selection(self):
+        """Persist current selections into data manager."""
+        if not self.data_manager:
+            return
+        settings = {
+            'dtm_layer': self.dtmLayerComboBox.currentLayer().name() if self.dtmLayerComboBox.currentLayer() else None,
+            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
+            'basal_contacts_layer': self.basalContactsComboBox.currentLayer().name() if self.basalContactsComboBox.currentLayer() else None,
+            'sampled_contacts_layer': self.sampledContactsComboBox.currentLayer().name() if self.sampledContactsComboBox.currentLayer() else None,
+            'structure_layer': self.structureLayerComboBox.currentLayer().name() if self.structureLayerComboBox.currentLayer() else None,
+            'calculator_type_index': self.calculatorTypeComboBox.currentIndex(),
+            'orientation_type_index': self.orientationTypeComboBox.currentIndex(),
+            'max_line_length': self.maxLineLengthSpinBox.value(),
+            'search_radius': self.searchRadiusSpinBox.value(),
+            'unit_name_field': self.unitNameFieldComboBox.currentField(),
+            'dip_field': self.dipFieldComboBox.currentField(),
+            'dipdir_field': self.dipDirFieldComboBox.currentField(),
+            'basal_unit_field': self.basalUnitNameFieldComboBox.currentField(),
+        }
+        self.data_manager.set_widget_settings('thickness_calculator_widget', settings)
+
     def _run_calculator(self):
         """Run the thickness calculator algorithm using the map2loop API."""
         from ...main.m2l_api import calculate_thickness
 
+        self._persist_selection()
         self._log_params("thickness_calculator_widget_run", self.get_parameters())
 
-        # Validate inputs
-        if not self.geologyLayerComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
-            return False
-
-        if not self.basalContactsComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a basal contacts layer.")
-            return False
-
-        if not self.sampledContactsComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a sampled contacts layer.")
-            return False
-
-        if not self.structureLayerComboBox.currentLayer():
-            QMessageBox.warning(
-                self, "Missing Input", "Please select a structure/orientation layer."
-            )
-            return False
-
+        # Validate inputs based on calculator type
         calculator_type = self.calculatorTypeComboBox.currentText()
 
+        if calculator_type == "InterpolatedStructure":
+            if not self.geologyLayerComboBox.currentLayer():
+                QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
+                return False
+            if not self.basalContactsComboBox.currentLayer():
+                QMessageBox.warning(self, "Missing Input", "Please select a basal contacts layer.")
+                return False
+
+        elif calculator_type == "StructuralPoint":
+            if not self.structureLayerComboBox.currentLayer():
+                QMessageBox.warning(self, "Missing Input", "Please select a structure layer.")
+                return False
+
         # Prepare parameters
+        params = self.get_parameters()
+
         try:
-            kwargs = {
-                'geology': self.geologyLayerComboBox.currentLayer(),
-                'basal_contacts': self.basalContactsComboBox.currentLayer(),
-                'sampled_contacts': self.sampledContactsComboBox.currentLayer(),
-                'structure': self.structureLayerComboBox.currentLayer(),
-                'calculator_type': calculator_type,
-                'unit_name_field': self.unitNameFieldComboBox.currentField(),
-                'basal_contacts_unit_name': self.basalUnitNameFieldComboBox.currentField(),
-                'dip_field': self.dipFieldComboBox.currentField(),
-                'dipdir_field': self.dipDirFieldComboBox.currentField(),
-                'orientation_type': self.orientationTypeComboBox.currentText(),
-                'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
-                'stratigraphic_order': (
-                    self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
-                ),
-            }
+            result = calculate_thickness(**params)
+            if not result:
+                QMessageBox.warning(self, "No Results", "Thickness calculation returned no results.")
+                return False
 
-            # Add optional parameters
-            if self.dtmLayerComboBox.currentLayer():
-                kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
-
-            if calculator_type == "StructuralPoint":
-                kwargs['max_line_length'] = self.maxLineLengthSpinBox.value()
-
-            # Get stratigraphic order from data_manager
-            if self.data_manager and hasattr(self.data_manager, 'stratigraphic_column'):
-                strati_order = [unit['name'] for unit in self.data_manager._stratigraphic_column]
-                if strati_order:
-                    kwargs['stratigraphic_order'] = strati_order
-
-            result = calculate_thickness(
-                **kwargs,
-                debug_manager=self._debug,
-            )
-            if self._debug and self._debug.is_debug():
-                try:
-                    self._debug.save_debug_file("thickness_result.txt", str(result).encode("utf-8"))
-                except Exception as err:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Failed to save thickness debug output: {err}",
-                        log_level=2,
-                    )
-
-            for idx in result['thicknesses'].index:
-                u = result['thicknesses'].loc[idx, 'name']
-                thick = result['thicknesses'].loc[idx, 'ThicknessStdDev']
-                if thick > 0:
-                    unit = self.data_manager._stratigraphic_column.get_unit_by_name(u)
-                    if unit:
-                        unit.thickness = thick
-                    else:
-                        self.data_manager.logger(
-                            f"Warning: Unit '{u}' not found in stratigraphic column.",
-                        )
-            # Save debugging files if checkbox is checked
-            if self.saveDebugCheckBox.isChecked():
-                if 'lines' in result:
-                    if result['lines'] is not None and not result['lines'].empty:
-                        addGeoDataFrameToproject(result['lines'], "Lines")
-                if 'location_tracking' in result:
-                    if (
-                        result['location_tracking'] is not None
-                        and not result['location_tracking'].empty
-                    ):
-                        addGeoDataFrameToproject(
-                            result['location_tracking'], "Thickness Location Tracking"
-                        )
-            if result is not None and not result['thicknesses'].empty:
+            # Expect result as dict with components; fall back to direct layer
+            if isinstance(result, dict):
+                thicknesses = result.get('thicknesses')
+                lines = result.get('lines')
+                location_tracking = result.get('location_tracking')
+                if thicknesses is not None:
+                    addGeoDataFrameToproject(thicknesses, "Thickness Results")
+                if lines is not None:
+                    addGeoDataFrameToproject(lines, "Thickness Lines")
+                if location_tracking is not None:
+                    addGeoDataFrameToproject(location_tracking, "Thickness Locations")
                 QMessageBox.information(
                     self,
                     "Success",
-                    f"Thickness calculation completed successfully! ({len(result)} records)",
+                    "Thickness calculation completed successfully and added to project.",
                 )
-            else:
-                QMessageBox.warning(self, "Error", "No thickness data was calculated.")
-                return False
+                return True
+
+            if hasattr(result, 'geometry'):
+                addGeoDataFrameToproject(result, "Thickness Results")
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    "Thickness calculation completed successfully and added to project.",
+                )
+                return True
+
+            QMessageBox.information(self, "Success", f"Thickness calculation completed: {result}")
             return True
 
         except Exception as e:
@@ -338,41 +350,24 @@ class ThicknessCalculatorWidget(QWidget):
         dict
             Dictionary of current widget parameters.
         """
-        return {
-            'calculator_type': self.calculatorTypeComboBox.currentIndex(),
-            'dtm_layer': self.dtmLayerComboBox.currentLayer(),
-            'geology_layer': self.geologyLayerComboBox.currentLayer(),
-            'unit_name_field': self.unitNameFieldComboBox.currentField(),
+        params = {
+            'calculator_type': self.calculatorTypeComboBox.currentText(),
+            'dtm': self.dtmLayerComboBox.currentLayer(),
+            'geology': self.geologyLayerComboBox.currentLayer(),
             'basal_contacts': self.basalContactsComboBox.currentLayer(),
             'sampled_contacts': self.sampledContactsComboBox.currentLayer(),
-            'structure_layer': self.structureLayerComboBox.currentLayer(),
+            'structure': self.structureLayerComboBox.currentLayer(),
+            'orientation_type': self.orientationTypeComboBox.currentText(),
+            'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'dip_field': self.dipFieldComboBox.currentField(),
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
-            'orientation_type': self.orientationTypeComboBox.currentIndex(),
+            'basal_contacts_unit_name': self.basalUnitNameFieldComboBox.currentField(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
+            'updater': (lambda msg: QMessageBox.information(self, "Progress", msg)),
+            'stratigraphic_order': (
+                self.data_manager.get_stratigraphic_unit_names()
+                if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')
+                else None
+            ),
         }
-
-    def set_parameters(self, params):
-        """Set widget parameters.
-
-        Parameters
-        ----------
-        params : dict
-            Dictionary of parameters to set.
-        """
-        if 'calculator_type' in params:
-            self.calculatorTypeComboBox.setCurrentIndex(params['calculator_type'])
-        if 'dtm_layer' in params and params['dtm_layer']:
-            self.dtmLayerComboBox.setLayer(params['dtm_layer'])
-        if 'geology_layer' in params and params['geology_layer']:
-            self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if 'basal_contacts' in params and params['basal_contacts']:
-            self.basalContactsComboBox.setLayer(params['basal_contacts'])
-        if 'sampled_contacts' in params and params['sampled_contacts']:
-            self.sampledContactsComboBox.setLayer(params['sampled_contacts'])
-        if 'structure_layer' in params and params['structure_layer']:
-            self.structureLayerComboBox.setLayer(params['structure_layer'])
-        if 'orientation_type' in params:
-            self.orientationTypeComboBox.setCurrentIndex(params['orientation_type'])
-        if 'max_line_length' in params:
-            self.maxLineLengthSpinBox.setValue(params['max_line_length'])
+        return params

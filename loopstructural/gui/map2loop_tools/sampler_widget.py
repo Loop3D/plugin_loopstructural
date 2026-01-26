@@ -131,6 +131,7 @@ class SamplerWidget(QWidget):
 
     def _run_sampler(self):
         """Run the sampler algorithm using the map2loop API."""
+
         from qgis.core import (
             QgsCoordinateReferenceSystem,
             QgsFeature,

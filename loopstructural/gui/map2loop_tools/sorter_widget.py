@@ -70,6 +70,7 @@ class SorterWidget(QWidget):
 
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+        self._restore_selection()
 
         # Initial state update
         self._on_algorithm_changed()
@@ -152,6 +153,56 @@ class SorterWidget(QWidget):
             dem_layer_match = dem_layer_matcher.find_match('DEM')
         dem_layer = self.data_manager.find_layer_by_name(dem_layer_match, layer_type=QgsRasterLayer)
         self.dtmLayerComboBox.setLayer(dem_layer)
+
+    def _restore_selection(self):
+        """Restore persisted selections from data manager."""
+        if not self.data_manager:
+            return
+        settings = self.data_manager.get_widget_settings('sorter_widget', {})
+        if not settings:
+            return
+        for key, combo in (
+            ('geology_layer', self.geologyLayerComboBox),
+            ('structure_layer', self.structureLayerComboBox),
+            ('contacts_layer', self.contactsLayerComboBox),
+            ('dtm_layer', self.dtmLayerComboBox),
+        ):
+            if layer_name := settings.get(key):
+                layer = self.data_manager.find_layer_by_name(layer_name)
+                if layer:
+                    combo.setLayer(layer)
+        if 'sorting_algorithm' in settings:
+            self.sortingAlgorithmComboBox.setCurrentIndex(settings['sorting_algorithm'])
+        if 'orientation_type' in settings:
+            self.orientationTypeComboBox.setCurrentIndex(settings['orientation_type'])
+        for key, combo in (
+            ('unit_name_field', self.unitNameFieldComboBox),
+            ('min_age_field', self.minAgeFieldComboBox),
+            ('max_age_field', self.maxAgeFieldComboBox),
+            ('dip_field', self.dipFieldComboBox),
+            ('dipdir_field', self.dipDirFieldComboBox),
+        ):
+            if field := settings.get(key):
+                combo.setField(field)
+
+    def _persist_selection(self):
+        """Persist current selections into data manager."""
+        if not self.data_manager:
+            return
+        settings = {
+            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
+            'structure_layer': self.structureLayerComboBox.currentLayer().name() if self.structureLayerComboBox.currentLayer() else None,
+            'contacts_layer': self.contactsLayerComboBox.currentLayer().name() if self.contactsLayerComboBox.currentLayer() else None,
+            'dtm_layer': self.dtmLayerComboBox.currentLayer().name() if self.dtmLayerComboBox.currentLayer() else None,
+            'sorting_algorithm': self.sortingAlgorithmComboBox.currentIndex(),
+            'orientation_type': self.orientationTypeComboBox.currentIndex(),
+            'unit_name_field': self.unitNameFieldComboBox.currentField(),
+            'min_age_field': self.minAgeFieldComboBox.currentField(),
+            'max_age_field': self.maxAgeFieldComboBox.currentField(),
+            'dip_field': self.dipFieldComboBox.currentField(),
+            'dipdir_field': self.dipDirFieldComboBox.currentField(),
+        }
+        self.data_manager.set_widget_settings('sorter_widget', settings)
 
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes to link to their respective layers."""
@@ -283,6 +334,7 @@ class SorterWidget(QWidget):
         """Run the stratigraphic sorter algorithm."""
         from ...main.m2l_api import sort_stratigraphic_column
 
+        self._persist_selection()
         self._log_params("sorter_widget_run")
 
         # Validate inputs
