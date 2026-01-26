@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 
-from ...main.helpers import ColumnMatcher, get_layer_names
+from ....main.helpers import ColumnMatcher, get_layer_names
 
 
 class StratigraphicLayersWidget(QWidget):
@@ -189,9 +189,9 @@ class StratigraphicLayersWidget(QWidget):
         # Structural data
         structural_names = get_layer_names(self.structuralDataLayer)
         structural_matcher = ColumnMatcher(structural_names)
-        structural_match = structural_matcher.find_match('STRUCTURE') or structural_matcher.find_match(
-            'ORIENTATION'
-        )
+        structural_match = structural_matcher.find_match(
+            'STRUCTURE'
+        ) or structural_matcher.find_match('ORIENTATION')
         if structural_match:
             layer = self.data_manager.find_layer_by_name(structural_match)
             if layer:
@@ -209,12 +209,16 @@ class StratigraphicLayersWidget(QWidget):
         if not self.data_manager:
             return
         settings = {
-            'basal_layer': self.basalContactsLayer.currentLayer().name()
-            if self.basalContactsLayer.currentLayer()
-            else None,
-            'structural_layer': self.structuralDataLayer.currentLayer().name()
-            if self.structuralDataLayer.currentLayer()
-            else None,
+            'basal_layer': (
+                self.basalContactsLayer.currentLayer().name()
+                if self.basalContactsLayer.currentLayer()
+                else None
+            ),
+            'structural_layer': (
+                self.structuralDataLayer.currentLayer().name()
+                if self.structuralDataLayer.currentLayer()
+                else None
+            ),
             'unit_name_field': self.unitNameField.currentField(),
             'orientation_field': self.orientationField.currentField(),
             'dip_field': self.dipField.currentField(),

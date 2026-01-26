@@ -2,10 +2,10 @@ import json
 from collections import defaultdict
 
 import numpy as np
-from LoopStructural.datatypes import BoundingBox
 from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
 
 from LoopStructural import FaultTopology, StratigraphicColumn
+from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
@@ -596,10 +596,13 @@ class ModellingDataManager:
                     log_level=2,
                 )
             i = 0
+
             while i < len(layers) and not issubclass(type(layers[i]), layer_type):
 
                 i += 1
-
+            if i >= len(layers):
+                self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
+                return None
             if issubclass(type(layers[i]), layer_type):
                 return layers[i]
             else:

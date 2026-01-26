@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 
-from ...main.helpers import ColumnMatcher, get_layer_names
+from ....main.helpers import ColumnMatcher, get_layer_names
 
 
 class FaultLayersWidget(QWidget):
@@ -108,13 +108,15 @@ class FaultLayersWidget(QWidget):
                 self.faultTraceLayer.setLayer(layer)
                 fields = [field.name() for field in layer.fields()]
                 field_matcher = ColumnMatcher(fields)
-                if name_match := field_matcher.find_match('FAULT_NAME') or field_matcher.find_match('NAME'):
+                if name_match := field_matcher.find_match('FAULT_NAME') or field_matcher.find_match(
+                    'NAME'
+                ):
                     self.faultNameField.setField(name_match)
                 if dip_match := field_matcher.find_match('DIP'):
                     self.faultDipField.setField(dip_match)
-                if disp_match := field_matcher.find_match('DISPLACEMENT') or field_matcher.find_match(
-                    'SLIP'
-                ):
+                if disp_match := field_matcher.find_match(
+                    'DISPLACEMENT'
+                ) or field_matcher.find_match('SLIP'):
                     self.faultDisplacementField.setField(disp_match)
 
     def _persist_selection(self):

@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 
-from ...main.helpers import ColumnMatcher, get_layer_names
+from ....main.helpers import ColumnMatcher, get_layer_names
 
 
 class DEMWidget(QWidget):
@@ -30,7 +30,6 @@ class DEMWidget(QWidget):
             self.demLayerQgsMapLayerComboBox.setCurrentIndex(-1)
             self.useDEMCheckBox.setChecked(False)
         self._persist_selection()
-
 
     def onUseDEMClicked(self):
         if self.useDEMCheckBox.isChecked():
@@ -67,6 +66,7 @@ class DEMWidget(QWidget):
         layer_names = get_layer_names(self.demLayerQgsMapLayerComboBox)
         matcher = ColumnMatcher(layer_names)
         match = matcher.find_match('DEM') or matcher.find_match('DTM')
+        print("DEMWidget: guessed layer match:", match)
         if match:
             layer = self.data_manager.find_layer_by_name(match)
             if layer:
