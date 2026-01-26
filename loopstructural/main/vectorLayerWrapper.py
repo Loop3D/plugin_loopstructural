@@ -1,5 +1,6 @@
 import os
 import tempfile
+import warnings
 
 import geopandas as gpd
 import numpy as np
@@ -132,10 +133,25 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
         if transform is not None:
             geom_copy = QgsGeometry(geom)
             try:
-                geom_copy.transform(transform)
+                result = geom_copy.transform(transform)
+                if result != 0:
+                    # Transform returned error code
+                    warnings.warn(
+                        f"Failed to transform geometry (error code {result}). "
+                        f"Source CRS: {source_crs.authid()}, Target CRS: {target_crs.authid()}. "
+                        f"Skipping feature.",
+                        RuntimeWarning
+                    )
+                    continue
                 data['geometry'].append(geom_copy)
-            except Exception:
-                # If transformation fails, skip this feature
+            except Exception as e:
+                # If transformation fails, log warning and skip this feature
+                warnings.warn(
+                    f"Exception during CRS transformation: {e}. "
+                    f"Source CRS: {source_crs.authid()}, Target CRS: {target_crs.authid()}. "
+                    f"Skipping feature.",
+                    RuntimeWarning
+                )
                 continue
         else:
             data['geometry'].append(geom)

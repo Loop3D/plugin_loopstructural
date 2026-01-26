@@ -563,7 +563,11 @@ class ModellingDataManager:
             'use_dem': self.use_dem,
             'elevation': self.elevation,
             'widget_settings': self.widget_settings,
-            'model_crs': self._model_crs.authid() if self._model_crs and self._model_crs.isValid() else None,
+            'model_crs': (
+                self._model_crs.authid() 
+                if self._model_crs and isinstance(self._model_crs, QgsCoordinateReferenceSystem) and self._model_crs.isValid() 
+                else None
+            ),
             'use_project_crs': self._use_project_crs,
         }
 
