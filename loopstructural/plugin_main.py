@@ -47,13 +47,6 @@ from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 
 
 class LoopstructuralPlugin:
-    def show_fault_topology_dialog(self):
-        """Show the fault topology calculator dialog."""
-        from loopstructural.gui.map2loop_tools.fault_topology_widget import FaultTopologyWidget
-
-        dialog = FaultTopologyWidget(self.iface.mainWindow())
-        dialog.exec_()
-
     """QGIS plugin entrypoint for LoopStructural.
 
     This class initializes plugin resources, UI elements and data/model managers
@@ -394,6 +387,17 @@ class LoopstructuralPlugin:
         from loopstructural.gui.map2loop_tools import PaintStratigraphicOrderDialog
 
         dialog = PaintStratigraphicOrderDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_fault_topology_dialog(self):
+        """Show the fault topology calculator dialog."""
+        from loopstructural.gui.map2loop_tools.fault_topology_widget import FaultTopologyWidget
+
+        dialog = FaultTopologyWidget(
             self.iface.mainWindow(),
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
