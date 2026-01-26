@@ -67,7 +67,6 @@ class Map2LoopProvider(QgsProcessingProvider):
         self.addAlgorithm(UserDefinedStratigraphyAlgorithm())
         self.addAlgorithm(ThicknessCalculatorAlgorithm())
         self.addAlgorithm(SamplerAlgorithm())
-        self.addAlgorithm(PaintStratigraphicOrderAlgorithm())
 
     def id(self) -> str:
         """Unique provider id, used for identifying it. This string should be unique, \

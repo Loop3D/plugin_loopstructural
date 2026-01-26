@@ -1,4 +1,3 @@
-from typing import final
 
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
@@ -14,7 +13,7 @@ from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
 from qgis.core import QgsVectorLayer
 
-from ..main.vectorLayerWrapper import qgsLayerToDataFrame, qgsLayerToGeoDataFrame
+from ..main.vectorLayerWrapper import qgsLayerToGeoDataFrame
 from .debug.export import export_debug_package
 
 # Mapping of sorter names to sorter classes
@@ -574,8 +573,8 @@ def paint_stratigraphic_order(
     geology_layer: 'QgsVectorLayer',
     stratigraphic_order: list,
     unit_name_field: str = "UNITNAME",
-    debug_manager: 'DebugManager' = None,
-    updater: 'Updater' = None,
+    debug_manager = None,
+    updater = None,
 ):
     """Paint stratigraphic order onto geology polygons.
     Parameters
@@ -595,7 +594,7 @@ def paint_stratigraphic_order(
     None
     """
     if updater:
-        updater(f"Painting stratigraphic order...")
+        updater("Painting stratigraphic order...")
     # check unit_name_field exists in geology_layer
     # Use the QGIS layer directly (if provided), otherwise accept a GeoDataFrame
     if geology_layer is None:
@@ -665,5 +664,5 @@ def paint_stratigraphic_order(
     # Commit changes
     geology_layer.commitChanges()
     if updater:
-        updater(f"Stratigraphic order painted successfully.")
+        updater("Stratigraphic order painted successfully.")
     return

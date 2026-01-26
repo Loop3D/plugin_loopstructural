@@ -2,7 +2,7 @@
 
 import os
 
-from PyQt5.QtWidgets import QLabel, QMessageBox, QWidget
+from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 

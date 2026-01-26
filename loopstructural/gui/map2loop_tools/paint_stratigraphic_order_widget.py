@@ -3,10 +3,9 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsMapLayerProxyModel, QgsProject
+from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 
-from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ...main.m2l_api import paint_stratigraphic_order
 
