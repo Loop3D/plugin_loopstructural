@@ -297,23 +297,40 @@ class ThicknessCalculatorWidget(QWidget):
 
         try:
             result = calculate_thickness(**params)
-            if result is not None:
-                # If result is a GeoDataFrame, add to project
-                if hasattr(result, 'geometry'):
-                    addGeoDataFrameToproject(result, "Thickness Results")
-                    QMessageBox.information(
-                        self,
-                        "Success",
-                        "Thickness calculation completed successfully and added to project.",
-                    )
-                else:
-                    QMessageBox.information(
-                        self, "Success", f"Thickness calculation completed: {result}"
-                    )
-                return True
-            else:
+            if not result:
                 QMessageBox.warning(self, "No Results", "Thickness calculation returned no results.")
                 return False
+
+            # Expect result as dict with components; fall back to direct layer
+            if isinstance(result, dict):
+                thicknesses = result.get('thicknesses')
+                lines = result.get('lines')
+                location_tracking = result.get('location_tracking')
+                if thicknesses is not None:
+                    addGeoDataFrameToproject(thicknesses, "Thickness Results")
+                if lines is not None:
+                    addGeoDataFrameToproject(lines, "Thickness Lines")
+                if location_tracking is not None:
+                    addGeoDataFrameToproject(location_tracking, "Thickness Locations")
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    "Thickness calculation completed successfully and added to project.",
+                )
+                return True
+
+            if hasattr(result, 'geometry'):
+                addGeoDataFrameToproject(result, "Thickness Results")
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    "Thickness calculation completed successfully and added to project.",
+                )
+                return True
+
+            QMessageBox.information(self, "Success", f"Thickness calculation completed: {result}")
+            return True
+
         except Exception as e:
             if self._debug:
                 self._debug.plugin.log(
@@ -347,5 +364,11 @@ class ThicknessCalculatorWidget(QWidget):
             'basal_unitname_field': self.basalUnitNameFieldComboBox.currentField(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
             'search_radius': self.searchRadiusSpinBox.value(),
+            'updater': getattr(self.data_manager, 'stratigraphic_column_callback', None),
+            'stratigraphic_order': (
+                self.data_manager.get_stratigraphic_column().order
+                if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_column')
+                else None
+            ),
         }
         return params

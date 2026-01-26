@@ -117,7 +117,8 @@ class SamplerWidget(QWidget):
             return
         # DTM
         dtm_names = get_layer_names(self.dtmLayerComboBox)
-        dtm_match = ColumnMatcher(dtm_names).find_match('DTM') or ColumnMatcher(dtm_names).find_match('DEM')
+        dtm_matcher = ColumnMatcher(dtm_names)
+        dtm_match = dtm_matcher.find_match('DTM') or dtm_matcher.find_match('DEM')
         if dtm_match:
             layer = self.data_manager.find_layer_by_name(dtm_match)
             self.dtmLayerComboBox.setLayer(layer)

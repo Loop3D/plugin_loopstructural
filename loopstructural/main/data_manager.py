@@ -616,10 +616,7 @@ class ModellingDataManager:
 
     def set_widget_settings(self, widget_name: str, settings: dict):
         """Store widget settings for persistence."""
-        if settings is None:
-            self.widget_settings[widget_name] = {}
-        else:
-            self.widget_settings[widget_name] = settings
+        self.widget_settings[widget_name] = settings
 
     def get_widget_settings(self, widget_name: str, default=None):
         """Retrieve persisted widget settings."""
