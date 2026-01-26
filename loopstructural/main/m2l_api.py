@@ -1,3 +1,5 @@
+from typing import final
+
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -10,6 +12,7 @@ from map2loop.sorter import (
 )
 from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
 from osgeo import gdal
+from qgis.core import QgsVectorLayer
 
 from ..main.vectorLayerWrapper import qgsLayerToDataFrame, qgsLayerToGeoDataFrame
 from .debug.export import export_debug_package
@@ -114,12 +117,17 @@ def extract_basal_contacts(
         print(e)
 
     try:
+        print('before all')
         all_contacts_result = contact_extractor.extract_all_contacts()
+        print('after all')
         basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
+        print('after basal')
+        print(all_contacts_result.shape, basal_contacts.shape)
     except Exception as e:
         print(f"Error during contact extraction: {e}")
         basal_contacts = pd.DataFrame()
         all_contacts_result = pd.DataFrame()
+
     if ignore_units and basal_contacts.empty is False:
         basal_contacts = basal_contacts[
             ~basal_contacts['basal_unit'].astype(str).str.strip().isin(ignore_units)
@@ -560,3 +568,102 @@ def calculate_thickness(
     # Ensure result object exists for return and for any debug export
     res = {'thicknesses': thickness}
     return res
+
+
+def paint_stratigraphic_order(
+    geology_layer: 'QgsVectorLayer',
+    stratigraphic_order: list,
+    unit_name_field: str = "UNITNAME",
+    debug_manager: 'DebugManager' = None,
+    updater: 'Updater' = None,
+):
+    """Paint stratigraphic order onto geology polygons.
+    Parameters
+    ----------
+    geology_layer : QgsVectorLayer
+        Geology polygon layer.
+    stratigraphic_order : list
+        List of unit names in stratigraphic order.
+    unit_name_field : str
+        Name of the field containing unit names.
+    debug_manager : DebugManager
+        Debug manager instance for handling debug information.
+    updater : Updater
+        Updater instance for handling updates.
+    Returns
+    -------
+    None
+    """
+    if updater:
+        updater(f"Painting stratigraphic order...")
+    # check unit_name_field exists in geology_layer
+    # Use the QGIS layer directly (if provided), otherwise accept a GeoDataFrame
+    if geology_layer is None:
+        msg = "No geology layer provided"
+        if debug_manager:
+            try:
+                debug_manager.log_params("paint_stratigraphic_order", {"error": msg})
+            except Exception:
+                pass
+        if updater:
+            updater(msg)
+        raise ValueError(msg)
+
+    geology_fields = None
+    # Try to treat as a QgsVectorLayer
+    if issubclass(type(geology_layer), QgsVectorLayer):
+        fields = geology_layer.fields()
+        if fields is not None:
+            try:
+                # QgsFields has .names() in many QGIS versions
+                geology_fields = list(fields.names())
+            except Exception:
+                # Fallback: iterate field objects
+                geology_fields = [f.name() for f in fields]
+            finally:
+                pass
+        if unit_name_field not in geology_fields:
+            msg = f"Unit name field '{unit_name_field}' not found in geology layer"
+            if debug_manager:
+                try:
+                    debug_manager.log_params(
+                        "paint_stratigraphic_order",
+                        {"error": msg, "geology_fields": geology_fields},
+                    )
+                except Exception:
+                    pass
+            if updater:
+                updater(msg)
+            raise ValueError(msg)
+        if updater:
+            updater(f"Found unit name field: {unit_name_field}")
+
+    stratigraphic_order_dict = {unit: index for index, unit in enumerate(stratigraphic_order)}
+    # Start editing the layer
+    geology_layer.startEditing()
+    # Add new field for stratigraphic order if it doesn't exist
+    strat_order_field = "strat_order"
+    if strat_order_field not in geology_fields:
+        from qgis.core import QgsField
+        from qgis.PyQt.QtCore import QVariant
+
+        new_field = QgsField(strat_order_field, QVariant.Int)
+        geology_layer.dataProvider().addAttributes([new_field])
+        geology_layer.updateFields()
+        if updater:
+            updater(f"Added new field for stratigraphic order: {strat_order_field}")
+    # Update stratigraphic order values
+    for feature in geology_layer.getFeatures():
+        unit_name = feature[unit_name_field]
+        strat_order_value = stratigraphic_order_dict.get(unit_name, None)
+        if strat_order_value is not None:
+            geology_layer.changeAttributeValue(
+                feature.id(),
+                geology_layer.fields().indexFromName(strat_order_field),
+                strat_order_value,
+            )
+    # Commit changes
+    geology_layer.commitChanges()
+    if updater:
+        updater(f"Stratigraphic order painted successfully.")
+    return

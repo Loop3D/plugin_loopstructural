@@ -183,3 +183,40 @@ class ThicknessCalculatorDialog(QDialog):
     def _run_and_accept(self):
         """Run the calculator and accept dialog if successful."""
         self.widget._run_calculator()
+
+
+class PaintStratigraphicOrderDialog(QDialog):
+    """Dialog for painting stratigraphic order onto geology polygons."""
+
+    def __init__(self, parent=None, data_manager=None, debug_manager=None):
+        """Initialize the paint stratigraphic order dialog."""
+        super().__init__(parent)
+        self.setWindowTitle("Paint Stratigraphic Order")
+        self.data_manager = data_manager
+        self.debug_manager = debug_manager
+        self.setup_ui()
+
+    def setup_ui(self):
+        """Set up the dialog UI."""
+        from .paint_stratigraphic_order_widget import PaintStratigraphicOrderWidget
+
+        layout = QVBoxLayout(self)
+        self.widget = PaintStratigraphicOrderWidget(
+            self,
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        layout.addWidget(self.widget)
+
+        # Replace the run button with dialog buttons
+        self.widget.runButton.hide()
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box.accepted.connect(self._run_and_accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+    def _run_and_accept(self):
+        """Run the painter and accept dialog if successful."""
+        self.widget._run_painter()
+
