@@ -124,13 +124,15 @@ class SamplerWidget(QWidget):
             self.dtmLayerComboBox.setLayer(layer)
         # Geology
         geology_names = get_layer_names(self.geologyLayerComboBox)
-        geology_match = ColumnMatcher(geology_names).find_match('GEOLOGY')
+        geology_matcher = ColumnMatcher(geology_names)
+        geology_match = geology_matcher.find_match('GEOLOGY')
         if geology_match:
             layer = self.data_manager.find_layer_by_name(geology_match)
             self.geologyLayerComboBox.setLayer(layer)
         # Spatial
         spatial_names = get_layer_names(self.spatialDataLayerComboBox)
-        spatial_match = ColumnMatcher(spatial_names).find_match('SPATIAL')
+        spatial_matcher = ColumnMatcher(spatial_names)
+        spatial_match = spatial_matcher.find_match('SPATIAL')
         if spatial_match:
             layer = self.data_manager.find_layer_by_name(spatial_match)
             self.spatialDataLayerComboBox.setLayer(layer)

@@ -364,10 +364,10 @@ class ThicknessCalculatorWidget(QWidget):
             'basal_unitname_field': self.basalUnitNameFieldComboBox.currentField(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
             'search_radius': self.searchRadiusSpinBox.value(),
-            'updater': getattr(self.data_manager, 'stratigraphic_column_callback', None),
+            'updater': (lambda msg: QMessageBox.information(self, "Progress", msg)),
             'stratigraphic_order': (
-                self.data_manager.get_stratigraphic_column().order
-                if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_column')
+                self.data_manager.get_stratigraphic_unit_names()
+                if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')
                 else None
             ),
         }
