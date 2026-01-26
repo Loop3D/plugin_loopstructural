@@ -288,11 +288,11 @@ class SorterWidget(QWidget):
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
-            return
+            return False
 
         if not self.contactsLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a contacts layer.")
-            return
+            return False
 
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
         algorithm_name = self.sorting_algorithms[algorithm_index]
@@ -305,12 +305,12 @@ class SorterWidget(QWidget):
                     "Missing Input",
                     "Structure layer is required for observation projections.",
                 )
-                return
+                return False
             if not self.dtmLayerComboBox.currentLayer():
                 QMessageBox.warning(
                     self, "Missing Input", "DTM layer is required for observation projections."
                 )
-                return
+                return False
 
         # Run the sorter API
         try:
@@ -366,6 +366,7 @@ class SorterWidget(QWidget):
                 )
             else:
                 QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
+            return True
 
         except Exception as e:
             if self._debug:
@@ -376,6 +377,7 @@ class SorterWidget(QWidget):
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            return False
 
     def get_parameters(self):
         """Get current widget parameters.

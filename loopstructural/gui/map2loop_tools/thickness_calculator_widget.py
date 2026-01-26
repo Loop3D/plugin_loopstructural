@@ -221,21 +221,21 @@ class ThicknessCalculatorWidget(QWidget):
         # Validate inputs
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
-            return
+            return False
 
         if not self.basalContactsComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a basal contacts layer.")
-            return
+            return False
 
         if not self.sampledContactsComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a sampled contacts layer.")
-            return
+            return False
 
         if not self.structureLayerComboBox.currentLayer():
             QMessageBox.warning(
                 self, "Missing Input", "Please select a structure/orientation layer."
             )
-            return
+            return False
 
         calculator_type = self.calculatorTypeComboBox.currentText()
 
@@ -316,6 +316,8 @@ class ThicknessCalculatorWidget(QWidget):
                 )
             else:
                 QMessageBox.warning(self, "Error", "No thickness data was calculated.")
+                return False
+            return True
 
         except Exception as e:
             if self._debug:
@@ -326,6 +328,7 @@ class ThicknessCalculatorWidget(QWidget):
             if PlgOptionsManager.get_debug_mode():
                 raise e
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            return False
 
     def get_parameters(self):
         """Get current widget parameters.

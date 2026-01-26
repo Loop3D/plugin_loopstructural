@@ -36,8 +36,8 @@ class SamplerDialog(QDialog):
 
     def _run_and_accept(self):
         """Run the sampler and accept dialog if successful."""
-        self.widget._run_sampler()
-        # Dialog stays open so user can see the result
+        if self.widget._run_sampler():
+            self.accept()
 
 
 class SorterDialog(QDialog):
@@ -73,7 +73,8 @@ class SorterDialog(QDialog):
 
     def _run_and_accept(self):
         """Run the sorter and accept dialog if successful."""
-        self.widget._run_sorter()
+        if self.widget._run_sorter():
+            self.accept()
 
 
 class UserDefinedSorterDialog(QDialog):
@@ -101,16 +102,15 @@ class UserDefinedSorterDialog(QDialog):
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons
-        # self.widget.runButton.hide()
-
-        # self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        # self.button_box.accepted.connect(self._run_and_accept)
-        # self.button_box.rejected.connect(self.reject)
-        # layout.addWidget(self.button_box)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box.accepted.connect(self._run_and_accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
 
     def _run_and_accept(self):
         """Run the sorter and accept dialog if successful."""
-        self.widget._run_sorter()
+        if self.widget._run_sorter():
+            self.accept()
 
 
 class BasalContactsDialog(QDialog):
@@ -146,7 +146,8 @@ class BasalContactsDialog(QDialog):
 
     def _run_and_accept(self):
         """Run the extractor and accept dialog if successful."""
-        self.widget._run_extractor()
+        if self.widget._run_extractor():
+            self.accept()
 
 
 class ThicknessCalculatorDialog(QDialog):
@@ -182,7 +183,8 @@ class ThicknessCalculatorDialog(QDialog):
 
     def _run_and_accept(self):
         """Run the calculator and accept dialog if successful."""
-        self.widget._run_calculator()
+        if self.widget._run_calculator():
+            self.accept()
 
 
 class PaintStratigraphicOrderDialog(QDialog):
@@ -218,5 +220,5 @@ class PaintStratigraphicOrderDialog(QDialog):
 
     def _run_and_accept(self):
         """Run the painter and accept dialog if successful."""
-        self.widget._run_painter()
-
+        if self.widget._run_painter():
+            self.accept()
