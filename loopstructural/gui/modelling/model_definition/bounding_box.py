@@ -22,6 +22,7 @@ class BoundingBoxWidget(QWidget):
         self.useCurrentViewExtentButton.clicked.connect(self.useCurrentViewExtent)
         self.selectFromCurrentLayerButton.clicked.connect(self.selectFromCurrentLayer)
         self.data_manager.set_bounding_box_update_callback(self.set_bounding_box)
+        self._update_bounding_box_styles()
 
     def set_bounding_box(self, bounding_box):
         """Populate UI controls with values from a BoundingBox object.
@@ -31,12 +32,37 @@ class BoundingBoxWidget(QWidget):
         bounding_box : object
             BoundingBox-like object with `origin` and `maximum` sequences of length 3.
         """
-        self.originXSpinBox.setValue(bounding_box.origin[0])
-        self.maxXSpinBox.setValue(bounding_box.maximum[0])
-        self.originYSpinBox.setValue(bounding_box.origin[1])
-        self.maxYSpinBox.setValue(bounding_box.maximum[1])
-        self.originZSpinBox.setValue(bounding_box.origin[2])
-        self.maxZSpinBox.setValue(bounding_box.maximum[2])
+        # Block spinbox signals to avoid emitting valueChanged while setting values
+        spinboxes = (
+            self.originXSpinBox,
+            self.maxXSpinBox,
+            self.originYSpinBox,
+            self.maxYSpinBox,
+            self.originZSpinBox,
+            self.maxZSpinBox,
+        )
+        for sb in spinboxes:
+            try:
+                sb.blockSignals(True)
+            except Exception:
+                pass
+
+        try:
+            self.originXSpinBox.setValue(bounding_box.origin[0])
+            self.maxXSpinBox.setValue(bounding_box.maximum[0])
+            self.originYSpinBox.setValue(bounding_box.origin[1])
+            self.maxYSpinBox.setValue(bounding_box.maximum[1])
+            self.originZSpinBox.setValue(bounding_box.origin[2])
+            self.maxZSpinBox.setValue(bounding_box.maximum[2])
+        finally:
+            # Ensure signals are unblocked even if setting values raises
+            for sb in spinboxes:
+                try:
+                    sb.blockSignals(False)
+                except Exception:
+                    pass
+
+        self._update_bounding_box_styles()
 
     def useCurrentViewExtent(self):
         """Set bounding box values from the current map canvas view extent."""
@@ -70,3 +96,27 @@ class BoundingBoxWidget(QWidget):
 
     def onChangeExtent(self, value):
         self.data_manager.set_bounding_box(**value)
+        try:
+            self._update_bounding_box_styles()
+        except Exception:
+            pass
+
+    def _update_bounding_box_styles(self):
+        """Highlight spin boxes if bounding box has not been set."""
+        if not hasattr(self, 'data_manager'):
+            return
+        try:
+            is_set = self.data_manager.is_bounding_box_set()
+        except Exception:
+            is_set = False
+        red_style = "border: 1px solid red;"
+        clear_style = ""
+        for sb in (
+            self.originXSpinBox,
+            self.originYSpinBox,
+            self.originZSpinBox,
+            self.maxXSpinBox,
+            self.maxYSpinBox,
+            self.maxZSpinBox,
+        ):
+            sb.setStyleSheet(clear_style if is_set else red_style)

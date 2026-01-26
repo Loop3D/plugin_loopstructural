@@ -142,6 +142,14 @@ class GeologicalModelTab(QWidget):
         # Run update_model in a background thread to avoid blocking the UI.
         if not self.model_manager:
             return
+        if self.data_manager is not None:
+            if not self.data_manager.is_bounding_box_set():
+                QMessageBox.critical(
+                    self,
+                    "Bounding box required",
+                    "Please set the bounding box before initializing the model.",
+                )
+                return
 
         # create progress dialog (indeterminate)
         progress = QProgressDialog("Updating geological model...", "Cancel", 0, 0, self)

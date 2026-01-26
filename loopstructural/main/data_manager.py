@@ -45,6 +45,7 @@ class ModellingDataManager:
                 default_bounding_box['zmax'],
             ],
         )
+        self._bounding_box_set = False
 
         self._basal_contacts = None
         self._fault_traces = None
@@ -99,7 +100,9 @@ class ModellingDataManager:
         self._model_manager.set_fault_topology(self._fault_topology)
         self._model_manager.update_bounding_box(self._bounding_box)
 
-    def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
+    def set_bounding_box(
+        self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None, *, mark_set=True
+    ):
         """Set the bounding box for the model."""
         origin = self._bounding_box.origin
         maximum = self._bounding_box.maximum
@@ -118,8 +121,8 @@ class ModellingDataManager:
             maximum[2] = zmax
         self._bounding_box.origin = origin
         self._bounding_box.maximum = maximum
-        self._bounding_box.origin = origin
-        self._bounding_box.maximum = maximum
+        if mark_set:
+            self._bounding_box_set = True
         self._model_manager.update_bounding_box(self._bounding_box)
         if self.bounding_box_callback:
             self.bounding_box_callback(self._bounding_box)
@@ -127,6 +130,10 @@ class ModellingDataManager:
     def set_bounding_box_update_callback(self, callback):
         self.bounding_box_callback = callback
         self.bounding_box_callback(self._bounding_box)
+
+    def is_bounding_box_set(self):
+        """Return True if the bounding box has been explicitly set by the user."""
+        return bool(self._bounding_box_set)
 
     def set_fault_trace_layer_callback(self, callback):
         """Set the callback for when the fault trace layer is updated."""
@@ -457,6 +464,7 @@ class ModellingDataManager:
 
         return {
             'bounding_box': self._bounding_box.to_dict(),
+            'bounding_box_set': self._bounding_box_set,
             'basal_contacts': basal_contacts,
             'fault_traces': fault_traces,
             'structural_orientations': structural_orientations,
@@ -478,6 +486,7 @@ class ModellingDataManager:
                 ymax=data['bounding_box']['maximum'][1],
                 zmin=data['bounding_box']['origin'][2],
                 zmax=data['bounding_box']['maximum'][2],
+                mark_set=data.get('bounding_box_set', True),
             )
         if 'dem_layer' in data and data['dem_layer'] is not None:
             dem_layer = QgsProject.instance().mapLayersByName(data['dem_layer'])
@@ -512,9 +521,10 @@ class ModellingDataManager:
                 ymax=data['bounding_box']['maximum'][1],
                 zmin=data['bounding_box']['origin'][2],
                 zmax=data['bounding_box']['maximum'][2],
+                mark_set=data.get('bounding_box_set', True),
             )
         else:
-            self.set_bounding_box(**default_bounding_box)
+            self.set_bounding_box(**default_bounding_box, mark_set=False)
         if 'dem_layer' in data and data['dem_layer'] is not None:
             dem_layer = QgsProject.instance().mapLayersByName(data['dem_layer'])
             if dem_layer:
