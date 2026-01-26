@@ -1,6 +1,7 @@
+import logging
 import os
 import tempfile
-import warnings
+from typing import Optional
 
 import geopandas as gpd
 import numpy as np
@@ -27,6 +28,8 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QDateTime, QVariant
 from shapely.geometry import LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon
+
+logger = logging.getLogger(__name__)
 
 
 def qgsRasterToGdalDataset(rlayer: QgsRasterLayer):
@@ -91,12 +94,12 @@ def qgsRasterToGdalDataset(rlayer: QgsRasterLayer):
 
 def _get_crs_id(crs):
     """Get a safe string identifier for a CRS.
-    
+
     Parameters
     ----------
     crs : QgsCoordinateReferenceSystem or None
         The CRS to get an ID for
-    
+
     Returns
     -------
     str
@@ -110,9 +113,9 @@ def _get_crs_id(crs):
     return "Unknown"
 
 
-def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
+def qgsLayerToGeoDataFrame(layer, target_crs=None) -> Optional[gpd.GeoDataFrame]:
     """Convert a QgsVectorLayer to a GeoDataFrame, optionally transforming to a target CRS.
-    
+
     Parameters
     ----------
     layer : QgsVectorLayer
@@ -120,7 +123,7 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
     target_crs : QgsCoordinateReferenceSystem, optional
         If provided, all geometries will be transformed to this CRS.
         If None, the layer's source CRS is used.
-    
+
     Returns
     -------
     gpd.GeoDataFrame
@@ -128,28 +131,28 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
     """
     if layer is None:
         return None
-    
+
     features = layer.getFeatures()
     fields = layer.fields()
     data = {'geometry': []}
     for f in fields:
         data[f.name()] = []
-    
+
     # Set up coordinate transformation if needed
     transform = None
     source_crs = layer.sourceCrs()
     output_crs = source_crs
-    
+
     if target_crs is not None and target_crs.isValid():
         if source_crs.isValid() and source_crs != target_crs:
             transform = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
             output_crs = target_crs
-    
+
     for feature in features:
         geom = feature.geometry()
         if geom.isEmpty():
             continue
-        
+
         # Transform geometry if needed
         if transform is not None:
             geom_copy = QgsGeometry(geom)
@@ -157,38 +160,34 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> gpd.GeoDataFrame:
                 result = geom_copy.transform(transform)
                 if result != 0:
                     # Transform returned error code
-                    warnings.warn(
+                    logger.warning(
                         f"Failed to transform geometry (error code {result}). "
                         f"Source CRS: {_get_crs_id(source_crs)}, Target CRS: {_get_crs_id(target_crs)}. "
-                        f"Skipping feature.",
-                        RuntimeWarning
+                        f"Skipping feature."
                     )
                     continue
-                data['geometry'].append(geom_copy)
             except Exception as e:
                 # If transformation fails, log warning and skip this feature
-                warnings.warn(
+                logger.exception(
                     f"Exception during CRS transformation: {e}. "
                     f"Source CRS: {_get_crs_id(source_crs)}, Target CRS: {_get_crs_id(target_crs)}. "
-                    f"Skipping feature.",
-                    RuntimeWarning
+                    f"Skipping feature."
                 )
                 continue
         else:
             data['geometry'].append(geom)
-        
+
         # Copy field values
         for f in fields:
             if f.type() == QVariant.String:
                 data[f.name()].append(str(feature[f.name()]))
             else:
                 data[f.name()].append(feature[f.name()])
-    
+
     return gpd.GeoDataFrame(data, crs=output_crs.authid())
 
 
-
-def qgsLayerToDataFrame(src, dtm=None) -> pd.DataFrame:
+def qgsLayerToDataFrame(src, dtm=None) -> Optional[pd.DataFrame]:
     """
     Convert a vector layer or processing feature source to a pandas DataFrame.
     Samples geometry using points or vertices of lines/polygons.
