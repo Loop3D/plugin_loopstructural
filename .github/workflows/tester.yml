@@ -68,6 +68,14 @@ jobs:
       - name: Print QGIS version
         run: qgis --version
 
+      - name: Install system packages (GDAL/PROJ/GEOS build deps)
+        run: |
+          set -e
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential gdal-bin libgdal-dev proj-bin libproj-dev libgeos-dev python3-dev xvfb
+          rm -rf /var/lib/apt/lists/*
+
       - name: Setup plugin
         run: bash /tests_directory/scripts/qgis_setup.sh loopstructural
 
@@ -76,6 +84,10 @@ jobs:
         run: |
           python3 -m pip install -U pip setuptools wheel
           python3 -m pip install -U -r requirements/testing.txt
+          python3 -m pip install -U -r /tests_directory/loopstructural/requirements.txt
+      - name: Install map2loop
+        run: |
+          python3 -m pip install git+https://github.com/Loop3D/map2loop.git@main
 
       - name: Run Unit tests
         run: |

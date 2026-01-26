@@ -5,3 +5,4 @@ pyqtgraph
 loopsolver
 geopandas
 numpy==1.26.4
+map2loop~=3.3
