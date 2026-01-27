@@ -237,8 +237,6 @@ class ThicknessCalculatorWidget(QWidget):
             self.orientationTypeComboBox.setCurrentIndex(settings['orientation_type_index'])
         if 'max_line_length' in settings:
             self.maxLineLengthSpinBox.setValue(settings['max_line_length'])
-        if 'search_radius' in settings:
-            self.searchRadiusSpinBox.setValue(settings['search_radius'])
         if field := settings.get('unit_name_field'):
             self.unitNameFieldComboBox.setField(field)
         if field := settings.get('dip_field'):
@@ -253,15 +251,34 @@ class ThicknessCalculatorWidget(QWidget):
         if not self.data_manager:
             return
         settings = {
-            'dtm_layer': self.dtmLayerComboBox.currentLayer().name() if self.dtmLayerComboBox.currentLayer() else None,
-            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
-            'basal_contacts_layer': self.basalContactsComboBox.currentLayer().name() if self.basalContactsComboBox.currentLayer() else None,
-            'sampled_contacts_layer': self.sampledContactsComboBox.currentLayer().name() if self.sampledContactsComboBox.currentLayer() else None,
-            'structure_layer': self.structureLayerComboBox.currentLayer().name() if self.structureLayerComboBox.currentLayer() else None,
+            'dtm_layer': (
+                self.dtmLayerComboBox.currentLayer().name()
+                if self.dtmLayerComboBox.currentLayer()
+                else None
+            ),
+            'geology_layer': (
+                self.geologyLayerComboBox.currentLayer().name()
+                if self.geologyLayerComboBox.currentLayer()
+                else None
+            ),
+            'basal_contacts_layer': (
+                self.basalContactsComboBox.currentLayer().name()
+                if self.basalContactsComboBox.currentLayer()
+                else None
+            ),
+            'sampled_contacts_layer': (
+                self.sampledContactsComboBox.currentLayer().name()
+                if self.sampledContactsComboBox.currentLayer()
+                else None
+            ),
+            'structure_layer': (
+                self.structureLayerComboBox.currentLayer().name()
+                if self.structureLayerComboBox.currentLayer()
+                else None
+            ),
             'calculator_type_index': self.calculatorTypeComboBox.currentIndex(),
             'orientation_type_index': self.orientationTypeComboBox.currentIndex(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
-            'search_radius': self.searchRadiusSpinBox.value(),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'dip_field': self.dipFieldComboBox.currentField(),
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
@@ -298,7 +315,9 @@ class ThicknessCalculatorWidget(QWidget):
         try:
             result = calculate_thickness(**params)
             if not result:
-                QMessageBox.warning(self, "No Results", "Thickness calculation returned no results.")
+                QMessageBox.warning(
+                    self, "No Results", "Thickness calculation returned no results."
+                )
                 return False
 
             # Expect result as dict with components; fall back to direct layer
