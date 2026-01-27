@@ -134,6 +134,19 @@ class StratigraphicUnitWidget(QWidget):
         if data:
             self.name = str(data.get("name", ""))
             self.colour = data.get("colour", "")
+            # If a thickness value is provided, update the widget's thickness
+            if 'thickness' in data and data.get('thickness') is not None:
+                try:
+                    th = float(data.get('thickness'))
+                except Exception:
+                    th = None
+                if th is not None:
+                    # Use set_thickness to update spinbox without emitting thicknessChanged
+                    try:
+                        self.set_thickness(th)
+                    except Exception:
+                        # ignore GUI update failures
+                        pass
         else:
             self.name = ""
             self.colour = ""
