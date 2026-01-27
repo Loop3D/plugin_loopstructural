@@ -190,10 +190,26 @@ class SorterWidget(QWidget):
         if not self.data_manager:
             return
         settings = {
-            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
-            'structure_layer': self.structureLayerComboBox.currentLayer().name() if self.structureLayerComboBox.currentLayer() else None,
-            'contacts_layer': self.contactsLayerComboBox.currentLayer().name() if self.contactsLayerComboBox.currentLayer() else None,
-            'dtm_layer': self.dtmLayerComboBox.currentLayer().name() if self.dtmLayerComboBox.currentLayer() else None,
+            'geology_layer': (
+                self.geologyLayerComboBox.currentLayer().name()
+                if self.geologyLayerComboBox.currentLayer()
+                else None
+            ),
+            'structure_layer': (
+                self.structureLayerComboBox.currentLayer().name()
+                if self.structureLayerComboBox.currentLayer()
+                else None
+            ),
+            'contacts_layer': (
+                self.contactsLayerComboBox.currentLayer().name()
+                if self.contactsLayerComboBox.currentLayer()
+                else None
+            ),
+            'dtm_layer': (
+                self.dtmLayerComboBox.currentLayer().name()
+                if self.dtmLayerComboBox.currentLayer()
+                else None
+            ),
             'sorting_algorithm': self.sortingAlgorithmComboBox.currentIndex(),
             'orientation_type': self.orientationTypeComboBox.currentIndex(),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
