@@ -1,6 +1,7 @@
 """Widget for thickness calculator."""
 
 import os
+import pandas as pd
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
@@ -325,8 +326,61 @@ class ThicknessCalculatorWidget(QWidget):
                 thicknesses = result.get('thicknesses')
                 lines = result.get('lines')
                 location_tracking = result.get('location_tracking')
-                if thicknesses is not None:
-                    addGeoDataFrameToproject(thicknesses, "Thickness Results")
+                # If thicknesses were calculated, update the stratigraphic column units
+                try:
+                    if thicknesses is not None and getattr(self, 'data_manager', None):
+                        # Prefer median thickness if available, fallback to mean
+                        thickness_col = (
+                            'ThicknessMedian'
+                            if 'ThicknessMedian' in getattr(thicknesses, 'columns', [])
+                            else (
+                                'ThicknessMean'
+                                if 'ThicknessMean' in getattr(thicknesses, 'columns', [])
+                                else None
+                            )
+                        )
+                        if thickness_col is not None:
+                            for _, row in thicknesses.iterrows():
+                                unit_name = row.get('name') or row.get('UNITNAME')
+                                if not unit_name:
+                                    continue
+                                try:
+                                    value = row.get(thickness_col)
+                                except Exception:
+                                    value = None
+                                # Skip invalid values (e.g. -1 means not calculated)
+                                try:
+                                    is_invalid = pd.isna(value) or float(value) == -1
+                                except Exception:
+                                    is_invalid = value is None
+                                if is_invalid:
+                                    continue
+                                # Find unit in stratigraphic column and update thickness
+                                try:
+                                    strat_col = self.data_manager.get_stratigraphic_column()
+                                    unit = strat_col.get_unit_by_name(unit_name)
+                                    if unit is not None:
+                                        unit.thickness = float(value)
+                                except Exception as err:
+                                    # Log but don't fail the widget
+                                    try:
+                                        if getattr(self, '_debug', None):
+                                            self._debug.plugin.log(
+                                                message=f"Failed to update stratigraphic unit thickness for {unit_name}: {err}",
+                                                log_level=2,
+                                            )
+                                    except Exception:
+                                        pass
+                        # Notify any stratigraphic column callbacks
+                        try:
+                            if getattr(self.data_manager, 'stratigraphic_column_callback', None):
+                                self.data_manager.stratigraphic_column_callback()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                # if thicknesses is not None:
+                #     addGeoDataFrameToproject(thicknesses, "Thickness Results")
                 if lines is not None:
                     addGeoDataFrameToproject(lines, "Thickness Lines")
                 if location_tracking is not None:
@@ -388,5 +442,6 @@ class ThicknessCalculatorWidget(QWidget):
                 if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')
                 else None
             ),
+            'debug_manager': self._debug,
         }
         return params
