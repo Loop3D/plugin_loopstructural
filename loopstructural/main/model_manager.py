@@ -26,6 +26,8 @@ from LoopStructural.modelling.features.fold import FoldFrame
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 from LoopStructural.utils.observer import Observable
 
+from ..main.helpers import qgisAttributeIsNone
+
 
 class AllSampler:
     """This is a simple sampler that just returns all the points, or all of the vertices
@@ -87,7 +89,7 @@ class GeologicalModelManager(Observable):
     It is responsible for updating the model with faults, stratigraphy, and other geological features.
     """
 
-    def __init__(self):
+    def __init__(self, debug_manager=None):
         """Initialize the geological model manager."""
         # Initialize Observable state
         super().__init__()
@@ -104,6 +106,7 @@ class GeologicalModelManager(Observable):
         # internal flag to temporarily suppress notifications (used when
         # updates are performed in background threads)
         self._suppress_notifications = False
+        self._debug_manager = debug_manager
 
     @contextmanager
     def suspend_notifications(self):
@@ -262,7 +265,7 @@ class GeologicalModelManager(Observable):
         self.stratigraphy.clear()  # Clear existing stratigraphy
         unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
         if len(unit_points) == 0 or unit_points.empty:
-            print("No basal contacts found or empty GeoDataFrame.")
+            self._debug_manager.log("No basal contacts found or empty GeoDataFrame.", log_level=2)
             return
         if unit_name_field is not None:
             unit_points['unit_name'] = unit_points[unit_name_field].astype(str)
@@ -336,6 +339,12 @@ class GeologicalModelManager(Observable):
         """
         stratigraphic_column = {}
         for _i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
+            # check if the attribute is none, if its none we want so skip as it could be an
+            # ambiguous attribute and cause multiple data assocaited with different features
+            # to be applied the same value.
+            if qgisAttributeIsNone(group) is None:
+                self._debug_manager.log(f"Group {group.name} has no data, skipping.", log_level=2)
+                continue
             val = 0
             data = []
             groupname = group.name
@@ -360,7 +369,9 @@ class GeologicalModelManager(Observable):
 
                 val += u.thickness
             if len(data) == 0:
-                print(f"No data found for group {groupname}, skipping.")
+                self._debug_manager.log(
+                    f"No data found for group {groupname}, skipping.", log_level=2
+                )
                 continue
             data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(
@@ -380,6 +391,20 @@ class GeologicalModelManager(Observable):
     def update_fault_features(self):
         """Update the fault features in the geological model."""
         for fault_name, fault_data in self.faults.items():
+            if qgisAttributeIsNone(fault_name):
+                # check if the attribute is none, if its none we want so skip as it could be an
+                # ambiguous attribute and cause multiple data assocaited with different features
+                # to be applied the same value.
+                # The DebugManager forwards to the toolbelt logger which is safe to
+                # call from background threads. Call it directly and swallow any
+                # exceptions to avoid causing freezes.
+                try:
+                    dbg = getattr(self, '_debug_manager', None)
+                    if dbg is not None and hasattr(dbg, 'log'):
+                        dbg.log('Skipping fault with no name.', log_level=2)
+                except Exception:
+                    pass
+                continue
             if 'data' in fault_data and not fault_data['data'].empty:
                 data = fault_data['data'].copy()
                 data['feature_name'] = fault_name
@@ -754,7 +779,9 @@ class GeologicalModelManager(Observable):
         try:
             from shapely.geometry import Point as _Point
         except Exception:
-            print("Shapely not available; geometry column will be omitted.")
+            self._debug_manager.log(
+                "Shapely not available; geometry column will be omitted.", log_level=2
+            )
             _Point = None
 
         pts = np.asarray(points)
