@@ -56,8 +56,8 @@ class LoopWidget(QWidget):
             data_manager=self.data_manager,
             project=self.data_manager.project if self.data_manager else None,
         )
-        tabWidget.addTab(self.modelling_widget, "Modelling")
         tabWidget.addTab(self.data_conversion_widget, "Data Conversion")
+        tabWidget.addTab(self.modelling_widget, "Modelling")
         tabWidget.addTab(self.visualisation_widget, "Visualisation")
 
     def get_modelling_widget(self):
