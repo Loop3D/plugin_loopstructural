@@ -11,6 +11,30 @@ from typing import Dict, List, Optional, Tuple, Union, overload
 from qgis.gui import QgsMapLayerComboBox
 
 
+def qgisAttributeIsNone(value) -> bool:
+    """
+    Check if a QGIS attribute value is considered None.
+
+    Parameters
+    ----------
+    value : Any
+        The attribute value to check.
+
+    Returns
+    -------
+    bool
+        True if the value is None or represents a null value in QGIS, False otherwise.
+    """
+
+    return (
+        value is None
+        or (hasattr(value, 'isNull') and value.isNull())
+        or value == ''
+        or value == 'NULL'
+        or value == 'None'
+    )
+
+
 class ColumnMatcher:
     """
     Intelligent column name matcher that finds the best matching column from a list.
