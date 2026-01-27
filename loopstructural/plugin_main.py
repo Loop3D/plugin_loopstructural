@@ -31,6 +31,7 @@ if importlib.util.find_spec("LoopStructural") is None:
     raise ImportError(
         "LoopStructural is not installed. Please install it using the requirements.txt file in the plugin directory."
     )
+from loopstructural.debug_manager import DebugManager
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
@@ -63,6 +64,7 @@ class LoopstructuralPlugin:
         """
         self.iface = iface
         self.log = PlgLogger().log
+        self.debug_manager = DebugManager(plugin=self)
 
         # translation
         # initialize the locale
@@ -90,6 +92,8 @@ class LoopstructuralPlugin:
         """
         import logging
 
+        from map2loop.logging import setLogging as setLogging_m2l
+
         import LoopStructural
         from loopstructural.toolbelt.log_handler import PlgLoggerHandler
 
@@ -97,6 +101,7 @@ class LoopstructuralPlugin:
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
 
         LoopStructural.setLogging(level="warning", handler=handler)
+        setLogging_m2l(level="warning", handler=handler)
 
     def initGui(self):
         """Set up plugin UI elements."""
@@ -108,6 +113,11 @@ class LoopstructuralPlugin:
         self.iface.registerOptionsWidgetFactory(self.options_factory)
 
         # -- Actions
+        self.action_fault_topology = QAction(
+            "Fault Topology Calculator",
+            self.iface.mainWindow(),
+        )
+        self.action_fault_topology.triggered.connect(self.show_fault_topology_dialog)
         self.action_help = QAction(
             QgsApplication.getThemeIcon("mActionHelpContents.svg"),
             self.tr("Help"),
@@ -137,9 +147,71 @@ class LoopstructuralPlugin:
         )
 
         self.toolbar.addAction(self.action_modelling)
+        self.toolbar.addAction(self.action_fault_topology)
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
+        self.initProcessing()
+
+        # Map2Loop tool actions
+        self.action_sampler = QAction(
+            "Sampler",
+            self.iface.mainWindow(),
+        )
+        self.action_sampler.triggered.connect(self.show_sampler_dialog)
+
+        self.action_sorter = QAction(
+            QIcon(
+                os.path.dirname(__file__) + "/resources/images/automatic_stratigraphic_column.png"
+            ),
+            "Automatic Stratigraphic Sorter",
+            self.iface.mainWindow(),
+        )
+        self.action_sorter.triggered.connect(self.show_sorter_dialog)
+
+        self.action_user_sorter = QAction(
+            QIcon(os.path.dirname(__file__) + "/resources/images/stratigraphic_column.png"),
+            "User-Defined Stratigraphic Column",
+            self.iface.mainWindow(),
+        )
+        self.action_user_sorter.triggered.connect(self.show_user_sorter_dialog)
+
+        self.action_basal_contacts = QAction(
+            QIcon(os.path.dirname(__file__) + "/resources/images/basal_contacts.png"),
+            "Extract Basal Contacts",
+            self.iface.mainWindow(),
+        )
+        self.action_basal_contacts.triggered.connect(self.show_basal_contacts_dialog)
+
+        self.action_thickness = QAction(
+            "Thickness Calculator",
+            self.iface.mainWindow(),
+        )
+        self.action_thickness.triggered.connect(self.show_thickness_dialog)
+
+        self.action_paint_strat_order = QAction(
+            "Paint Stratigraphic Order",
+            self.iface.mainWindow(),
+        )
+        self.action_paint_strat_order.triggered.connect(self.show_paint_strat_order_dialog)
+
+        # Add all map2loop tool actions to the toolbar
+        self.toolbar.addAction(self.action_sampler)
+        self.toolbar.addAction(self.action_sorter)
+        self.toolbar.addAction(self.action_user_sorter)
+        self.toolbar.addAction(self.action_basal_contacts)
+        self.toolbar.addAction(self.action_thickness)
+        self.toolbar.addAction(self.action_paint_strat_order)
+        self.toolbar.addAction(self.action_fault_topology)
+
+        self.iface.addPluginToMenu(__title__, self.action_sampler)
+        self.iface.addPluginToMenu(__title__, self.action_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_user_sorter)
+        self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
+        self.iface.addPluginToMenu(__title__, self.action_thickness)
+        self.iface.addPluginToMenu(__title__, self.action_paint_strat_order)
+        self.iface.addPluginToMenu(__title__, self.action_fault_topology)
+
         self.initProcessing()
 
         # -- Help menu
@@ -255,6 +327,83 @@ class LoopstructuralPlugin:
             self.modelling_dockwidget = None
             self.visualisation_dockwidget = None
 
+    def show_sampler_dialog(self):
+        """Show the sampler dialog."""
+        from loopstructural.gui.map2loop_tools import SamplerDialog
+
+        dialog = SamplerDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_sorter_dialog(self):
+        """Show the automatic stratigraphic sorter dialog."""
+        from loopstructural.gui.map2loop_tools import SorterDialog
+
+        dialog = SorterDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_user_sorter_dialog(self):
+        """Show the user-defined stratigraphic column dialog."""
+        from loopstructural.gui.map2loop_tools import UserDefinedSorterDialog
+
+        dialog = UserDefinedSorterDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_basal_contacts_dialog(self):
+        """Show the basal contacts extractor dialog."""
+        from loopstructural.gui.map2loop_tools import BasalContactsDialog
+
+        dialog = BasalContactsDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_thickness_dialog(self):
+        """Show the thickness calculator dialog."""
+        from loopstructural.gui.map2loop_tools import ThicknessCalculatorDialog
+
+        dialog = ThicknessCalculatorDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_paint_strat_order_dialog(self):
+        """Show the paint stratigraphic order dialog."""
+        from loopstructural.gui.map2loop_tools import PaintStratigraphicOrderDialog
+
+        dialog = PaintStratigraphicOrderDialog(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
+    def show_fault_topology_dialog(self):
+        """Show the fault topology calculator dialog."""
+        from loopstructural.gui.map2loop_tools.fault_topology_widget import FaultTopologyWidget
+
+        dialog = FaultTopologyWidget(
+            self.iface.mainWindow(),
+            data_manager=self.data_manager,
+            debug_manager=self.debug_manager,
+        )
+        dialog.exec_()
+
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.
 
@@ -276,53 +425,91 @@ class LoopstructuralPlugin:
         QgsApplication.processingRegistry().addProvider(self.provider)
 
     def unload(self):
-        """Clean up when plugin is disabled or uninstalled."""
-        # -- Clean up dock widgets
-        if self.loop_dockwidget:
-            self.iface.removeDockWidget(self.loop_dockwidget)
-            del self.loop_dockwidget
-        if self.modelling_dockwidget:
-            self.iface.removeDockWidget(self.modelling_dockwidget)
-            del self.modelling_dockwidget
-        if self.visualisation_dockwidget:
-            self.iface.removeDockWidget(self.visualisation_dockwidget)
-            del self.visualisation_dockwidget
+        """Clean up when plugin is disabled or uninstalled.
 
-        # -- Clean up menu
-        self.iface.removePluginMenu(__title__, self.action_help)
-        self.iface.removePluginMenu(__title__, self.action_settings)
-        # self.iface.removeMenu(self.menu)
+        This implementation is defensive: initGui may not have been run when
+        QGIS asks the plugin to unload (plugin reloader), so attributes may be
+        missing. Use getattr to check for presence and guard removals/deletions.
+        """
+        # -- Clean up dock widgets
+        for dock_attr in ("loop_dockwidget", "modelling_dockwidget", "visualisation_dockwidget"):
+            dock = getattr(self, dock_attr, None)
+            if dock:
+                try:
+                    self.iface.removeDockWidget(dock)
+                except Exception:
+                    # ignore errors during unload
+                    pass
+                try:
+                    delattr(self, dock_attr)
+                except Exception:
+                    pass
+
+        # -- Clean up menu/actions (only remove if they exist)
+        for attr in (
+            "action_help",
+            "action_settings",
+            "action_sampler",
+            "action_sorter",
+            "action_user_sorter",
+            "action_basal_contacts",
+            "action_thickness",
+            "action_paint_strat_order",
+            "action_fault_topology",
+            "action_modelling",
+            "action_visualisation",
+        ):
+            act = getattr(self, attr, None)
+            if act:
+                try:
+                    self.iface.removePluginMenu(__title__, act)
+                except Exception:
+                    pass
+                try:
+                    delattr(self, attr)
+                except Exception:
+                    pass
+
         # -- Clean up preferences panel in QGIS settings
-        self.iface.unregisterOptionsWidgetFactory(self.options_factory)
-        # -- Unregister processing
-        QgsApplication.processingRegistry().removeProvider(self.provider)
+        options_factory = getattr(self, "options_factory", None)
+        if options_factory:
+            try:
+                self.iface.unregisterOptionsWidgetFactory(options_factory)
+            except Exception:
+                pass
+            try:
+                delattr(self, "options_factory")
+            except Exception:
+                pass
+
+        # -- Unregister processing provider
+        provider = getattr(self, "provider", None)
+        if provider:
+            try:
+                QgsApplication.processingRegistry().removeProvider(provider)
+            except Exception:
+                pass
+            try:
+                delattr(self, "provider")
+            except Exception:
+                pass
 
         # remove from QGIS help/extensions menu
-        if self.action_help_plugin_menu_documentation:
-            self.iface.pluginHelpMenu().removeAction(self.action_help_plugin_menu_documentation)
+        help_action = getattr(self, "action_help_plugin_menu_documentation", None)
+        if help_action:
+            try:
+                self.iface.pluginHelpMenu().removeAction(help_action)
+            except Exception:
+                pass
+            try:
+                delattr(self, "action_help_plugin_menu_documentation")
+            except Exception:
+                pass
 
-        # remove actions
-        del self.action_settings
-        del self.action_help
-        del self.toolbar
-
-    def run(self):
-        """Run main process.
-
-        Raises
-        ------
-        Exception
-            If there is no item in the feed.
-        """
-        try:
-            self.log(
-                message=self.tr("Everything ran OK."),
-                log_level=3,
-                push=False,
-            )
-        except Exception as err:
-            self.log(
-                message=self.tr("Houston, we've got a problem: {}".format(err)),
-                log_level=2,
-                push=True,
-            )
+        # remove toolbar if present
+        if getattr(self, "toolbar", None):
+            try:
+                # There's no explicit removeToolbar API; deleting reference is fine.
+                delattr(self, "toolbar")
+            except Exception:
+                pass

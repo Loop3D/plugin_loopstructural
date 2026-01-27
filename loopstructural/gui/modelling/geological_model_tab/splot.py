@@ -18,12 +18,12 @@ class SPlotDialog(QDialog):
         feature = self.model_manager.model.get_feature_by_name(self.feature_name)
         layout = QVBoxLayout()
 
-        
+
         fold_frame = feature.fold.fold_limb_rotation.fold_frame_coordinate
-        rotation = feature.fold.fold_limb_rotation.rotation_angle 
+        rotation = feature.fold.fold_limb_rotation.rotation_angle
         # Placeholder scatter plot using pyqtgraph
         self.plot_widget = pg.PlotWidget()
-        
+
         self.plot_widget.plot(
             fold_frame,
             rotation,

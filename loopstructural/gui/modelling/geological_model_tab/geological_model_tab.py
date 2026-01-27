@@ -1,6 +1,8 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import (
     QMenu,
+    QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSplitter,
     QTreeWidget,
@@ -9,18 +11,18 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from .feature_details_panel import (
-    FaultFeatureDetailsPanel,
-    FoldedFeatureDetailsPanel,
-    FoliationFeatureDetailsPanel,
-    StructuralFrameFeatureDetailsPanel,
-)
 from LoopStructural.modelling.features import FeatureType
 
 # Import the AddFaultDialog
 from .add_fault_dialog import AddFaultDialog
 from .add_foliation_dialog import AddFoliationDialog
 from .add_unconformity_dialog import AddUnconformityDialog
+from .feature_details_panel import (
+    FaultFeatureDetailsPanel,
+    FoldedFeatureDetailsPanel,
+    FoliationFeatureDetailsPanel,
+    StructuralFrameFeatureDetailsPanel,
+)
 
 
 class GeologicalModelTab(QWidget):
@@ -28,7 +30,28 @@ class GeologicalModelTab(QWidget):
         super().__init__(parent)
         self.model_manager = model_manager
         self.data_manager = data_manager
-        self.model_manager.observers.append(self.update_feature_list)
+        # Register update observer using Observable API if available
+        if self.model_manager is not None:
+            try:
+                # listen for model-level updates
+                self._disp_model = self.model_manager.attach(
+                    self.update_feature_list, 'model_updated'
+                )
+                # show progress when model updates start/finish (covers indirect calls)
+                self._disp_update_start = self.model_manager.attach(
+                    lambda _obs, _ev, *a, **k: self._on_model_update_started(),
+                    'model_update_started',
+                )
+                self._disp_update_finish = self.model_manager.attach(
+                    lambda _obs, _ev, *a, **k: self._on_model_update_finished(),
+                    'model_update_finished',
+                )
+            except Exception:
+                # fallback to legacy list
+                try:
+                    self.model_manager.observers.append(self.update_feature_list)
+                except Exception:
+                    raise RuntimeError("Failed to register model update observer")
         # Main layout
         mainLayout = QVBoxLayout(self)
 
@@ -75,6 +98,10 @@ class GeologicalModelTab(QWidget):
         # Connect feature selection to update details panel
         self.featureList.itemClicked.connect(self.on_feature_selected)
 
+        # thread handle to keep worker alive while running
+        self._model_update_thread = None
+        self._model_update_worker = None
+
     def show_add_feature_menu(self, *args):
         menu = QMenu(self)
         add_fault = menu.addAction("Add Fault")
@@ -89,6 +116,7 @@ class GeologicalModelTab(QWidget):
             self.open_add_foliation_dialog()
         elif action == add_unconformity:
             self.open_add_unconformity_dialog()
+
     def open_add_fault_dialog(self):
         dialog = AddFaultDialog(self)
         if dialog.exec_() == dialog.Accepted:
@@ -102,16 +130,123 @@ class GeologicalModelTab(QWidget):
         )
         if dialog.exec_() == dialog.Accepted:
             pass
+
     def open_add_unconformity_dialog(self):
         dialog = AddUnconformityDialog(
             self, data_manager=self.data_manager, model_manager=self.model_manager
         )
         if dialog.exec_() == dialog.Accepted:
             pass
-    def initialize_model(self):
-        self.model_manager.update_model()
 
-    def update_feature_list(self):
+    def initialize_model(self):
+        # Run update_model in a background thread to avoid blocking the UI.
+        if not self.model_manager:
+            return
+        if self.data_manager is not None:
+            if not self.data_manager.is_bounding_box_set():
+                QMessageBox.critical(
+                    self,
+                    "Bounding box required",
+                    "Please set the bounding box before initializing the model.",
+                )
+                return
+            
+            # Validate model CRS
+            if not self.data_manager.is_model_crs_valid():
+                crs = self.data_manager.get_model_crs()
+                if crs is None or not crs.isValid():
+                    msg = "Model CRS is not set or invalid. Please select a valid projected CRS in the Model Definition tab."
+                else:
+                    # Safely get CRS description
+                    try:
+                        crs_desc = crs.description() or crs.authid() or "Unknown"
+                    except Exception:
+                        crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+                    msg = f"Model CRS must be projected (in meters), not geographic.\nSelected CRS: {crs_desc}\n\nPlease select a valid projected CRS in the Model Definition tab."
+                
+                QMessageBox.critical(
+                    self,
+                    "Invalid Model CRS",
+                    msg,
+                )
+                return
+
+        # create progress dialog (indeterminate)
+        progress = QProgressDialog("Updating geological model...", "Cancel", 0, 0, self)
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setWindowTitle("Updating Model")
+        progress.setCancelButton(None)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        # worker and thread
+        thread = QThread(self)
+        worker = _ModelUpdateWorker(self.model_manager)
+        worker.moveToThread(thread)
+
+        # When thread starts run worker.run
+        thread.started.connect(worker.run)
+
+        # on worker finished, notify observers on main thread and cleanup
+        def _on_finished():
+            try:
+                # notify observers now on main thread
+                try:
+                    self.model_manager.notify('model_updated')
+                except Exception:
+                    for obs in getattr(self.model_manager, 'observers', []):
+                        try:
+                            obs()
+                        except Exception as e:
+                            self._debug.log_error("Error notifying observer", e)
+            finally:
+                try:
+                    progress.close()
+                except Exception:
+                    pass
+                # cleanup worker/thread
+                try:
+                    worker.deleteLater()
+                except Exception:
+                    pass
+                try:
+                    thread.quit()
+                    thread.wait(2000)
+                except Exception:
+                    pass
+
+        def _on_error(tb):
+            try:
+                progress.close()
+            except Exception:
+                pass
+            try:
+                QMessageBox.critical(
+                    self,
+                    "Model update failed",
+                    f"An error occurred while updating the model:\n{tb}",
+                )
+            except Exception:
+                pass
+            # ensure thread cleanup
+            try:
+                worker.deleteLater()
+            except Exception:
+                pass
+            try:
+                thread.quit()
+                thread.wait(2000)
+            except Exception:
+                pass
+
+        worker.finished.connect(_on_finished)
+        worker.error.connect(_on_error)
+        thread.finished.connect(thread.deleteLater)
+        self._model_update_thread = thread
+        self._model_update_worker = worker
+        thread.start()
+
+    def update_feature_list(self, *args, **kwargs):
         self.featureList.clear()  # Clear the feature list before populating it
         for feature in self.model_manager.features():
             if feature.name.startswith("__"):
@@ -152,6 +287,42 @@ class GeologicalModelTab(QWidget):
         splitter = self.layout().itemAt(1).widget()
         splitter.widget(1).deleteLater()  # Remove the existing widget
         splitter.addWidget(self.featureDetailsPanel)  # Add the new widget
+
+    def _on_model_update_started(self):
+        """Show a non-blocking indeterminate progress dialog for model updates.
+
+        This method is invoked via the Observable notifications and ensures the
+        user sees that a background or foreground update is in progress.
+        """
+        print("Model update started - showing progress dialog")
+        try:
+            if getattr(self, '_progress_dialog', None) is None:
+                self._progress_dialog = QProgressDialog(
+                    "Updating geological model...", None, 0, 0, self
+                )
+                self._progress_dialog.setWindowTitle("Updating Model")
+                self._progress_dialog.setWindowModality(Qt.ApplicationModal)
+                self._progress_dialog.setCancelButton(None)
+                self._progress_dialog.setMinimumDuration(0)
+            self._progress_dialog.show()
+        except Exception:
+            pass
+
+    def _on_model_update_finished(self):
+        """Close the progress dialog shown for model updates."""
+        try:
+            if getattr(self, '_progress_dialog', None) is not None:
+                try:
+                    self._progress_dialog.close()
+                except Exception:
+                    pass
+                try:
+                    self._progress_dialog.deleteLater()
+                except Exception:
+                    pass
+                self._progress_dialog = None
+        except Exception:
+            pass
 
     def show_feature_context_menu(self, pos):
         # Show context menu only for items
@@ -197,10 +368,50 @@ class GeologicalModelTab(QWidget):
 
         # Notify observers to refresh UI
         try:
-            for obs in getattr(self.model_manager, 'observers', []):
-                try:
-                    obs()
-                except Exception:
-                    pass
+            # Prefer notify API
+            try:
+                self.model_manager.notify('model_updated')
+            except Exception:
+                # fallback to legacy observers list
+                for obs in getattr(self.model_manager, 'observers', []):
+                    try:
+                        obs()
+                    except Exception:
+                        pass
         except Exception:
             pass
+
+
+class _ModelUpdateWorker(QObject):
+    """Worker that runs model_manager.update_model in a background thread.
+
+    Emits finished when done and error with a string if an exception occurs.
+    """
+
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, model_manager):
+        super().__init__()
+        self.model_manager = model_manager
+
+    @pyqtSlot()
+    def run(self):
+        try:
+            # perform the expensive update
+            # run update without notifying observers from the background thread
+            try:
+                self.model_manager.update_model(notify_observers=False)
+            except TypeError:
+                # fallback if update_model signature not available
+                self.model_manager.update_model()
+        except Exception as e:
+            try:
+                import traceback
+
+                tb = traceback.format_exc()
+            except Exception:
+                tb = str(e)
+            self.error.emit(tb)
+        finally:
+            self.finished.emit()

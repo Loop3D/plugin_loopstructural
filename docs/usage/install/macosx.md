@@ -12,7 +12,7 @@
    ```bash
    brew install qgis
    ```
-   
+
 ### Step 2: Install Dependencies Using pip
 1. Ensure you have `pip` installed. If not, install it using:
    ```bash

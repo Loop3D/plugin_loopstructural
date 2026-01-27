@@ -7,6 +7,7 @@ settings used across the UI and background services.
 """
 
 # standard
+import logging
 from dataclasses import asdict, dataclass, fields
 
 # PyQGIS
@@ -27,6 +28,7 @@ class PlgSettingsStructure:
 
     # global
     debug_mode: bool = False
+    debug_directory: str = ""
     version: str = __version__
     interpolator_type: str = 'FDI'
     interpolator_nelements: int = 10000
@@ -42,6 +44,21 @@ class PlgOptionsManager:
     Provides convenience helpers around QGIS settings storage used by the
     plugin to persist user preferences such as debug mode and UI options.
     """
+
+    @staticmethod
+    def _configure_logging(debug_mode: bool):
+        """Configure Python logging level according to plugin debug setting.
+
+        When debug_mode is True the root logger level is set to DEBUG so that
+        any logger.debug(...) calls in the plugin will be emitted. When False
+        the level is set to INFO to reduce verbosity.
+        """
+        try:
+            root = logging.getLogger()
+            root.setLevel(logging.DEBUG if bool(debug_mode) else logging.INFO)
+        except Exception:
+            # Best-effort: do not raise from logging configuration issues
+            pass
 
     @staticmethod
     def get_plg_settings() -> PlgSettingsStructure:
@@ -72,6 +89,9 @@ class PlgOptionsManager:
         options = PlgSettingsStructure(*li_settings_values)
 
         settings.endGroup()
+
+        # Ensure logging level matches the loaded debug_mode preference
+        PlgOptionsManager._configure_logging(options.debug_mode)
 
         return options
 
@@ -118,6 +138,28 @@ class PlgOptionsManager:
         return out_value
 
     @classmethod
+    def get_debug_mode(cls) -> bool:
+        """Get the current debug mode setting.
+
+        Returns
+        -------
+        bool
+            True if debug mode is enabled, False otherwise.
+        """
+        return cls.get_value_from_key("debug_mode", default=False, exp_type=bool)
+
+    @classmethod
+    def get_debug_directory(cls) -> str:
+        """Get the configured debug directory path."""
+        value = cls.get_value_from_key("debug_directory", default="", exp_type=str)
+        return value if value is not None else ""
+
+    @classmethod
+    def set_debug_directory(cls, path: str) -> bool:
+        """Set the debug directory path."""
+        return cls.set_value_from_key("debug_directory", path or "")
+
+    @classmethod
     def set_value_from_key(cls, key: str, value) -> bool:
         """Set a plugin setting value in QGIS settings.
 
@@ -148,6 +190,13 @@ class PlgOptionsManager:
         try:
             settings.setValue(key, value)
             out_value = True
+
+            # If debug mode was toggled, immediately apply logging configuration
+            if key == "debug_mode":
+                try:
+                    PlgOptionsManager._configure_logging(value)
+                except Exception:
+                    pass
         except Exception as err:
             log_hdlr.PlgLogger.log(
                 message="Error occurred trying to set settings: {}.Trace: {}".format(key, err)

@@ -25,6 +25,3 @@ In LoopStructural stratigraphic surfaces can be modelled using implicit function
 
 ### Fault modelling
 Faults are modelled in LoopStructural by building three implicit functions defining the fault surface, fault slip vector and the fault extent. Combined with a parametric representation of the fault displacement within these coordinates a kinematic model.
-
-
-

@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -10,16 +10,24 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qgis.gui import QgsMapLayerComboBox, QgsCollapsibleGroupBox
-
+from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
 from qgis.utils import plugins
+
+from LoopStructural import getLogger
+from LoopStructural.modelling.features import StructuralFrame
+from LoopStructural.utils import (
+    normal_vector_to_strike_and_dip,
+    plungeazimuth2vector,
+    strikedip2vector,
+)
+
+from .bounding_box_widget import BoundingBoxWidget
 from .layer_selection_table import LayerSelectionTable
 from .splot import SPlotDialog
-from .bounding_box_widget import BoundingBoxWidget
-from LoopStructural.modelling.features import StructuralFrame
-from LoopStructural.utils import normal_vector_to_strike_and_dip, plungeazimuth2vector
-from LoopStructural import getLogger
+
 logger = getLogger(__name__)
+
+
 class BaseFeatureDetailsPanel(QWidget):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
         super().__init__(parent)
@@ -47,7 +55,13 @@ class BaseFeatureDetailsPanel(QWidget):
         # Set the main layout
         self.setLayout(mainLayout)
 
-        
+        # Debounce timer for rebuilds: schedule a single rebuild after user stops
+        # interacting for a short interval to avoid repeated expensive builds.
+        self._rebuild_timer = QTimer(self)
+        self._rebuild_timer.setSingleShot(True)
+        self._rebuild_timer.setInterval(500)  # milliseconds; adjust as desired
+        self._rebuild_timer.timeout.connect(self._perform_rebuild)
+
         ## define interpolator parameters
         # Regularisation spin box
         self.regularisation_spin_box = QDoubleSpinBox()
@@ -55,21 +69,31 @@ class BaseFeatureDetailsPanel(QWidget):
         self.regularisation_spin_box.setValue(
             feature.builder.build_arguments.get('regularisation', 1.0)
         )
+        # Update build arguments and schedule a debounced rebuild
         self.regularisation_spin_box.valueChanged.connect(
-            lambda value: self.feature.builder.update_build_arguments({'regularisation': value})
+            lambda value: (
+                self.feature.builder.update_build_arguments({'regularisation': value}),
+                self.schedule_rebuild(),
+            )
         )
         self.cpw_spin_box = QDoubleSpinBox()
         self.cpw_spin_box.setRange(0, 100)
         self.cpw_spin_box.setValue(feature.builder.build_arguments.get('cpw', 1.0))
         self.cpw_spin_box.valueChanged.connect(
-            lambda value: self.feature.builder.update_build_arguments({'cpw': value})
+            lambda value: (
+                self.feature.builder.update_build_arguments({'cpw': value}),
+                self.schedule_rebuild(),
+            )
         )
 
         self.npw_spin_box = QDoubleSpinBox()
         self.npw_spin_box.setRange(0, 100)
         self.npw_spin_box.setValue(feature.builder.build_arguments.get('npw', 1.0))
         self.npw_spin_box.valueChanged.connect(
-            lambda value: self.feature.builder.update_build_arguments({'npw': value})
+            lambda value: (
+                self.feature.builder.update_build_arguments({'npw': value}),
+                self.schedule_rebuild(),
+            )
         )
         self.interpolator_type_label = QLabel("Interpolator Type:")
         self.interpolator_type_combo = QComboBox()
@@ -102,8 +126,10 @@ class BaseFeatureDetailsPanel(QWidget):
         group_box.setLayout(form_layout)
         self.layout.addWidget(group_box)
         self.layout.addWidget(table_group_box)
+        # this will call the addMidBlock and addExportBlock methods
         self.addMidBlock()
         self.addExportBlock()
+
     def addMidBlock(self):
         """Base mid block is intentionally empty now — bounding-box controls
         were moved into the export/evaluation section so they appear alongside
@@ -120,7 +146,9 @@ class BaseFeatureDetailsPanel(QWidget):
         self.export_eval_layout.setSpacing(6)
 
         # --- Bounding box controls (moved here into dedicated widget) ---
-        bb_widget = BoundingBoxWidget(parent=self, model_manager=self.model_manager, data_manager=self.data_manager)
+        bb_widget = BoundingBoxWidget(
+            parent=self, model_manager=self.model_manager, data_manager=self.data_manager
+        )
         # keep reference so export handlers can use it
         self.bounding_box_widget = bb_widget
         self.export_eval_layout.addWidget(bb_widget)
@@ -142,7 +170,9 @@ class BaseFeatureDetailsPanel(QWidget):
 
         # Evaluate target: bounding-box centres or project point layer
         self.evaluate_target_combo = QComboBox()
-        self.evaluate_target_combo.addItems(["Bounding box cell centres", "Project point layer","Viewer Object"])
+        self.evaluate_target_combo.addItems(
+            ["Bounding box cell centres", "Project point layer", "Viewer Object"]
+        )
         export_layout.addRow("Evaluate on:", self.evaluate_target_combo)
 
         # Project layer selector (populated with point vector layers from project)
@@ -160,10 +190,11 @@ class BaseFeatureDetailsPanel(QWidget):
         lbl = export_layout.labelForField(self.meshObjectCombo)
         if lbl is not None:
             lbl.setVisible(False)
+
         # Connect evaluate target change to enable/disable project layer combo
         def _on_evaluate_target_changed(index):
-            use_project = (index == 1)
-            use_vtk = (index == 2)
+            use_project = index == 1
+            use_vtk = index == 2
             self.project_layer_combo.setVisible(use_project)
             self.project_layer_combo.setEnabled(use_project)
             self.meshObjectCombo.setVisible(use_vtk)
@@ -182,13 +213,8 @@ class BaseFeatureDetailsPanel(QWidget):
                     viewer = self.plugin.loop_widget.visualisation_widget.plotter
                     mesh_names = list(viewer.meshes.keys())
                     self.meshObjectCombo.addItems(mesh_names)
+
         self.evaluate_target_combo.currentIndexChanged.connect(_on_evaluate_target_changed)
-
-        
-
-        
-
-        
 
         # Export button
         self.export_points_button = QPushButton("Export to QGIS points")
@@ -204,17 +230,17 @@ class BaseFeatureDetailsPanel(QWidget):
         # These blocks are intentionally minimal now (only a disabled label) and
         # will be populated with export/evaluate controls later.
         if self.model_manager is not None:
-            for feat in self.model_manager.features(): 
+            for feat in self.model_manager.features():
                 block = QWidget()
                 block.setObjectName(f"export_block_{getattr(feat, 'name', 'feature')}")
                 block_layout = QVBoxLayout(block)
                 block_layout.setContentsMargins(0, 0, 0, 0)
                 self.export_eval_layout.addWidget(block)
-                self.export_blocks[getattr(feat, 'name', f"feature_{len(self.export_blocks)}")] = block
+                self.export_blocks[getattr(feat, 'name', f"feature_{len(self.export_blocks)}")] = (
+                    block
+                )
 
         self.layout.addWidget(self.export_eval_container)
-
-    
 
     def _on_bounding_box_updated(self, bounding_box):
         """Callback to update UI widgets when bounding box object changes externally.
@@ -237,21 +263,29 @@ class BaseFeatureDetailsPanel(QWidget):
                 pass
 
         try:
-            if getattr(bounding_box, 'nelements', None) is not None and hasattr(self, 'bb_nelements_spinbox'):
+            if getattr(bounding_box, 'nelements', None) is not None and hasattr(
+                self, 'bb_nelements_spinbox'
+            ):
                 try:
                     self.bb_nelements_spinbox.setValue(int(getattr(bounding_box, 'nelements')))
                 except Exception:
                     try:
                         self.bb_nelements_spinbox.setValue(getattr(bounding_box, 'nelements'))
                     except Exception:
-                        logger.debug('Could not set nelements spinbox from bounding_box', exc_info=True)
+                        logger.debug(
+                            'Could not set nelements spinbox from bounding_box', exc_info=True
+                        )
 
             if getattr(bounding_box, 'nsteps', None) is not None:
                 try:
                     nsteps = list(bounding_box.nsteps)
                 except Exception:
                     try:
-                        nsteps = [int(bounding_box.nsteps[0]), int(bounding_box.nsteps[1]), int(bounding_box.nsteps[2])]
+                        nsteps = [
+                            int(bounding_box.nsteps[0]),
+                            int(bounding_box.nsteps[1]),
+                            int(bounding_box.nsteps[2]),
+                        ]
                     except Exception:
                         nsteps = None
                 if nsteps is not None:
@@ -263,7 +297,9 @@ class BaseFeatureDetailsPanel(QWidget):
                         if hasattr(self, 'bb_nsteps_z'):
                             self.bb_nsteps_z.setValue(int(nsteps[2]))
                     except Exception:
-                        logger.debug('Could not set nsteps spinboxes from bounding_box', exc_info=True)
+                        logger.debug(
+                            'Could not set nsteps spinboxes from bounding_box', exc_info=True
+                        )
 
         finally:
             # Unblock signals
@@ -281,12 +317,14 @@ class BaseFeatureDetailsPanel(QWidget):
                     if self.feature[i].interpolator is not None:
                         self.feature[i].interpolator.nelements = value
                         self.feature[i].builder.update_build_arguments({'nelements': value})
-                        self.feature[i].builder.build()
+                # schedule a single debounced rebuild after user stops changing value
+                self.schedule_rebuild()
             elif self.feature.interpolator is not None:
 
                 self.feature.interpolator.nelements = value
                 self.feature.builder.update_build_arguments({'nelements': value})
-                self.feature.builder.build()
+                # schedule a debounced rebuild instead of building immediately
+                self.schedule_rebuild()
         else:
             print("Error: Feature is not initialized.")
 
@@ -298,6 +336,7 @@ class BaseFeatureDetailsPanel(QWidget):
             elif feature.interpolator is not None:
                 return feature.interpolator.n_elements
         return 1000
+
     def _export_scalar_points(self):
         """Gather points (bounding-box centres or project point layer), evaluate feature values
         using the model_manager and add the resulting GeoDataFrame as a memory layer to the
@@ -306,7 +345,11 @@ class BaseFeatureDetailsPanel(QWidget):
         """
         # determine scalar type
         logger.info('Exporting scalar points')
-        scalar_type = self.scalar_field_combo.currentText() if hasattr(self, 'scalar_field_combo') else 'scalar'
+        scalar_type = (
+            self.scalar_field_combo.currentText()
+            if hasattr(self, 'scalar_field_combo')
+            else 'scalar'
+        )
 
         # gather points
         pts = None
@@ -314,7 +357,7 @@ class BaseFeatureDetailsPanel(QWidget):
         crs = self.data_manager.project.crs().authid()
         try:
             # QGIS imports (guarded)
-            from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsPoint, QgsField
+            from qgis.core import QgsFeature, QgsField, QgsPoint, QgsProject, QgsVectorLayer
             from qgis.PyQt.QtCore import QVariant
         except Exception as e:
             # Not running inside QGIS — nothing to do
@@ -326,10 +369,7 @@ class BaseFeatureDetailsPanel(QWidget):
         if self.evaluate_target_combo.currentIndex() == 0:
             # use bounding-box resolution or custom nsteps
             logger.info('Using bounding box cell centres for evaluation')
-            
-            
 
-            
             pts = self.model_manager.model.bounding_box.cell_centres()
             # no extra attributes for grid
             attributes_df = None
@@ -364,13 +404,21 @@ class BaseFeatureDetailsPanel(QWidget):
                             try:
                                 z = p.z()
                             except Exception:
-                                z = self.model_manager.dem_function(x, y) if hasattr(self.model_manager, 'dem_function') else 0
+                                z = (
+                                    self.model_manager.dem_function(x, y)
+                                    if hasattr(self.model_manager, 'dem_function')
+                                    else 0
+                                )
                         except Exception:
                             # fallback to centroid
                             try:
                                 c = geom.centroid().asPoint()
                                 x, y = c.x(), c.y()
-                                z = self.model_manager.dem_function(x, y) if hasattr(self.model_manager, 'dem_function') else 0
+                                z = (
+                                    self.model_manager.dem_function(x, y)
+                                    if hasattr(self.model_manager, 'dem_function')
+                                    else 0
+                                )
                             except Exception:
                                 continue
                         pts_list.append((x, y, z))
@@ -385,6 +433,7 @@ class BaseFeatureDetailsPanel(QWidget):
             if len(pts_list) == 0:
                 return
             import pandas as _pd
+
             pts = _pd.DataFrame(pts_list).values
             try:
                 attributes_df = _pd.DataFrame(attrs)
@@ -396,7 +445,7 @@ class BaseFeatureDetailsPanel(QWidget):
                 crs = None
         elif self.evaluate_target_combo.currentIndex() == 2:
             # Evaluate on an object from the viewer
-            # These are all pyvista objects and we want to add 
+            # These are all pyvista objects and we want to add
             # the scalar as a new field to the objects
 
             viewer = self.plugin.loop_widget.visualisation_widget.plotter
@@ -407,9 +456,7 @@ class BaseFeatureDetailsPanel(QWidget):
                 return
             vtk_mesh = viewer.meshes[mesh]['mesh']
             self.model_manager.export_feature_values_to_vtk_mesh(
-                self.feature.name,
-                vtk_mesh,
-                scalar_type=scalar_type
+                self.feature.name, vtk_mesh, scalar_type=scalar_type
             )
         # call model_manager to produce GeoDataFrame
         try:
@@ -494,14 +541,45 @@ class BaseFeatureDetailsPanel(QWidget):
             mem_layer.updateExtents()
             QgsProject.instance().addMapLayer(mem_layer)
 
+    def schedule_rebuild(self, delay_ms: int = 500):
+        """Schedule a debounced rebuild of the current feature.
+
+        Multiple calls will reset the timer so only a single rebuild occurs
+        after user activity has settled.
+        """
+        try:
+            if self._rebuild_timer is None:
+                return
+            self._rebuild_timer.stop()
+            self._rebuild_timer.setInterval(delay_ms)
+            self._rebuild_timer.start()
+        except Exception:
+            logger.debug('Failed to schedule debounced rebuild', exc_info=True)
+            pass
+
+    def _perform_rebuild(self):
+        """Perform the actual build operation when the debounce timer fires."""
+        try:
+            if not hasattr(self, 'feature') or self.feature is None:
+                return
+            # StructuralFrame consists of three sub-features
+            self.model_manager.update_feature(self.feature.name)
+
+        except Exception:
+            logger.debug('Debounced rebuild failed', exc_info=True)
+
+
 class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
     def __init__(self, parent=None, *, fault=None, model_manager=None, data_manager=None):
-        super().__init__(parent, feature=fault, model_manager=model_manager, data_manager=data_manager)
+        super().__init__(
+            parent, feature=fault, model_manager=model_manager, data_manager=data_manager
+        )
         if fault is None:
             raise ValueError("Fault must be provided.")
         self.fault = fault
-        dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 0]
+        dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
+
         pitch = 0
         self.fault_parameters = {
             'displacement': fault.displacement,
@@ -513,76 +591,90 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
             # 'enabled': fault.fault_enabled
         }
 
-        # # Fault displacement slider
-        # self.displacement_spinbox = QDoubleSpinBox()
-        # self.displacement_spinbox.setRange(0, 1000000)  # Example range
-        # self.displacement_spinbox.setValue(self.fault.displacement)
-        # self.displacement_spinbox.valueChanged.connect(
-        #     lambda value: self.fault_parameters.__setitem__('displacement', value)
-        # )
+        def update_displacement(value):
+            self.fault.displacement = value
 
-        # # Fault axis lengths
-        # self.major_axis_spinbox = QDoubleSpinBox()
-        # self.major_axis_spinbox.setRange(0, float('inf'))
-        # self.major_axis_spinbox.setValue(self.fault_parameters['major_axis_length'])
-        # # self.major_axis_spinbox.setPrefix("Major Axis Length: ")
-        # self.major_axis_spinbox.valueChanged.connect(
-        #     lambda value: self.fault_parameters.__setitem__('major_axis_length', value)
-        # )
-        # self.minor_axis_spinbox = QDoubleSpinBox()
-        # self.minor_axis_spinbox.setRange(0, float('inf'))
-        # self.minor_axis_spinbox.setValue(self.fault_parameters['minor_axis_length'])
-        # # self.minor_axis_spinbox.setPrefix("Minor Axis Length: ")
-        # self.minor_axis_spinbox.valueChanged.connect(
-        #     lambda value: self.fault_parameters.__setitem__('minor_axis_length', value)
-        # )
-        # self.intermediate_axis_spinbox = QDoubleSpinBox()
-        # self.intermediate_axis_spinbox.setRange(0, float('inf'))
-        # self.intermediate_axis_spinbox.setValue(self.fault_parameters['intermediate_axis_length'])
-        # self.intermediate_axis_spinbox.valueChanged.connect(
-        #     lambda value: self.fault_parameters.__setitem__('intermediate_axis_length', value)
-        # )
-        # # self.intermediate_axis_spinbox.setPrefix("Intermediate Axis Length: ")
+        def update_major_axis(value):
+            self.fault.fault_major_axis = value
+            # schedule a debounced rebuild so multiple rapid edits are coalesced
+            self.schedule_rebuild()
 
-        # # Fault dip field
-        # self.dip_spinbox = QDoubleSpinBox()
-        # self.dip_spinbox.setRange(0, 90)  # Dip angle range
-        # self.dip_spinbox.setValue(self.fault_parameters['dip'])
-        # # self.dip_spinbox.setPrefix("Fault Dip: ")
+        def update_minor_axis(value):
+            self.fault.fault_minor_axis = value
+            self.schedule_rebuild()
+
+        def update_intermediate_axis(value):
+            self.fault.fault_intermediate_axis = value
+            self.schedule_rebuild()
+
+        def update_dip(value):
+            strike = normal_vector_to_strike_and_dip(self.fault.fault_normal_vector)[0, 0]
+            self.fault.builder.fault_normal_vector = strikedip2vector([strike], [value])[0]
+            self.schedule_rebuild()
+
+        # Fault displacement slider
+        self.displacement_spinbox = QDoubleSpinBox()
+        self.displacement_spinbox.setRange(0, 1000000)  # Example range
+        self.displacement_spinbox.setValue(self.fault.displacement)
+        self.displacement_spinbox.valueChanged.connect(update_displacement)
+
+        # Fault axis lengths
+        self.major_axis_spinbox = QDoubleSpinBox()
+        self.major_axis_spinbox.setRange(0, float('inf'))
+        self.major_axis_spinbox.setValue(self.fault.fault_major_axis)
+        # self.major_axis_spinbox.setPrefix("Major Axis Length: ")
+        self.major_axis_spinbox.valueChanged.connect(update_major_axis)
+        self.minor_axis_spinbox = QDoubleSpinBox()
+        self.minor_axis_spinbox.setRange(0, float('inf'))
+        self.minor_axis_spinbox.setValue(self.fault.fault_minor_axis)
+        # self.minor_axis_spinbox.setPrefix("Minor Axis Length: ")
+        self.minor_axis_spinbox.valueChanged.connect(update_minor_axis)
+        self.intermediate_axis_spinbox = QDoubleSpinBox()
+        self.intermediate_axis_spinbox.setRange(0, float('inf'))
+        self.intermediate_axis_spinbox.setValue(fault.fault_intermediate_axis)
+        self.intermediate_axis_spinbox.valueChanged.connect(update_intermediate_axis)
+        # self.intermediate_axis_spinbox.setPrefix("Intermediate Axis Length: ")
+
+        # Fault dip field
+        self.dip_spinbox = QDoubleSpinBox()
+        self.dip_spinbox.setRange(0, 90)  # Dip angle range
+        self.dip_spinbox.setValue(dip)
+        # self.dip_spinbox.setPrefix("Fault Dip: ")
+        self.dip_spinbox.valueChanged.connect(update_dip)
+        self.pitch_spinbox = QDoubleSpinBox()
+        self.pitch_spinbox.setRange(0, 180)
+        self.pitch_spinbox.setValue(self.fault_parameters['pitch'])
+        self.pitch_spinbox.valueChanged.connect(
+            lambda value: self.fault_parameters.__setitem__('pitch', value)
+        )
         # self.dip_spinbox.valueChanged.connect(
-        #     lambda value: self.fault_parameters.__setitem__('dip', value)
-        # )
-        # self.pitch_spinbox = QDoubleSpinBox()
-        # self.pitch_spinbox.setRange(0, 180)
-        # self.pitch_spinbox.setValue(self.fault_parameters['pitch'])
-        # self.pitch_spinbox.valueChanged.connect(
-        #     lambda value: self.fault_parameters.__setitem__('pitch', value)
-        # )
-        # # self.dip_spinbox.valueChanged.connect(
 
-        # # Enabled field
-        # # self.enabled_checkbox = QCheckBox("Enabled")
-        # # self.enabled_checkbox.setChecked(False)
+        # Enabled field
+        # self.enabled_checkbox = QCheckBox("Enabled")
+        # self.enabled_checkbox.setChecked(False)
 
-        # # Form layout for better organization
-        # form_layout = QFormLayout()
-        # form_layout.addRow("Fault displacement", self.displacement_spinbox)
-        # form_layout.addRow("Major Axis Length", self.major_axis_spinbox)
-        # form_layout.addRow("Minor Axis Length", self.minor_axis_spinbox)
-        # form_layout.addRow("Intermediate Axis Length", self.intermediate_axis_spinbox)
-        # form_layout.addRow("Fault Dip", self.dip_spinbox)
-        # # form_layout.addRow("Enabled:", self.enabled_checkbox)
+        # Form layout for better organization
+        form_layout = QFormLayout()
+        form_layout.addRow("Fault displacement", self.displacement_spinbox)
+        form_layout.addRow("Major Axis Length", self.major_axis_spinbox)
+        form_layout.addRow("Minor Axis Length", self.minor_axis_spinbox)
+        form_layout.addRow("Intermediate Axis Length", self.intermediate_axis_spinbox)
+        form_layout.addRow("Fault Dip", self.dip_spinbox)
+        # form_layout.addRow("Enabled:", self.enabled_checkbox)
 
-        # self.layout.addLayout(form_layout)
-        # self.setLayout(self.layout)
+        self.layout.addLayout(form_layout)
+        self.setLayout(self.layout)
 
 
 class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
-        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
+        super().__init__(
+            parent, feature=feature, model_manager=model_manager, data_manager=data_manager
+        )
         if feature is None:
             raise ValueError("Feature must be provided.")
         self.feature = feature
+
     def addMidBlock(self):
         form_layout = QFormLayout()
         fold_frame_combobox = QComboBox()
@@ -602,20 +694,24 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
         # Remove redundant layout setting
         self.setLayout(self.layout)
 
-
     def on_fold_frame_changed(self, text):
         self.model_manager.add_fold_to_feature(self.feature.name, fold_frame_name=text)
 
 
 class StructuralFrameFeatureDetailsPanel(BaseFeatureDetailsPanel):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
-        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
+        super().__init__(
+            parent, feature=feature, model_manager=model_manager, data_manager=data_manager
+        )
 
 
 class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
-        super().__init__(parent, feature=feature, model_manager=model_manager, data_manager=data_manager)
-    def addMidBlock(self):    
+        super().__init__(
+            parent, feature=feature, model_manager=model_manager, data_manager=data_manager
+        )
+
+    def addMidBlock(self):
         # Remove redundant layout setting
         # self.setLayout(self.layout)
         form_layout = QFormLayout()
@@ -636,6 +732,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
                 }
             )
         )
+        norm_length.valueChanged.connect(lambda value: self.schedule_rebuild())
         form_layout.addRow("Normal Length", norm_length)
 
         norm_weight = QDoubleSpinBox()
@@ -651,6 +748,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
                 }
             )
         )
+        norm_weight.valueChanged.connect(lambda value: self.schedule_rebuild())
         form_layout.addRow("Normal Weight", norm_weight)
 
         fold_axis_weight = QDoubleSpinBox()
@@ -666,6 +764,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
                 }
             )
         )
+        fold_axis_weight.valueChanged.connect(lambda value: self.schedule_rebuild())
         form_layout.addRow("Fold Axis Weight", fold_axis_weight)
 
         fold_orientation_weight = QDoubleSpinBox()
@@ -681,6 +780,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
                 }
             )
         )
+        fold_orientation_weight.valueChanged.connect(lambda value: self.schedule_rebuild())
         form_layout.addRow("Fold Orientation Weight", fold_orientation_weight)
 
         average_fold_axis_checkbox = QCheckBox("Average Fold Axis")
@@ -719,23 +819,27 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         self.layout.addWidget(group_box)
         # Remove redundant layout setting
         self.setLayout(self.layout)
+
     def open_splot_dialog(self):
-        dialog = SPlotDialog(self, data_manager=self.data_manager, model_manager=self.model_manager, feature_name=self.feature.name)
+        dialog = SPlotDialog(
+            self,
+            data_manager=self.data_manager,
+            model_manager=self.model_manager,
+            feature_name=self.feature.name,
+        )
         if dialog.exec_() == dialog.Accepted:
             pass
+
     def remove_fold_frame(self):
         pass
 
     def foldAxisFromPlungeAzimuth(self):
         """Calculate the fold axis from plunge and azimuth."""
         if self.feature:
-            plunge = (
-                self.fold_plunge.value()
-            )
-            azimuth = (
-                self.fold_azimuth.value())
+            plunge = self.fold_plunge.value()
+            azimuth = self.fold_azimuth.value()
             vector = plungeazimuth2vector(plunge, azimuth)[0]
             if plunge is not None and azimuth is not None:
                 self.feature.builder.update_build_arguments({'fold_axis': vector.tolist()})
-
-
+                # schedule rebuild after updating builder arguments
+                self.schedule_rebuild()

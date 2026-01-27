@@ -10,7 +10,8 @@ interaction with the LoopStructural model from the GUI code.
 """
 
 from collections import defaultdict
-from typing import Callable, Optional
+from contextlib import contextmanager
+from typing import Callable, Optional, Union
 
 import geopandas as gpd
 import numpy as np
@@ -23,6 +24,7 @@ from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColu
 from LoopStructural.modelling.features import FeatureType, StructuralFrame
 from LoopStructural.modelling.features.fold import FoldFrame
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
+from LoopStructural.utils.observer import Observable
 
 
 class AllSampler:
@@ -72,19 +74,24 @@ class AllSampler:
                     z = dem(coords[0], coords[1])
                 else:
                     z = 0
-                points.append({'X': coords[0], 'Y': coords[1], 'Z': z, 'feature_id': feature_id, **attributes})
+                points.append(
+                    {'X': coords[0], 'Y': coords[1], 'Z': z, 'feature_id': feature_id, **attributes}
+                )
             feature_id += 1
         df = pd.DataFrame(points)
         return df
 
 
-class GeologicalModelManager:
+class GeologicalModelManager(Observable):
     """This class manages the geological model and assembles it from the data provided by the data manager.
     It is responsible for updating the model with faults, stratigraphy, and other geological features.
     """
 
     def __init__(self):
         """Initialize the geological model manager."""
+        # Initialize Observable state
+        super().__init__()
+
         self.model = GeologicalModel([0, 0, 0], [1, 1, 1])
         self.stratigraphy = {}
         self.groups = []
@@ -92,12 +99,41 @@ class GeologicalModelManager:
         self.stratigraphy = defaultdict(dict)
         self.stratigraphic_column = None
         self.fault_topology = None
-        self.observers = []
+        # Observers managed by Observable base class
         self.dem_function = lambda x, y: 0
+        # internal flag to temporarily suppress notifications (used when
+        # updates are performed in background threads)
+        self._suppress_notifications = False
+
+    @contextmanager
+    def suspend_notifications(self):
+        prev = getattr(self, '_suppress_notifications', False)
+        self._suppress_notifications = True
+        try:
+            yield
+        finally:
+            self._suppress_notifications = prev
+
+    def _emit(self, *args, **kwargs):
+        """Emit an observer notification unless notifications are suppressed.
+
+        This wrapper should be used instead of calling self.notify directly from
+        the manager so callers can suppress notifications when running updates
+        on background threads.
+        """
+        if getattr(self, '_suppress_notifications', False):
+            return
+        try:
+            self.notify(*args, **kwargs)
+        except Exception:
+            # be tolerant of observer errors
+            pass
 
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Set the stratigraphic column for the geological model manager."""
         self.stratigraphic_column = stratigraphic_column
+        # changing the stratigraphic column changes model geometry
+        self._emit('stratigraphic_column_changed')
 
     def set_fault_topology(self, fault_topology):
         """Set the fault topology for the geological model manager."""
@@ -191,6 +227,8 @@ class GeologicalModelManager:
 
         for fault_name in existing_faults:
             self.fault_topology.remove_fault(fault_name)
+        # signal that fault point input changed
+        self._emit('data_changed', 'fault_points')
 
     def update_contact_traces(
         self,
@@ -235,6 +273,9 @@ class GeologicalModelManager:
                 unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
             ]
 
+        # signal that input data changed — consumers may choose to rebuild the model
+        self._emit('data_changed', 'contact_traces')
+
     def update_structural_data(
         self,
         structural_orientations: gpd.GeoDataFrame,
@@ -276,6 +317,9 @@ class GeologicalModelManager:
                 structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
             ]
             self.stratigraphy[unit_name]['orientations'] = orientations
+
+        # signal structural orientation data changed
+        self._emit('data_changed', 'structural_orientations')
 
     def update_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Update the stratigraphic column with a new stratigraphic column"""
@@ -330,6 +374,8 @@ class GeologicalModelManager:
             )
             self.model.add_unconformity(foliation, 0)
         self.model.stratigraphic_column = self.stratigraphic_column
+        # foliation features were rebuilt; let observers know
+        self._emit('foliation_features_updated')
 
     def update_fault_features(self):
         """Update the fault features in the geological model."""
@@ -348,7 +394,6 @@ class GeologicalModelManager:
                     dip = fault_data['data']['dip'].mean()
                 else:
                     dip = 90
-                print(f"Fault {fault_name} dip: {dip}")
 
                 if 'pitch' in fault_data['data']:
                     pitch = fault_data['data']['pitch'].mean()
@@ -390,18 +435,76 @@ class GeologicalModelManager:
                     valid = False
         return valid
 
-    def update_model(self):
-        """Update the geological model with the current stratigraphy and faults."""
+    def update_model(self, notify_observers: bool = True):
+        """Update the geological model with the current stratigraphy and faults.
+
+        Parameters
+        ----------
+        notify_observers : bool
+            If True (default) observers will be notified after the model update
+            completes. If False, the caller is responsible for notifying
+            observers from the main thread (useful when performing the update
+            in a background thread).
+        """
 
         self.model.features = []
         self.model.feature_name_index = {}
+
+        # Notify start (if requested) so UI can react
+        if notify_observers:
+            self._emit('model_update_started')
 
         # Update the model with stratigraphy
         self.update_fault_features()
         self.update_foliation_features()
 
-        for observer in self.observers:
-            observer()
+        # Notify observers using the Observable framework if requested
+        if notify_observers:
+            self._emit('model_updated')
+            self._emit('model_update_finished')
+
+    def update_feature(self, feature_name: str):
+        """Update a specific feature in the geological model.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the feature to update.
+        """
+        feature = self.model.get_feature_by_name(feature_name)
+        if feature is None:
+            raise ValueError(f"Feature '{feature_name}' not found in the model.")
+        # Allow UI to react to a feature update
+        self._emit('model_update_started')
+        feature.builder.update()
+        # Notify observers and include feature name for interested listeners
+        self._emit('feature_updated', feature_name)
+        self._emit('model_update_finished')
+
+    def update_all_features(self, subset: Optional[Union[list, str]] = None):
+        """Update all features in the geological model."""
+        # Allow UI to react to a feature update
+        self._emit('model_update_started')
+        if subset is not None:
+
+            if isinstance(subset, str):
+                if subset == 'faults':
+                    subset = [f.name for f in self.model.features if f.type == FeatureType.FAULT]
+                elif subset == 'stratigraphy' or subset == 'foliations':
+                    subset = [
+                        f.name for f in self.model.features if f.type == FeatureType.FOLIATION
+                    ]
+                else:
+                    subset = [subset]
+            for feature_name in subset:
+                feature = self.model.get_feature_by_name(feature_name)
+                if feature is not None:
+                    feature.builder.update()
+        else:
+            self.model.update()
+        # Notify observers and include feature name for interested listeners
+        self._emit('all_features_updated')
+        self._emit('model_update_finished')
 
     def features(self):
         """Return the list of features currently held by the internal model.
@@ -449,7 +552,7 @@ class GeologicalModelManager:
         """
         # for z
         dfs = []
-        kwargs={}
+        kwargs = {}
         for layer_data in data.values():
             if layer_data['type'] == 'Orientation':
                 df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
@@ -471,20 +574,16 @@ class GeologicalModelManager:
                 df['u'] = df[layer_data['upper_field']]
                 df['feature_name'] = name
                 dfs.append(df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']])
-                kwargs['solver']='admm'
+                kwargs['solver'] = 'admm'
             else:
                 raise ValueError(f"Unknown layer type: {layer_data['type']}")
-        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True),   **kwargs)
-        # if folded_feature_name is not None:
-        #     from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
+        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True), **kwargs)
+        # inform listeners that a new foliation/feature was added
+        self._emit('model_updated')
 
-        #     folded_feature = self.model.get_feature_by_name(folded_feature_name)
-        #     folded_feature_name = add_fold_to_feature(frame, folded_feature)
-        #     self.model[folded_feature_name] = folded_feature
-        for observer in self.observers:
-            observer()
-
-    def add_unconformity(self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY):
+    def add_unconformity(
+        self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY
+    ):
         """Add an unconformity (or onlap unconformity) to a named foliation.
 
         Parameters
@@ -509,6 +608,8 @@ class GeologicalModelManager:
             self.model.add_unconformity(foliation, value)
         elif type == FeatureType.ONLAPUNCONFORMITY:
             self.model.add_onlap_unconformity(foliation, value)
+        # model geometry changed
+        self._emit('model_updated')
 
     def add_fold_to_feature(self, feature_name: str, fold_frame_name: str, fold_weights={}):
         """Apply a FoldFrame to an existing feature, producing a folded feature.
@@ -533,8 +634,8 @@ class GeologicalModelManager:
         from LoopStructural.modelling.features._feature_converters import add_fold_to_feature
 
         fold_frame = self.model.get_feature_by_name(fold_frame_name)
-        if isinstance(fold_frame,StructuralFrame):
-            fold_frame = FoldFrame(fold_frame.name,fold_frame.features, None, fold_frame.model)
+        if isinstance(fold_frame, StructuralFrame):
+            fold_frame = FoldFrame(fold_frame.name, fold_frame.features, None, fold_frame.model)
         if fold_frame is None:
             raise ValueError(f"Fold frame '{fold_frame_name}' not found in the model.")
         feature = self.model.get_feature_by_name(feature_name)
@@ -542,6 +643,8 @@ class GeologicalModelManager:
             raise ValueError(f"Feature '{feature_name}' not found in the model.")
         folded_feature = add_fold_to_feature(feature, fold_frame)
         self.model[feature_name] = folded_feature
+        # feature replaced/modified
+        self._emit('model_updated')
 
     def convert_feature_to_structural_frame(self, feature_name: str):
         """Convert an interpolated feature into a StructuralFrame.
@@ -560,13 +663,17 @@ class GeologicalModelManager:
         builder = self.model.get_feature_by_name(feature_name).builder
         new_builder = StructuralFrameBuilder.from_feature_builder(builder)
         self.model[feature_name] = new_builder.frame
+        # feature converted
+        self._emit('model_updated')
 
     @property
     def fold_frames(self):
         """Return the fold frames in the model."""
         return [f for f in self.model.features if f.type == FeatureType.STRUCTURALFRAME]
 
-    def evaluate_feature_on_points(self, feature_name: str, points: np.ndarray, scalar_type: str = 'scalar') -> np.ndarray:
+    def evaluate_feature_on_points(
+        self, feature_name: str, points: np.ndarray, scalar_type: str = 'scalar'
+    ) -> np.ndarray:
         """Evaluate a model feature at the provided points.
 
         Parameters
@@ -641,14 +748,15 @@ class GeologicalModelManager:
             GeoDataFrame containing point geometries and computed value columns
             (and any provided attributes).
         """
-        import pandas as _pd
         import geopandas as _gpd
+        import pandas as _pd
+
         try:
             from shapely.geometry import Point as _Point
         except Exception:
-            print("Shapely not available; geometry column will be omitted." )
+            print("Shapely not available; geometry column will be omitted.")
             _Point = None
-        
+
         pts = np.asarray(points)
         if pts.ndim != 2 or pts.shape[1] < 3:
             raise ValueError('points must be an Nx3 array')
@@ -676,7 +784,9 @@ class GeologicalModelManager:
         if attributes is not None:
             try:
                 attributes = _pd.DataFrame(attributes).reset_index(drop=True)
-                df = _pd.concat([df.reset_index(drop=True), attributes.reset_index(drop=True)], axis=1)
+                df = _pd.concat(
+                    [df.reset_index(drop=True), attributes.reset_index(drop=True)], axis=1
+                )
             except Exception:
                 # ignore attributes if they cannot be combined
                 pass
@@ -692,7 +802,7 @@ class GeologicalModelManager:
 
         return gdf
 
-    def export_feature_values_to_vtk_mesh(self,  name, mesh, scalar_type='scalar'):
+    def export_feature_values_to_vtk_mesh(self, name, mesh, scalar_type='scalar'):
         """Evaluate a feature on a mesh's points and attach the values as a field.
 
         Parameters

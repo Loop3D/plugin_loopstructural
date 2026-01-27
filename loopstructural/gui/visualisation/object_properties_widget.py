@@ -296,7 +296,7 @@ class ObjectPropertiesWidget(QWidget):
         # populate scalar combo
         self.scalar_combo.blockSignals(True)
         self.scalar_combo.clear()
-        
+
         try:
             pdata = getattr(self.current_mesh, 'point_data', None) or {}
             cdata = getattr(self.current_mesh, 'cell_data', None) or {}

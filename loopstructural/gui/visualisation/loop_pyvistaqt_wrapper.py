@@ -1,6 +1,7 @@
+from typing import Any, Dict, Optional, Tuple
+
 from PyQt5.QtCore import pyqtSignal
 from pyvistaqt import QtInteractor
-from typing import Optional, Any, Dict, Tuple
 
 
 class LoopPyVistaQTPlotter(QtInteractor):
@@ -27,7 +28,22 @@ class LoopPyVistaQTPlotter(QtInteractor):
             name = '_'.join(parts)
         return name
 
-    def add_mesh_object(self, mesh, name: str, *, scalars: Optional[Any] = None, cmap: Optional[str] = None, clim: Optional[Tuple[float, float]] = None, opacity: Optional[float] = None, show_scalar_bar: bool = False, color: Optional[Tuple[float, float, float]] = None, **kwargs) -> None:
+    def add_mesh_object(
+        self,
+        mesh,
+        name: str,
+        *,
+        scalars: Optional[Any] = None,
+        cmap: Optional[str] = None,
+        clim: Optional[Tuple[float, float]] = None,
+        opacity: Optional[float] = None,
+        show_scalar_bar: bool = False,
+        color: Optional[Tuple[float, float, float]] = None,
+        source_feature: Optional[str] = None,
+        source_type: Optional[str] = None,
+        isovalue: Optional[float] = None,
+        **kwargs,
+    ) -> None:
         """Add a mesh to the plotter.
 
         This wrapper stores metadata to allow robust re-adding and
@@ -51,8 +67,12 @@ class LoopPyVistaQTPlotter(QtInteractor):
             Whether to show a scalar bar for mapped scalars.
         color : Optional[tuple(float, float, float)]
             Solid color as (r, g, b) in 0..1; if provided, overrides scalars.
-        **kwargs : dict
-            Additional keyword arguments forwarded to the underlying pyvista add_mesh call.
+        source_feature : Optional[str]
+            Name of the geological feature (or other source identifier) that
+            generated this mesh. Stored for later updates.
+        source_type : Optional[str]
+            A short tag describing the kind of source (e.g. 'feature_surface',
+            'fault_surface', 'bounding_box').
 
         Returns
         -------
@@ -61,7 +81,7 @@ class LoopPyVistaQTPlotter(QtInteractor):
         # Remove any previous entry with the same name (to keep metadata consistent)
         # if name in self.meshes:
         #     try:
-                
+        #
         #         self.remove_object(name)
         #     except Exception:
         #         # ignore removal errors and proceed to add
@@ -73,7 +93,7 @@ class LoopPyVistaQTPlotter(QtInteractor):
 
         # Build add_mesh kwargs
         add_kwargs: Dict[str, Any] = {}
-        
+
         if use_scalar:
             add_kwargs['scalars'] = scalars
             add_kwargs['cmap'] = cmap
@@ -97,7 +117,15 @@ class LoopPyVistaQTPlotter(QtInteractor):
         actor = self.add_mesh(mesh, name=name, **add_kwargs)
 
         # store the mesh, actor and kwargs for future re-adds
-        self.meshes[name] = {'mesh': mesh, 'actor': actor, 'kwargs': {**add_kwargs}}
+        # persist source metadata so callers can find meshes created from model features
+        self.meshes[name] = {
+            'mesh': mesh,
+            'actor': actor,
+            'kwargs': {**add_kwargs},
+            'source_feature': source_feature,
+            'source_type': source_type,
+            'isovalue': isovalue,
+        }
         self.objectAdded.emit(self)
 
     def remove_object(self, name: str) -> None:
