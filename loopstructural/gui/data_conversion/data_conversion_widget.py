@@ -1,4 +1,4 @@
-"""Data conversion widget displayed inside the LoopStructural dock."""
+"""Data conversion widgets and dialog for LoopStructural."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -290,16 +292,16 @@ class AutomaticConversionWidget(QWidget):
                     data_sources[data_type] = path
         return data_sources
 
-    def _handle_run_conversion(self) -> None:
+    def _handle_run_conversion(self) -> bool:
         converter_option = self.current_converter()
         if converter_option is None:
             self._update_status("Please select a converter before running.", error=True)
-            return
+            return False
 
         sources = self._collect_data_sources()
         if not sources:
             self._update_status("Select at least one data source layer before running.", error=True)
-            return
+            return False
 
         loop_converter: Any = None
         result: Any = None
@@ -314,7 +316,7 @@ class AutomaticConversionWidget(QWidget):
                 added_layers = self._add_layers_to_project_group(layers)
         except Exception as exc:  # pragma: no cover - UI feedback
             self._update_status(f"Conversion failed: {exc}", error=True)
-            return
+            return False
 
         if added_layers:
             message = (
@@ -325,6 +327,7 @@ class AutomaticConversionWidget(QWidget):
         else:
             message = "Conversion completed successfully."
         self._update_status(message)
+        return True
 
     def _update_status(self, message: str, *, error: bool = False) -> None:
         color = "#c00000" if error else "#006400"
@@ -572,19 +575,18 @@ class AutomaticConversionWidget(QWidget):
         return options
 
 
-class DataConversionWidget(QWidget):
-    """High level widget that exposes automatic conversion."""
+class AutomaticConversionDialog(QDialog):
+    """Dialog wrapper for the automatic conversion workflow."""
 
     def __init__(
         self,
         parent: Optional[QWidget] = None,
         *,
-        data_manager: Any = None,
         converters: Optional[Iterable[Any]] = None,
         project: Optional[QgsProject] = None,
     ):
         super().__init__(parent)
-        self.data_manager = data_manager
+        self.setWindowTitle("Data Converter")
         self.project = project or QgsProject.instance()
 
         layout = QVBoxLayout(self)
@@ -592,17 +594,19 @@ class DataConversionWidget(QWidget):
         description.setWordWrap(True)
         layout.addWidget(description)
 
-        self.automatic_widget = AutomaticConversionWidget(self, converters=converters, project=self.project)
-        layout.addWidget(self.automatic_widget)
+        self.widget = AutomaticConversionWidget(self, converters=converters, project=self.project)
+        layout.addWidget(self.widget)
+        self.widget.run_button.hide()
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box.accepted.connect(self._run_and_accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+    def _run_and_accept(self) -> None:
+        if self.widget._handle_run_conversion():
+            self.accept()
 
     def set_converters(self, converters: Iterable[Any]) -> None:
-        """Update the converter options displayed in the automatic tab."""
-        self.automatic_widget.set_converters(converters)
-
-    def get_active_configuration(self) -> Dict[str, Any]:
-        """Return a serialisable summary of the current tab selection."""
-        converter = self.automatic_widget.current_converter()
-        return {
-            "mode": "automatic",
-            "converter": converter.to_dict() if converter else None,
-        }
+        """Update the converter options displayed in the dialog."""
+        self.widget.set_converters(converters)

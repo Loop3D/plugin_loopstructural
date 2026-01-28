@@ -140,6 +140,11 @@ class LoopstructuralPlugin:
             self.tr("LoopStructural Modelling"),
             self.iface.mainWindow(),
         )
+        self.action_data_conversion = QAction(
+            self.tr("LoopStructural Data Conversion"),
+            self.iface.mainWindow(),
+        )
+        self.action_data_conversion.triggered.connect(self.show_data_conversion_dialog)
         self.action_visualisation = QAction(
             QIcon(os.path.dirname(__file__) + "/3D_icon.png"),
             self.tr("LoopStructural Visualisation"),
@@ -147,10 +152,12 @@ class LoopstructuralPlugin:
         )
 
         self.toolbar.addAction(self.action_modelling)
+        self.toolbar.addAction(self.action_data_conversion)
         self.toolbar.addAction(self.action_fault_topology)
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
+        self.iface.addPluginToMenu(__title__, self.action_data_conversion)
         self.initProcessing()
 
         # Map2Loop tool actions
@@ -338,6 +345,16 @@ class LoopstructuralPlugin:
         )
         dialog.exec_()
 
+    def show_data_conversion_dialog(self):
+        """Show the data conversion dialog."""
+        from loopstructural.gui.data_conversion import AutomaticConversionDialog
+
+        dialog = AutomaticConversionDialog(
+            self.iface.mainWindow(),
+            project=self.data_manager.project if self.data_manager else None,
+        )
+        dialog.exec_()
+
     def show_sorter_dialog(self):
         """Show the automatic stratigraphic sorter dialog."""
         from loopstructural.gui.map2loop_tools import SorterDialog
@@ -449,6 +466,7 @@ class LoopstructuralPlugin:
         for attr in (
             "action_help",
             "action_settings",
+            "action_data_conversion",
             "action_sampler",
             "action_sorter",
             "action_user_sorter",

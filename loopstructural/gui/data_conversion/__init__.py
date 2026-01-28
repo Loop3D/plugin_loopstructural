@@ -1,5 +1,5 @@
 """Data conversion GUI components."""
 
-from .data_conversion_widget import DataConversionWidget
+from .data_conversion_widget import AutomaticConversionDialog, AutomaticConversionWidget
 
-__all__ = ["DataConversionWidget"]
+__all__ = ["AutomaticConversionDialog", "AutomaticConversionWidget"]
