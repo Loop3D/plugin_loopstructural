@@ -9,7 +9,7 @@ from map2loop.sorter import (
     SorterObservationProjections,
     SorterUseNetworkX,
 )
-from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint
+from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint, AlongSection
 from osgeo import gdal
 from qgis.core import QgsVectorLayer
 
@@ -395,6 +395,7 @@ def calculate_thickness(
     basal_contacts,
     sampled_contacts,
     structure,
+    cross_sections=None,
     calculator_type="InterpolatedStructure",
     dtm=None,
     unit_name_field="UNITNAME",
@@ -419,6 +420,8 @@ def calculate_thickness(
         Sampled contacts point layer.
     structure : QgsVectorLayer or GeoDataFrame
         Structure point layer with orientation data.
+    cross_sections : QgsVectorLayer or GeoDataFrame, optional
+        Cross-sections line layer, by default None.
     calculator_type : str, optional
         Type of calculator ("InterpolatedStructure" or "StructuralPoint"), by default "InterpolatedStructure".
     dtm : QgsRasterLayer or GDAL dataset, optional
@@ -455,7 +458,8 @@ def calculate_thickness(
         else basal_contacts_gdf
     )
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
-    structure_gdf = qgsLayerToGeoDataFrame(structure)
+    structure_gdf = qgsLayerToGeoDataFrame(structure) 
+    cross_sections_gdf = qgsLayerToGeoDataFrame(cross_sections)
 
     # Log parameters via DebugManager if provided
     if debug_manager:
@@ -471,6 +475,8 @@ def calculate_thickness(
                 "basal_contacts": basal_contacts_gdf,
                 "sampled_contacts": sampled_contacts_gdf,
                 "structure": structure_gdf,
+                "cross_sections": cross_sections_gdf,
+                
             },
         )
 
@@ -480,6 +486,9 @@ def calculate_thickness(
         'maxy': geology_gdf.total_bounds[3],
         'miny': geology_gdf.total_bounds[1],
     }
+    
+    
+        
     # Rename unit name field if needed
     if unit_name_field and unit_name_field != 'UNITNAME':
         if unit_name_field in geology_gdf.columns:
@@ -514,7 +523,7 @@ def calculate_thickness(
             is_strike=orientation_type == 'Strike',
             max_line_length=max_line_length,
         )
-    else:  # StructuralPoint
+    if calculator_type == "StructuralPoint":
         if max_line_length is None:
             raise ValueError("max_line_length parameter is required for StructuralPoint calculator")
         calculator = StructuralPoint(
@@ -523,6 +532,12 @@ def calculate_thickness(
             is_strike=orientation_type == 'Strike',
             max_line_length=max_line_length,
         )
+    if calculator_type == "AlongSection":
+        calculator = AlongSection(
+            bounding_box=bounding_box,
+            sections=cross_sections_gdf,
+            )
+    
     if unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
         geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
     units = geology_gdf.copy()
