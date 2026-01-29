@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
@@ -21,6 +23,7 @@ from PyQt5.QtWidgets import (
 from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
 from qgis.gui import QgsMapLayerComboBox
 
+from ...main.helpers import ColumnMatcher
 from ...main.vectorLayerWrapper import QgsLayerFromDataFrame, QgsLayerFromGeoDataFrame
 from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
 
@@ -214,6 +217,11 @@ class AutomaticConversionWidget(QWidget):
         self.sources_layout.setLabelAlignment(Qt.AlignLeft | Qt.AlignTop)
         layout.addWidget(self.sources_widget)
         self._build_data_source_inputs()
+        if self.project is not None:
+            try:
+                self.project.layersAdded.connect(self._guess_layers)
+            except Exception:
+                pass
 
         actions_widget = QWidget()
         actions_layout = QHBoxLayout(actions_widget)
@@ -276,11 +284,157 @@ class AutomaticConversionWidget(QWidget):
 
         for data_type in self._data_types:
             combo = QgsMapLayerComboBox()
-            combo.setFilters(QgsMapLayerProxyModel.VectorLayer)
+            if self.project is not None:
+                try:
+                    combo.setProject(self.project)
+                except Exception:
+                    pass
+            combo.setFilters(self._layer_filter_for_data_type(data_type))
             combo.setAllowEmptyLayer(True)
             combo.setObjectName(f"automaticSource_{self._format_identifier_label(data_type)}")
             self.sources_layout.addRow(self._format_identifier_label(data_type), combo)
             self.layer_selectors[data_type] = combo
+        self._schedule_guess_layers()
+
+    def _schedule_guess_layers(self) -> None:
+        QTimer.singleShot(0, self._guess_layers)
+
+    def _guess_layers(self) -> None:
+        """Attempt to auto-select layers based on common naming conventions."""
+        if self.project is None and QgsProject.instance() is None:
+            return
+
+        for data_type, combo in self.layer_selectors.items():
+            if combo.currentLayer() is not None:
+                continue
+            candidates = self._build_layer_candidate_map(combo)
+            if not candidates:
+                continue
+            matcher = ColumnMatcher(list(candidates.keys()))
+            match = None
+            for target in self._target_keys_for_data_type(data_type):
+                match = matcher.find_match(target)
+                if match is not None:
+                    break
+            if match is None:
+                match = matcher.find_match(self._format_identifier_label(data_type))
+            if match is None and isinstance(data_type, Datatype):
+                value = getattr(data_type, "value", None)
+                if isinstance(value, str) and value.strip():
+                    match = matcher.find_match(value)
+            if match:
+                layer = candidates.get(match)
+                if layer is not None:
+                    combo.setLayer(layer)
+
+    def _build_layer_candidate_map(
+        self, combo: QgsMapLayerComboBox
+    ) -> Dict[str, QgsVectorLayer]:
+        candidates: Dict[str, QgsVectorLayer] = {}
+        for layer in self._layers_for_combo(combo):
+            if not isinstance(layer, QgsVectorLayer) or not layer.isValid():
+                continue
+            for candidate in self._layer_candidates(layer):
+                if candidate and candidate not in candidates:
+                    candidates[candidate] = layer
+                upper_candidate = candidate.upper() if isinstance(candidate, str) else None
+                if upper_candidate and upper_candidate not in candidates:
+                    candidates[upper_candidate] = layer
+        return candidates
+
+    def _layers_for_combo(self, combo: QgsMapLayerComboBox) -> List[QgsVectorLayer]:
+        layers: List[QgsVectorLayer] = []
+        for index in range(combo.count()):
+            layer = combo.layer(index)
+            if isinstance(layer, QgsVectorLayer):
+                layers.append(layer)
+        if layers:
+            return layers
+        project = self.project or QgsProject.instance()
+        if project is None:
+            return layers
+        for layer in project.mapLayers().values():
+            if isinstance(layer, QgsVectorLayer) and layer.isValid():
+                layers.append(layer)
+        return layers
+
+    def _layer_candidates(self, layer: QgsVectorLayer) -> List[str]:
+        names: List[str] = []
+        if layer is None:
+            return names
+        layer_name = layer.name()
+        if layer_name:
+            names.append(layer_name)
+        try:
+            source = layer.source()
+        except Exception:
+            source = ""
+        names.extend(self._names_from_source(source))
+        return names
+
+    def _names_from_source(self, source: str) -> List[str]:
+        if not source:
+            return []
+
+        names: List[str] = []
+        parts = source.split("|")
+        base = parts[0].strip()
+        if base:
+            names.append(base)
+            basename = os.path.basename(base)
+            if basename:
+                names.append(basename)
+                stem, _ = os.path.splitext(basename)
+                if stem:
+                    names.append(stem)
+
+        for part in parts[1:]:
+            key, _, value = part.partition("=")
+            if not value:
+                continue
+            key = key.strip().lower()
+            if key in ("layername", "table"):
+                cleaned = value.strip().strip("\"'").strip()
+                if cleaned:
+                    names.append(cleaned)
+
+        for pattern in (r"\blayername\s*=\s*([^|;]+)", r"\btable\s*=\s*([^|;]+)"):
+            match = re.search(pattern, source, re.IGNORECASE)
+            if match:
+                cleaned = match.group(1).strip().strip("\"'").strip()
+                if cleaned:
+                    names.append(cleaned)
+
+        return names
+
+    def _target_key_for_data_type(self, data_type: Datatype | str) -> str:
+        if isinstance(data_type, Datatype):
+            return data_type.name
+        return str(data_type)
+
+    def _target_keys_for_data_type(self, data_type: Datatype | str) -> List[str]:
+        key = self._target_key_for_data_type(data_type).upper()
+        if key == "GEOLOGY":
+            return ["GEOLOGY", "LITH", "LITHOLOGY", "OUTCROP"]
+        if key == "FOLD":
+            return ["FOLD", "FOLDS"]
+        if key == "FAULT":
+            return ["FAULT", "FAULTS"]
+        if key == "STRUCTURE":
+            return ["STRUCTURE", "STRUCTURES"]
+        return [key]
+
+    def _layer_filter_for_data_type(self, data_type: Datatype | str) -> int:
+        key = self._target_key_for_data_type(data_type).upper()
+        if key == "GEOLOGY":
+            return QgsMapLayerProxyModel.PolygonLayer
+        if key == "FAULT":
+            return QgsMapLayerProxyModel.LineLayer
+        if key == "STRUCTURE":
+            return QgsMapLayerProxyModel.PointLayer
+        if key == "FOLD":
+            return QgsMapLayerProxyModel.LineLayer
+        return QgsMapLayerProxyModel.VectorLayer
 
     def _collect_data_sources(self) -> Dict[Datatype | str, str]:
         data_sources: Dict[Datatype | str, str] = {}
