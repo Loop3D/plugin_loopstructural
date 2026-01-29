@@ -44,9 +44,10 @@ class ThicknessCalculatorWidget(QWidget):
         self.basalContactsComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
         self.sampledContactsComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
         self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.crossSectionLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
 
         # Initialize calculator types
-        self.calculator_types = ["InterpolatedStructure", "StructuralPoint"]
+        self.calculator_types = ["InterpolatedStructure", "StructuralPoint", "AlongSection"]
         self.calculatorTypeComboBox.addItems(self.calculator_types)
 
         # Initialize orientation types
@@ -149,6 +150,14 @@ class ThicknessCalculatorWidget(QWidget):
         if structure_layer_match:
             structure_layer = self.data_manager.find_layer_by_name(structure_layer_match)
             self.structureLayerComboBox.setLayer(structure_layer)
+            
+        # Attempt to find cross-sections layer
+        cross_sections_layer_names = get_layer_names(self.crossSectionLayerComboBox)
+        cross_sections_matcher = ColumnMatcher(cross_sections_layer_names)
+        cross_sections_layer_match = cross_sections_matcher.find_match('CROSS_SECTIONS')
+        if cross_sections_layer_match:
+            cross_sections_layer = self.data_manager.find_layer_by_name(cross_sections_layer_match)
+            self.crossSectionLayerComboBox.setLayer(cross_sections_layer)
 
     def _setup_field_combo_boxes(self):
         """Set up field combo boxes to link to their respective layers."""
@@ -209,7 +218,18 @@ class ThicknessCalculatorWidget(QWidget):
         if calculator_type == "StructuralPoint":
             self.maxLineLengthLabel.setVisible(True)
             self.maxLineLengthSpinBox.setVisible(True)
-        else:  # InterpolatedStructure
+            self.crossSectionLayerLabel.setVisible(False)
+            self.crossSectionLayerComboBox.setVisible(False)
+            
+        if calculator_type == "InterpolatedStructure":
+            self.maxLineLengthLabel.setVisible(False)
+            self.maxLineLengthSpinBox.setVisible(False)
+            self.crossSectionLayerLabel.setVisible(False)
+            self.crossSectionLayerComboBox.setVisible(False)
+            
+        if calculator_type == "AlongSection":
+            self.crossSectionLayerLabel.setVisible(True)
+            self.crossSectionLayerComboBox.setVisible(True)
             self.maxLineLengthLabel.setVisible(False)
             self.maxLineLengthSpinBox.setVisible(False)
 
@@ -226,6 +246,7 @@ class ThicknessCalculatorWidget(QWidget):
             ('basal_contacts_layer', self.basalContactsComboBox),
             ('sampled_contacts_layer', self.sampledContactsComboBox),
             ('structure_layer', self.structureLayerComboBox),
+            ("cross_sections_layer", self.crossSectionLayerComboBox)
         ):
             if layer_name := settings.get(key):
                 layer = self.data_manager.find_layer_by_name(layer_name)
@@ -276,6 +297,11 @@ class ThicknessCalculatorWidget(QWidget):
                 if self.structureLayerComboBox.currentLayer()
                 else None
             ),
+            'cross_sections_layer': (
+                self.crossSectionLayerComboBox.currentLayer().name()
+                if self.crossSectionLayerComboBox.currentLayer()
+                else None
+            ),
             'calculator_type_index': self.calculatorTypeComboBox.currentIndex(),
             'orientation_type_index': self.orientationTypeComboBox.currentIndex(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
@@ -308,6 +334,12 @@ class ThicknessCalculatorWidget(QWidget):
             if not self.structureLayerComboBox.currentLayer():
                 QMessageBox.warning(self, "Missing Input", "Please select a structure layer.")
                 return False
+        
+        elif calculator_type == "AlongSection":
+            if not self.crossSectionLayerComboBox.currentLayer():
+                QMessageBox.warning(self, "Missing Input", "Please select a cross-sections layer.")
+                return False
+
 
         # Prepare parameters
         params = self.get_parameters()
@@ -376,6 +408,7 @@ class ThicknessCalculatorWidget(QWidget):
             'basal_contacts': self.basalContactsComboBox.currentLayer(),
             'sampled_contacts': self.sampledContactsComboBox.currentLayer(),
             'structure': self.structureLayerComboBox.currentLayer(),
+            'cross_sections': self.crossSectionLayerComboBox.currentLayer(),
             'orientation_type': self.orientationTypeComboBox.currentText(),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'dip_field': self.dipFieldComboBox.currentField(),
