@@ -226,4 +226,5 @@ class FaultTopologyWidget(QDialog):
             "Success",
             f"Calculated fault topology for {len(df) if df is not None else 0} pairs.",
         )
+        self.close()
         return True

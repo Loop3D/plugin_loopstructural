@@ -80,7 +80,7 @@ class LoopstructuralPlugin:
         self.data_manager = ModellingDataManager(
             mapCanvas=self.iface.mapCanvas(), logger=self.log, project=QgsProject.instance()
         )
-        self.model_manager = GeologicalModelManager()
+        self.model_manager = GeologicalModelManager(debug_manager=self.debug_manager)
         self.data_manager.set_model_manager(self.model_manager)
 
     def injectLogHandler(self):

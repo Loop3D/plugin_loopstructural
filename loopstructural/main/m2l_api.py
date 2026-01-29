@@ -1,4 +1,3 @@
-
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -519,7 +518,7 @@ def calculate_thickness(
     if calculator_type == "InterpolatedStructure":
         calculator = InterpolatedStructure(
             bounding_box=bounding_box,
-            dtm_data=dtm_gdal,
+            # dtm_data=dtm_gdal,
             is_strike=orientation_type == 'Strike',
             max_line_length=max_line_length,
         )
@@ -528,7 +527,7 @@ def calculate_thickness(
             raise ValueError("max_line_length parameter is required for StructuralPoint calculator")
         calculator = StructuralPoint(
             bounding_box=bounding_box,
-            dtm_data=dtm_gdal,
+            # dtm_data=dtm_gdal,
             is_strike=orientation_type == 'Strike',
             max_line_length=max_line_length,
         )
@@ -545,12 +544,12 @@ def calculate_thickness(
     units_unique = units.drop_duplicates(subset=['UNITNAME']).reset_index(drop=True)
     units = pd.DataFrame({'name': units_unique['UNITNAME']})
     basal_contacts_gdf['type'] = 'BASAL'  # required by calculator
-
+    structure_gdf['X'] = structure_gdf.geometry.x
+    structure_gdf['Y'] = structure_gdf.geometry.y
     # No local export path placeholders required; export_debug_package handles exports
     try:
         if debug_manager and getattr(debug_manager, "is_debug", lambda: False)():
             # Export layers and pickled objects first to get their exported filenames
-
             _exported = export_debug_package(
                 debug_manager,
                 runner_script_name="run_calculate_thickness.py",
@@ -559,8 +558,8 @@ def calculate_thickness(
                     'units': units,
                     'stratigraphic_order': stratigraphic_order,
                     'basal_contacts': basal_contacts_gdf,
-                    'structure': structure_gdf,
-                    'geology': geology_gdf,
+                    'structure_data': structure_gdf,
+                    'geology_data': geology_gdf,
                     'sampled_contacts': sampled_contacts_gdf,
                 },
             )
@@ -568,8 +567,6 @@ def calculate_thickness(
     except Exception as e:
         print("Failed to save sampler debug info")
         raise e
-    structure_gdf['X'] = structure_gdf.geometry.x
-    structure_gdf['Y'] = structure_gdf.geometry.y
 
     thickness = calculator.compute(
         units,
@@ -588,8 +585,8 @@ def paint_stratigraphic_order(
     geology_layer: 'QgsVectorLayer',
     stratigraphic_order: list,
     unit_name_field: str = "UNITNAME",
-    debug_manager = None,
-    updater = None,
+    debug_manager=None,
+    updater=None,
 ):
     """Paint stratigraphic order onto geology polygons.
     Parameters

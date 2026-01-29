@@ -169,8 +169,16 @@ class BasalContactsWidget(QWidget):
         if not self.data_manager:
             return
         settings = {
-            'geology_layer': self.geologyLayerComboBox.currentLayer().name() if self.geologyLayerComboBox.currentLayer() else None,
-            'faults_layer': self.faultsLayerComboBox.currentLayer().name() if self.faultsLayerComboBox.currentLayer() else None,
+            'geology_layer': (
+                self.geologyLayerComboBox.currentLayer().name()
+                if self.geologyLayerComboBox.currentLayer()
+                else None
+            ),
+            'faults_layer': (
+                self.faultsLayerComboBox.currentLayer().name()
+                if self.faultsLayerComboBox.currentLayer()
+                else None
+            ),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
         }
         self.data_manager.set_widget_settings('basal_contacts_widget', settings)
@@ -322,7 +330,6 @@ class BasalContactsWidget(QWidget):
                 if val not in values:
                     values.append(val)
             stratigraphic_order = values
-            print(f"Extracting all contacts for units: {stratigraphic_order}")
             self.data_manager.logger(f"Extracting all contacts for units: {stratigraphic_order}")
 
         result = extract_basal_contacts(

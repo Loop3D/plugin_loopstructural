@@ -29,6 +29,14 @@ class DebugManager:
         self._debug_state_logged = False
         self.logger = self.plugin.log
 
+    def log(self, message: str, log_level: int = 0):
+        """Log a message via the plugin's logging mechanism."""
+        self.plugin.log(message=message, log_level=log_level)
+
+    def message(self, message: str):
+        """Log an informational message via the plugin's logging mechanism."""
+        self.plugin.log(message=message, log_level=0)
+
     def _get_settings(self):
         return plg_prefs_hdlr.PlgOptionsManager.get_plg_settings()
 

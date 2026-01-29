@@ -3,7 +3,7 @@
 import os
 
 from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsProject
+from qgis.core import QgsProject, QgsWkbTypes
 from qgis.PyQt import uic
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
@@ -41,6 +41,10 @@ class SamplerWidget(QWidget):
             # DTM should show raster layers, geology polygons
             self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
             self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+            self.spatialDataLayerComboBox.setFilters(
+                QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
+            )
+
             # spatialData can be any type, leave default
         except Exception:
             # If QGIS isn't available, skip filter setup
@@ -53,9 +57,22 @@ class SamplerWidget(QWidget):
         # Connect signals
         self.samplerTypeComboBox.currentIndexChanged.connect(self._on_sampler_type_changed)
         self.runButton.clicked.connect(self._run_sampler)
+        # When user selects a spatial layer, automatically determine sampler type
+        try:
+            # Many QGIS widgets emit currentIndexChanged for layer changes
+            self.spatialDataLayerComboBox.currentIndexChanged.connect(
+                self._on_spatial_layer_changed
+            )
+        except Exception:
+            pass
 
         # Initial state update
         self._on_sampler_type_changed()
+        # Also ensure state reflects any preselected spatial layer
+        try:
+            self._on_spatial_layer_changed()
+        except Exception:
+            pass
 
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
@@ -128,6 +145,74 @@ class SamplerWidget(QWidget):
             # Spacing can work with optional DTM and geology
             self.dtmLayerComboBox.setAllowEmptyLayer(True)
             self.geologyLayerComboBox.setAllowEmptyLayer(True)
+
+    def _set_invalid_spatial_type(self, message: str = None):
+        """Disable controls when an invalid spatial layer type is selected."""
+        # Disable sampler selection and run to prevent usage with unsupported types
+        try:
+            self.samplerTypeComboBox.setEnabled(False)
+        except Exception:
+            pass
+        try:
+            self.runButton.setEnabled(False)
+        except Exception:
+            pass
+        if message:
+            QMessageBox.warning(self, "Invalid Spatial Data", message)
+
+    def _on_spatial_layer_changed(self):
+        """Automatically set sampler type based on spatial data layer geometry.
+
+        - Point geometry -> Decimator
+        - Other geometries -> disallowed
+        """
+        try:
+            layer = self.spatialDataLayerComboBox.currentLayer()
+        except Exception:
+            layer = None
+
+        if layer is None:
+            return
+
+        # Determine geometry type; only vector layers expose geometryType
+        try:
+            if not hasattr(layer, 'geometryType'):
+                # Non-vector layer (raster, etc.) is not allowed
+                self._set_invalid_spatial_type("Only point vector layers are allowed for sampling.")
+                return
+
+            geom_type = layer.geometryType()
+            # QgsWkbTypes: PointGeometry = 0, LineGeometry = 1, PolygonGeometry = 2
+            if geom_type == QgsWkbTypes.PointGeometry:
+                # Use Decimator for point sets
+                try:
+                    idx = self.sampler_types.index("Decimator")
+                    self.samplerTypeComboBox.setCurrentIndex(idx)
+                except Exception as e:
+                    print(e)
+                    pass
+                self.samplerTypeComboBox.setEnabled(False)
+                self.runButton.setEnabled(True)
+            elif geom_type == QgsWkbTypes.LineGeometry:
+                # Line geometry is not allowed
+                try:
+                    idx = self.sampler_types.index("Spacing")
+                    self.samplerTypeComboBox.setCurrentIndex(idx)
+                except Exception as e:
+                    print(e)
+                    pass
+                self.samplerTypeComboBox.setEnabled(False)
+                self.runButton.setEnabled(False)
+            else:
+                # Line, polygon or other vector type -> disallowed
+                self._set_invalid_spatial_type("Only point or line layers can be used")
+                return
+        except Exception:
+            # On any error, be conservative and disable run
+            self._set_invalid_spatial_type(
+                "Selected layer type could not be determined. Only point vector layers are allowed."
+            )
+            return
 
     def _run_sampler(self):
         """Run the sampler algorithm using the map2loop API."""
