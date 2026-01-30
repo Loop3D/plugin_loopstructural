@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QComboBox,
@@ -25,7 +26,6 @@ from qgis.gui import QgsMapLayerComboBox
 
 from ...main.helpers import ColumnMatcher
 from ...main.vectorLayerWrapper import QgsLayerFromDataFrame, QgsLayerFromGeoDataFrame
-from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
 
 try:
     from geopandas import GeoDataFrame
@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - geopandas may be unavailable in tests
 
 try:
     from pandas import DataFrame
-except Exception:  # pragma: no cover - pandas may be unavailable in tests
+except ImportException:  # pragma: no cover - pandas may be unavailable in tests
     DataFrame = None
 
 
@@ -165,18 +165,27 @@ def _normalise_converters(converters: Optional[Iterable[Any]]) -> List[Converter
             )
             label = str(raw.get("label") or raw.get("name") or identifier)
             description = str(raw.get("description") or "")
-            normalised.append(ConverterOption(identifier=identifier, label=label, description=description))
+            normalised.append(
+                ConverterOption(identifier=identifier, label=label, description=description)
+            )
             continue
 
         text = str(raw)
         normalised.append(ConverterOption(identifier=text, label=text, description=""))
     return normalised
 
+
 class AutomaticConversionWidget(QWidget):
     """Widget showing the automatic conversion workflow."""
 
     SUPPORTED_DATA_TYPES: Tuple[str, ...] = ("GEOLOGY", "STRUCTURE", "FAULT", "FOLD")
-    OUTPUT_DATA_TYPES: Tuple[str, ...] = ("GEOLOGY", "STRUCTURE", "FAULT", "FOLD", "FAULT_ORIENTATION")
+    OUTPUT_DATA_TYPES: Tuple[str, ...] = (
+        "GEOLOGY",
+        "STRUCTURE",
+        "FAULT",
+        "FOLD",
+        "FAULT_ORIENTATION",
+    )
     OUTPUT_GROUP_NAME = "Loop-Ready Data"
 
     def __init__(
@@ -208,7 +217,9 @@ class AutomaticConversionWidget(QWidget):
         self.summary_text.setMinimumHeight(80)
         layout.addWidget(self.summary_text)
 
-        source_description = QLabel("Select the layers that correspond to each dataset required by the converter.")
+        source_description = QLabel(
+            "Select the layers that correspond to each dataset required by the converter."
+        )
         source_description.setWordWrap(True)
         layout.addWidget(source_description)
 
@@ -221,6 +232,9 @@ class AutomaticConversionWidget(QWidget):
             try:
                 self.project.layersAdded.connect(self._guess_layers)
             except Exception:
+                # Best-effort: if the project object does not provide a compatible
+                # layersAdded signal (e.g., in certain QGIS versions or test stubs),
+                # silently skip automatic layer guessing rather than failing the UI.
                 pass
 
         actions_widget = QWidget()
@@ -288,6 +302,8 @@ class AutomaticConversionWidget(QWidget):
                 try:
                     combo.setProject(self.project)
                 except Exception:
+                    # Some QGIS/Qt environments may not support setProject or may raise here;
+                    # failure to bind the project is non-fatal, so we intentionally ignore
                     pass
             combo.setFilters(self._layer_filter_for_data_type(data_type))
             combo.setAllowEmptyLayer(True)
@@ -327,9 +343,7 @@ class AutomaticConversionWidget(QWidget):
                 if layer is not None:
                     combo.setLayer(layer)
 
-    def _build_layer_candidate_map(
-        self, combo: QgsMapLayerComboBox
-    ) -> Dict[str, QgsVectorLayer]:
+    def _build_layer_candidate_map(self, combo: QgsMapLayerComboBox) -> Dict[str, QgsVectorLayer]:
         candidates: Dict[str, QgsVectorLayer] = {}
         for layer in self._layers_for_combo(combo):
             if not isinstance(layer, QgsVectorLayer) or not layer.isValid():
@@ -473,9 +487,7 @@ class AutomaticConversionWidget(QWidget):
             return False
 
         if added_layers:
-            message = (
-                f"Conversion completed: {added_layers} layer(s) added to '{self.OUTPUT_GROUP_NAME}'."
-            )
+            message = f"Conversion completed: {added_layers} layer(s) added to '{self.OUTPUT_GROUP_NAME}'."
         elif result not in (None, True):
             message = f"Conversion completed: {result}"
         else:

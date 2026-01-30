@@ -599,10 +599,18 @@ def _geometry_from_value(value):
                 try:
                     data = bytes(data)
                 except Exception:
+                    # Best-effort conversion to bytes; if this fails, leave data as-is
+
                     pass
                 try:
                     return QgsGeometry.fromWkb(data)
                 except Exception:
+                    # Best-effort conversion to bytes; if this fails, fall back to using the
+                    # original data and let the subsequent fromWkb call handle it.
+                    logger.debug(
+                        "Failed to convert WKB data to bytes in _geometry_from_value",
+                        exc_info=True,
+                    )
                     continue
     # Shapely geometries expose wkb/wkt attributes
     wkb_data = getattr(value, "wkb", None)
@@ -661,6 +669,7 @@ def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
         if epsg:
             return QgsCoordinateReferenceSystem.fromEpsgId(int(epsg))
     except Exception:
+        logger.debug("Failed to convert EPSG code to QgsCoordinateReferenceSystem", exc_info=True)
         pass
     if isinstance(crs_info, str):
         try:
@@ -696,7 +705,9 @@ def QgsLayerFromGeoDataFrame(geodataframe, layer_name: str = "Converted Data"):
     for column in geodataframe.columns:
         if column == geometry_column:
             continue
-        attribute_fields.append(QgsField(str(column), _qvariant_type_from_dtype(geodataframe[column].dtype)))
+        attribute_fields.append(
+            QgsField(str(column), _qvariant_type_from_dtype(geodataframe[column].dtype))
+        )
     if attribute_fields:
         provider.addAttributes(attribute_fields)
         layer.updateFields()

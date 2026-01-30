@@ -8,7 +8,7 @@ from map2loop.sorter import (
     SorterObservationProjections,
     SorterUseNetworkX,
 )
-from map2loop.thickness_calculator import InterpolatedStructure, StructuralPoint, AlongSection
+from map2loop.thickness_calculator import AlongSection, InterpolatedStructure, StructuralPoint
 from osgeo import gdal
 from qgis.core import QgsVectorLayer
 
@@ -457,7 +457,7 @@ def calculate_thickness(
         else basal_contacts_gdf
     )
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
-    structure_gdf = qgsLayerToGeoDataFrame(structure) 
+    structure_gdf = qgsLayerToGeoDataFrame(structure)
     cross_sections_gdf = qgsLayerToGeoDataFrame(cross_sections)
 
     # Log parameters via DebugManager if provided
@@ -475,7 +475,6 @@ def calculate_thickness(
                 "sampled_contacts": sampled_contacts_gdf,
                 "structure": structure_gdf,
                 "cross_sections": cross_sections_gdf,
-                
             },
         )
 
@@ -485,9 +484,7 @@ def calculate_thickness(
         'maxy': geology_gdf.total_bounds[3],
         'miny': geology_gdf.total_bounds[1],
     }
-    
-    
-        
+
     # Rename unit name field if needed
     if unit_name_field and unit_name_field != 'UNITNAME':
         if unit_name_field in geology_gdf.columns:
@@ -535,8 +532,8 @@ def calculate_thickness(
         calculator = AlongSection(
             bounding_box=bounding_box,
             sections=cross_sections_gdf,
-            )
-    
+        )
+
     if unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
         geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
     units = geology_gdf.copy()

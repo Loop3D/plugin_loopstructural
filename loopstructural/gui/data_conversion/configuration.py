@@ -1,4 +1,4 @@
-"""configuration helpers used by the data conversion UI."""
+"""Configuration helpers used by the data conversion UI."""
 
 from __future__ import annotations
 

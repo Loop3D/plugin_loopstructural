@@ -72,4 +72,3 @@ class LoopWidget(QWidget):
             The visualisation widget.
         """
         return self.visualisation_widget
-

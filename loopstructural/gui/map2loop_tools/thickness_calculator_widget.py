@@ -1,8 +1,8 @@
 """Widget for thickness calculator."""
 
 import os
-import pandas as pd
 
+import pandas as pd
 from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
@@ -151,7 +151,7 @@ class ThicknessCalculatorWidget(QWidget):
         if structure_layer_match:
             structure_layer = self.data_manager.find_layer_by_name(structure_layer_match)
             self.structureLayerComboBox.setLayer(structure_layer)
-            
+
         # Attempt to find cross-sections layer
         cross_sections_layer_names = get_layer_names(self.crossSectionLayerComboBox)
         cross_sections_matcher = ColumnMatcher(cross_sections_layer_names)
@@ -221,14 +221,14 @@ class ThicknessCalculatorWidget(QWidget):
             self.maxLineLengthSpinBox.setVisible(True)
             self.crossSectionLayerLabel.setVisible(False)
             self.crossSectionLayerComboBox.setVisible(False)
-            
-        if calculator_type == "InterpolatedStructure":
+
+        elif calculator_type == "InterpolatedStructure":
             self.maxLineLengthLabel.setVisible(False)
             self.maxLineLengthSpinBox.setVisible(False)
             self.crossSectionLayerLabel.setVisible(False)
             self.crossSectionLayerComboBox.setVisible(False)
-            
-        if calculator_type == "AlongSection":
+
+        elif calculator_type == "AlongSection":
             self.crossSectionLayerLabel.setVisible(True)
             self.crossSectionLayerComboBox.setVisible(True)
             self.maxLineLengthLabel.setVisible(False)
@@ -247,7 +247,7 @@ class ThicknessCalculatorWidget(QWidget):
             ('basal_contacts_layer', self.basalContactsComboBox),
             ('sampled_contacts_layer', self.sampledContactsComboBox),
             ('structure_layer', self.structureLayerComboBox),
-            ("cross_sections_layer", self.crossSectionLayerComboBox)
+            ("cross_sections_layer", self.crossSectionLayerComboBox),
         ):
             if layer_name := settings.get(key):
                 layer = self.data_manager.find_layer_by_name(layer_name)
@@ -335,12 +335,11 @@ class ThicknessCalculatorWidget(QWidget):
             if not self.structureLayerComboBox.currentLayer():
                 QMessageBox.warning(self, "Missing Input", "Please select a structure layer.")
                 return False
-        
+
         elif calculator_type == "AlongSection":
             if not self.crossSectionLayerComboBox.currentLayer():
                 QMessageBox.warning(self, "Missing Input", "Please select a cross-sections layer.")
                 return False
-
 
         # Prepare parameters
         params = self.get_parameters()
