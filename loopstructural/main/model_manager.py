@@ -16,15 +16,15 @@ from typing import Callable, Optional, Union
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-
-from LoopStructural import GeologicalModel
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
 from LoopStructural.modelling.features import FeatureType, StructuralFrame
 from LoopStructural.modelling.features.fold import FoldFrame
-from loopstructural.toolbelt.preferences import PlgSettingsStructure
 from LoopStructural.utils.observer import Observable
+
+from LoopStructural import GeologicalModel
+from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 from ..main.helpers import qgisAttributeIsNone
 
@@ -482,7 +482,7 @@ class GeologicalModelManager(Observable):
         # Update the model with stratigraphy
         self.update_fault_features()
         self.update_foliation_features()
-
+        
         # Notify observers using the Observable framework if requested
         if notify_observers:
             self._emit('model_updated')

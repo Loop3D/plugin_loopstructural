@@ -2,9 +2,8 @@ import logging
 from typing import Optional, Union
 
 import numpy as np
-from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
-
 from LoopStructural.datatypes import VectorPoints
+from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +276,33 @@ class FeatureListWidget(QWidget):
         feature_name = None
         if event == 'feature_updated' and len(args) >= 1:
             feature_name = args[0]
+
+        # If the model was reset (None) or features referenced by viewer meshes
+        # no longer exist in the current model, remove the linkage from those
+        # meshes so they are not treated as feature-driven on subsequent updates.
+        try:
+            try:
+                current_features = {f.name for f in self.model_manager.features()}
+            except Exception:
+                current_features = set()
+
+            # If the model is None or a feature referenced by a mesh is missing,
+            # decouple that mesh from the feature so it remains visible but won't
+            # be auto-updated or re-added when the model changes.
+            for mesh_name, meta in list(self.viewer.meshes.items()):
+                sf = meta.get('source_feature', None)
+                if sf is None:
+                    continue
+                if self.model_manager.model is None or sf not in current_features:
+                    _log(f"Decoupling mesh '{mesh_name}' from missing feature '{sf}'")
+                    meta.pop('source_feature', None)
+                    meta.pop('source_type', None)
+                    meta.pop('isovalue', None)
+                    # mark as decoupled so other logic can detect it if needed
+                    meta['decoupled_from_feature'] = True
+        except Exception:
+            _log('Failed while decoupling meshes from features')
+
         # Build a set of features that currently have viewer meshes
         affected_features = set()
         for _, meta in list(self.viewer.meshes.items()):
