@@ -1,0 +1,20 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect x="2" y="2" width="60" height="60" rx="6" fill="none" stroke="#333" stroke-width="4"/>
+
+  <!-- Split line -->
+  <line x1="32" y1="2" x2="32" y2="62" stroke="#333" stroke-width="4"/>
+
+  <!-- Right side: filled layers -->
+  <rect x="32" y="2" width="30" height="60" fill="#f4b942"/>
+  <path d="M32 22 H62" stroke="#333" stroke-width="4"/>
+  <path d="M32 42 H62" stroke="#333" stroke-width="4"/>
+  <rect x="32" y="22" width="30" height="20" fill="#6ca96c"/>
+
+  <!-- Left side: contacts only -->
+  <path d="M2 22 H32" stroke="#333" stroke-width="4"/>
+   <path d="M2 42 H32" stroke="#333" stroke-width="4"/>
+
+  <!-- Arrow -->
+  <polygon points="18,32 8,24 8,40" fill="#333"/>
+</svg>

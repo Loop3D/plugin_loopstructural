@@ -9,10 +9,10 @@ bridges Python's `logging` into the plugin's logging facilities.
 # standard library
 import logging
 from functools import partial
-from typing import Callable, Literal, Optional, Union
+from typing import Callable
 
 # PyQGIS
-from qgis.core import Qgis, QgsMessageLog, QgsMessageOutput
+from qgis.core import QgsMessageLog, QgsMessageOutput
 from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtWidgets import QPushButton, QWidget
 from qgis.utils import iface
@@ -93,48 +93,85 @@ class PlgLogger(logging.Handler):
                 logging.error(err_msg)
                 message = err_msg
 
-        # send it to QGIS messages panel
-        QgsMessageLog.logMessage(message=message, tag=application, notifyUser=push, level=log_level)
+        # send it to QGIS messages panel (safe to do immediately)
+        try:
+            QgsMessageLog.logMessage(
+                message=message, tag=application, notifyUser=push, level=log_level
+            )
+        except Exception:
+            # be tolerant of failures writing to the message log
+            pass
 
-        # optionally, display message on QGIS Message bar (above the map canvas)
-        if push and iface is not None:
-            msg_bar = None
+        # If the caller did not request a push (message bar) or button we are done
+        if not push and not button and parent_location is None:
+            return
 
-            # QGIS or custom dialog
-            if parent_location and isinstance(parent_location, QWidget):
-                msg_bar = parent_location.findChild(QgsMessageBar)
+        # Prepare the function that interacts with QGIS UI; run this on the Qt main thread
+        def _do_push():
+            try:
+                msg_bar = None
 
-            if not msg_bar:
-                msg_bar = iface.messageBar()
+                # QGIS or custom dialog
+                if parent_location and isinstance(parent_location, QWidget):
+                    msg_bar = parent_location.findChild(QgsMessageBar)
 
-            # calc duration
-            if duration is None:
-                duration = (log_level + 1) * 3
+                if not msg_bar and iface is not None:
+                    msg_bar = iface.messageBar()
 
-            # create message with/out a widget
-            if button:
-                # create output message
-                notification = iface.messageBar().createMessage(title=application, text=message)
-                widget_button = QPushButton(button_text or "More...")
-                if button_connect:
-                    widget_button.clicked.connect(button_connect)
+                # calc duration
+                _duration = duration if duration is not None else (log_level + 1) * 3
+
+                # create message with/out a widget
+                if button:
+                    # create output message
+                    notification = iface.messageBar().createMessage(title=application, text=message)
+                    widget_button = QPushButton(button_text or "More...")
+                    if button_connect:
+                        widget_button.clicked.connect(button_connect)
+                    else:
+                        mini_dlg = QgsMessageOutput.createMessageOutput()
+                        mini_dlg.setTitle(application)
+                        mini_dlg.setMessage(message, QgsMessageOutput.MessageText)
+                        widget_button.clicked.connect(partial(mini_dlg.showMessage, False))
+
+                    notification.layout().addWidget(widget_button)
+                    if msg_bar is not None:
+                        msg_bar.pushWidget(widget=notification, level=log_level, duration=_duration)
                 else:
-                    mini_dlg = QgsMessageOutput.createMessageOutput()
-                    mini_dlg.setTitle(application)
-                    mini_dlg.setMessage(message, QgsMessageOutput.MessageText)
-                    widget_button.clicked.connect(partial(mini_dlg.showMessage, False))
+                    if msg_bar is not None:
+                        msg_bar.pushMessage(
+                            title=application,
+                            text=message,
+                            level=log_level,
+                            duration=_duration,
+                        )
+            except Exception:
+                logging.exception("Failed to push message to QGIS message bar")
 
-                notification.layout().addWidget(widget_button)
-                msg_bar.pushWidget(widget=notification, level=log_level, duration=duration)
-
+        # Try to schedule the UI interaction on the Qt main thread using QTimer
+        try:
+            try:
+                from qgis.PyQt.QtCore import QTimer as _QTimer
+            except Exception:
+                # fall back to PyQt5/PySide2 if qgis.PyQt namespace isn't present
+                try:
+                    from PyQt5.QtCore import QTimer as _QTimer  # type: ignore
+                except Exception:
+                    try:
+                        from PySide2.QtCore import QTimer as _QTimer  # type: ignore
+                    except Exception:
+                        _QTimer = None
+            if _QTimer is not None:
+                _QTimer.singleShot(0, _do_push)
             else:
-                # send simple message
-                msg_bar.pushMessage(
-                    title=application,
-                    text=message,
-                    level=log_level,
-                    duration=duration,
-                )
+                # last resort: call directly (may block if called from background thread)
+                _do_push()
+        except Exception:
+            # ensure we do not raise from logging
+            try:
+                _do_push()
+            except Exception:
+                pass
 
 
 class PlgLoggerHandler(logging.Handler):

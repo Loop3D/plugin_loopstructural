@@ -2,10 +2,11 @@ import json
 from collections import defaultdict
 
 import numpy as np
-from qgis.core import QgsPointXY, QgsProject, QgsVectorLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsPointXY, QgsProject, QgsVectorLayer
 
 from LoopStructural import FaultTopology, StratigraphicColumn
 from LoopStructural.datatypes import BoundingBox
+from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
@@ -44,6 +45,7 @@ class ModellingDataManager:
                 default_bounding_box['zmax'],
             ],
         )
+        self._bounding_box_set = False
 
         self._basal_contacts = None
         self._fault_traces = None
@@ -58,14 +60,18 @@ class ModellingDataManager:
         self.basal_contacts_callback = None
         self.fault_traces_callback = None
         self.structural_orientations_callback = None
-        self.stratigraphic_column_callback = None
+        self._stratigraphic_column_callbacks = []
         self.fault_adjacency = None
         self.fault_stratigraphy_adjacency = None
         self.elevation = np.nan
         self.dem_layer = None
         self.use_dem = True
         self.dem_callback = None
+        self.widget_settings = {}
         self.feature_data = defaultdict(dict)
+        self._model_crs = None
+        self._use_project_crs = True
+        self.model_crs_callback = None
 
     def onSaveProject(self):
         """Save project data."""
@@ -84,9 +90,12 @@ class ModellingDataManager:
 
             except json.JSONDecodeError as e:
                 self.logger(message=f"Error loading data manager: {e}", log_level=2)
+
     def onNewProject(self):
         self.logger(message="New project created, clearing data...", log_level=3)
         self.update_from_dict({})
+        self.widget_settings = {}
+
     def set_model_manager(self, model_manager):
         """Set the model manager for the data manager."""
         if model_manager is None:
@@ -96,7 +105,9 @@ class ModellingDataManager:
         self._model_manager.set_fault_topology(self._fault_topology)
         self._model_manager.update_bounding_box(self._bounding_box)
 
-    def set_bounding_box(self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None):
+    def set_bounding_box(
+        self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None, *, mark_set=True
+    ):
         """Set the bounding box for the model."""
         origin = self._bounding_box.origin
         maximum = self._bounding_box.maximum
@@ -115,8 +126,8 @@ class ModellingDataManager:
             maximum[2] = zmax
         self._bounding_box.origin = origin
         self._bounding_box.maximum = maximum
-        self._bounding_box.origin = origin
-        self._bounding_box.maximum = maximum
+        if mark_set:
+            self._bounding_box_set = True
         self._model_manager.update_bounding_box(self._bounding_box)
         if self.bounding_box_callback:
             self.bounding_box_callback(self._bounding_box)
@@ -124,6 +135,10 @@ class ModellingDataManager:
     def set_bounding_box_update_callback(self, callback):
         self.bounding_box_callback = callback
         self.bounding_box_callback(self._bounding_box)
+
+    def is_bounding_box_set(self):
+        """Return True if the bounding box has been explicitly set by the user."""
+        return bool(self._bounding_box_set)
 
     def set_fault_trace_layer_callback(self, callback):
         """Set the callback for when the fault trace layer is updated."""
@@ -139,7 +154,15 @@ class ModellingDataManager:
 
     def set_stratigraphic_column_callback(self, callback):
         """Set the callback for when the stratigraphic column is updated."""
-        self.stratigraphic_column_callback = callback
+        self._stratigraphic_column_callbacks.append(callback)
+
+    @property
+    def stratigraphic_column_callback(self):
+        def call_all():
+            for cb in self._stratigraphic_column_callbacks:
+                cb()
+
+        return call_all
 
     def set_dem_callback(self, callback):
         """Set the callback for when the DEM layer is updated."""
@@ -150,6 +173,100 @@ class ModellingDataManager:
     def get_bounding_box(self):
         """Get the current bounding box."""
         return self._bounding_box
+
+    def set_model_crs(self, crs, use_project_crs=False):
+        """Set the model CRS.
+        
+        Parameters
+        ----------
+        crs : QgsCoordinateReferenceSystem or None
+            The CRS to use for the model. If None and use_project_crs is True, 
+            will use the project CRS.
+        use_project_crs : bool
+            If True, use the project CRS instead of a custom CRS.
+        
+        Returns
+        -------
+        tuple
+            (success: bool, message: str)
+        """
+        self._use_project_crs = use_project_crs
+        
+        if use_project_crs:
+            crs = self.project.crs()
+        
+        # Validate CRS
+        if crs is None or not crs.isValid():
+            self._model_crs = None
+            msg = "Model CRS is not valid."
+            self.logger(message=msg, log_level=2)
+            if self.model_crs_callback:
+                self.model_crs_callback(self._model_crs, self._use_project_crs)
+            return False, msg
+        
+        # Check if CRS is projected (not geographic)
+        if crs.isGeographic():
+            self._model_crs = None
+            # Safely get CRS description
+            try:
+                crs_desc = crs.description() or crs.authid() or "Unknown"
+            except Exception:
+                crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+            msg = f"Model CRS must be projected (in meters), not geographic. Selected CRS: {crs_desc}"
+            self.logger(message=msg, log_level=2)
+            if self.model_crs_callback:
+                self.model_crs_callback(self._model_crs, self._use_project_crs)
+            return False, msg
+        
+        self._model_crs = crs
+        # Safely get CRS description
+        try:
+            crs_desc = crs.description() or "Unknown"
+            crs_id = crs.authid() or "Unknown"
+        except Exception:
+            crs_desc = "Unknown"
+            crs_id = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+        msg = f"Model CRS set to: {crs_desc} ({crs_id})"
+        self.logger(message=msg, log_level=3)
+        
+        if self.model_crs_callback:
+            self.model_crs_callback(self._model_crs, self._use_project_crs)
+        
+        return True, msg
+
+    def get_model_crs(self):
+        """Get the model CRS.
+        
+        Returns
+        -------
+        QgsCoordinateReferenceSystem or None
+            The model CRS, or None if not set.
+        """
+        if self._use_project_crs:
+            return self.project.crs()
+        return self._model_crs
+    
+    def is_model_crs_valid(self):
+        """Check if the model CRS is valid and projected.
+        
+        Returns
+        -------
+        bool
+            True if the model CRS is valid and projected, False otherwise.
+        """
+        crs = self.get_model_crs()
+        if crs is None or not crs.isValid():
+            return False
+        if crs.isGeographic():
+            return False
+        return True
+    
+    def set_model_crs_callback(self, callback):
+        """Set the callback for when the model CRS is updated."""
+        self.model_crs_callback = callback
+        # Trigger callback with current values
+        if self.model_crs_callback:
+            self.model_crs_callback(self.get_model_crs(), self._use_project_crs)
 
     def set_elevation(self, elevation):
         """Set the elevation for the model."""
@@ -188,7 +305,7 @@ class ModellingDataManager:
     def set_use_dem(self, use_dem):
         self.use_dem = use_dem
         self._model_manager.set_dem_function(self.dem_function)
-        
+
     def set_basal_contacts(self, basal_contacts, unitname_field=None, use_z_coordinate=False):
         """Set the basal contacts for the model."""
         self._basal_contacts = {
@@ -227,6 +344,16 @@ class ModellingDataManager:
                     # Add the unit to the stratigraphic column if it does not already exist
                     self._stratigraphic_column.add_unit(name=unit_name, colour=None)
         self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
+
+    def get_stratigraphic_unit_names(self):
+        """Get the names of the stratigraphic units in the column."""
+        units = []
+        for u in self._stratigraphic_column.order:
+            if u.element_type == StratigraphicColumnElementType.UNIT:
+                units.append(u.name)
+        return units
 
     def add_to_stratigraphic_column(self, unit_data):
         """Add a unit or unconformity to the stratigraphic column."""
@@ -234,7 +361,7 @@ class ModellingDataManager:
         if isinstance(unit_data, dict):
             if unit_data.get('type') == 'unit':
                 stratigraphic_element = self._stratigraphic_column.add_unit(
-                    name=unit_data.get('name'), colour=unit_data.get('colour')
+                    name=unit_data.get('name'), colour=unit_data.get('colour', None)
                 )
             elif unit_data.get('type') == 'unconformity':
                 stratigraphic_element = self._stratigraphic_column.add_unconformity(
@@ -249,12 +376,16 @@ class ModellingDataManager:
                 message=f"Added {unit_data.get('type')} '{unit_data.get('name')}' to the stratigraphic column."
             )
             self.update_stratigraphy()
+            if self.stratigraphic_column_callback:
+                self.stratigraphic_column_callback()
             return stratigraphic_element
 
     def remove_from_stratigraphic_column(self, unit_uuid):
         """Remove a unit or unconformity from the stratigraphic column."""
         self._stratigraphic_column.remove_unit(uuid=unit_uuid)
         self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
 
     def update_stratigraphic_column_order(self, new_order):
         """Update the order of units in the stratigraphic column."""
@@ -262,6 +393,8 @@ class ModellingDataManager:
             raise ValueError("new_order must be a list of unit uuids.")
         self._stratigraphic_column.update_order(new_order)
         self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
 
     def get_basal_contacts(self):
         """Get the basal contacts."""
@@ -271,7 +404,10 @@ class ModellingDataManager:
         """Get the unique faults from the fault traces."""
         if self._fault_traces is None or self._fault_traces['layer'] is None:
             return []
+        if self._fault_traces['fault_name_field'] is None:
+            return []
         unique_faults = set()
+
         for feature in self._fault_traces['layer'].getFeatures():
             fault_name = feature[self._fault_traces['fault_name_field']]
             unique_faults.add(str(fault_name))
@@ -332,19 +468,23 @@ class ModellingDataManager:
         """Get the stratigraphic column."""
         return self._stratigraphic_column
 
+    def clear_stratigraphic_column(self):
+        self._stratigraphic_column.clear()
+
     def update_stratigraphy(self):
         """Update the foliation features in the model manager."""
         print("Updating stratigraphy...")
         if self._model_manager is not None:
+            model_crs = self.get_model_crs()
             if self._basal_contacts is not None:
                 self._model_manager.update_contact_traces(
-                    qgsLayerToGeoDataFrame(self._basal_contacts['layer']),
+                    qgsLayerToGeoDataFrame(self._basal_contacts['layer'], target_crs=model_crs),
                     unit_name_field=self._basal_contacts['unitname_field'],
                 )
             if self._structural_orientations is not None:
                 print("Updating structural orientations...")
                 self._model_manager.update_structural_data(
-                    qgsLayerToGeoDataFrame(self._structural_orientations['layer']),
+                    qgsLayerToGeoDataFrame(self._structural_orientations['layer'], target_crs=model_crs),
                     strike_field=self._structural_orientations['strike_field'],
                     dip_field=self._structural_orientations['dip_field'],
                     unit_name_field=self._structural_orientations['unitname_field'],
@@ -370,8 +510,9 @@ class ModellingDataManager:
             self._fault_topology.remove_fault(fault)
         self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:
+            model_crs = self.get_model_crs()
             self._model_manager.update_fault_points(
-                qgsLayerToGeoDataFrame(self._fault_traces['layer']),
+                qgsLayerToGeoDataFrame(self._fault_traces['layer'], target_crs=model_crs),
                 fault_name_field=self._fault_traces['fault_name_field'],
                 fault_dip_field=self._fault_traces['fault_dip_field'],
                 fault_pitch_field=self._fault_traces.get('fault_pitch_field', None),
@@ -394,6 +535,22 @@ class ModellingDataManager:
         self._basal_contacts = None
         self._fault_traces = None
         self._structural_orientations = None
+
+    def _get_model_crs_authid(self):
+        """Get the model CRS authid string for serialization.
+        
+        Returns
+        -------
+        str or None
+            CRS authid string (e.g., 'EPSG:32633') or None if CRS is not valid.
+        """
+        if not self._model_crs:
+            return None
+        if not isinstance(self._model_crs, QgsCoordinateReferenceSystem):
+            return None
+        if not self._model_crs.isValid():
+            return None
+        return self._model_crs.authid()
 
     def to_dict(self):
         """Convert the data manager to a dictionary."""
@@ -423,6 +580,7 @@ class ModellingDataManager:
 
         return {
             'bounding_box': self._bounding_box.to_dict(),
+            'bounding_box_set': self._bounding_box_set,
             'basal_contacts': basal_contacts,
             'fault_traces': fault_traces,
             'structural_orientations': structural_orientations,
@@ -432,6 +590,9 @@ class ModellingDataManager:
             'dem_layer': dem_layer_name if self.dem_layer else None,
             'use_dem': self.use_dem,
             'elevation': self.elevation,
+            'widget_settings': self.widget_settings,
+            'model_crs': self._get_model_crs_authid(),
+            'use_project_crs': self._use_project_crs,
         }
 
     def from_dict(self, data):
@@ -444,6 +605,7 @@ class ModellingDataManager:
                 ymax=data['bounding_box']['maximum'][1],
                 zmin=data['bounding_box']['origin'][2],
                 zmax=data['bounding_box']['maximum'][2],
+                mark_set=data.get('bounding_box_set', True),
             )
         if 'dem_layer' in data and data['dem_layer'] is not None:
             dem_layer = QgsProject.instance().mapLayersByName(data['dem_layer'])
@@ -467,6 +629,16 @@ class ModellingDataManager:
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
             self.stratigraphic_column_callback()
+        if 'widget_settings' in data:
+            self.widget_settings = data['widget_settings']
+        
+        # Load model CRS settings
+        if 'use_project_crs' in data:
+            self._use_project_crs = data['use_project_crs']
+        if 'model_crs' in data and data['model_crs'] is not None:
+            crs = QgsCoordinateReferenceSystem(data['model_crs'])
+            if crs.isValid():
+                self.set_model_crs(crs, use_project_crs=self._use_project_crs)
 
     def update_from_dict(self, data):
         """Update the data manager from a dictionary."""
@@ -478,9 +650,10 @@ class ModellingDataManager:
                 ymax=data['bounding_box']['maximum'][1],
                 zmin=data['bounding_box']['origin'][2],
                 zmax=data['bounding_box']['maximum'][2],
+                mark_set=data.get('bounding_box_set', True),
             )
         else:
-            self.set_bounding_box(**default_bounding_box)
+            self.set_bounding_box(**default_bounding_box, mark_set=False)
         if 'dem_layer' in data and data['dem_layer'] is not None:
             dem_layer = QgsProject.instance().mapLayersByName(data['dem_layer'])
             if dem_layer:
@@ -538,11 +711,26 @@ class ModellingDataManager:
         else:
             self._stratigraphic_column.clear()
 
+        if 'widget_settings' in data:
+            self.widget_settings = data['widget_settings']
+        else:
+            self.widget_settings = {}
+        
+        # Load model CRS settings
+        if 'use_project_crs' in data:
+            self._use_project_crs = data['use_project_crs']
+        else:
+            self._use_project_crs = True
+            
+        if 'model_crs' in data and data['model_crs'] is not None:
+            crs = QgsCoordinateReferenceSystem(data['model_crs'])
+            if crs.isValid():
+                self.set_model_crs(crs, use_project_crs=self._use_project_crs)
+
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
-
-    def find_layer_by_name(self, layer_name):
+    def find_layer_by_name(self, layer_name, layer_type=QgsVectorLayer):
         """Find a layer by name in the project."""
         if layer_name is None:
             return None
@@ -557,11 +745,14 @@ class ModellingDataManager:
                     log_level=2,
                 )
             i = 0
-            while i < len(layers) and not issubclass(type(layers[i]), QgsVectorLayer):
+
+            while i < len(layers) and not issubclass(type(layers[i]), layer_type):
 
                 i += 1
-
-            if issubclass(type(layers[i]), QgsVectorLayer):
+            if i >= len(layers):
+                self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
+                return None
+            if issubclass(type(layers[i]), layer_type):
                 return layers[i]
             else:
                 self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
@@ -574,18 +765,32 @@ class ModellingDataManager:
         self.feature_data[feature_name][feature_data['layer_name']] = feature_data
         self.logger(message=f"Updated feature data for '{feature_name}'.")
 
+    def set_widget_settings(self, widget_name: str, settings: dict):
+        """Store widget settings for persistence."""
+        self.widget_settings[widget_name] = settings
+
+    def get_widget_settings(self, widget_name: str, default=None):
+        """Retrieve persisted widget settings."""
+        if widget_name in self.widget_settings:
+            return self.widget_settings[widget_name]
+        return default
+
     def add_foliation_to_model(self, foliation_name: str, *, folded_feature_name=None):
         """Add a foliation to the model."""
         if foliation_name not in self.feature_data:
             raise ValueError(f"Foliation '{foliation_name}' does not exist in the data manager.")
         foliation_data = self.feature_data[foliation_name]
+        model_crs = self.get_model_crs()
         for layer in foliation_data.values():
             layer['df'] = qgsLayerToGeoDataFrame(
-                layer['layer']
+                layer['layer'], target_crs=model_crs
             )  # Convert QgsVectorLayer to GeoDataFrame
         if self._model_manager:
             self._model_manager.add_foliation(
-                foliation_name, foliation_data, folded_feature_name=folded_feature_name,use_z_coordinate=True
+                foliation_name,
+                foliation_data,
+                folded_feature_name=folded_feature_name,
+                use_z_coordinate=True,
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
         else:
