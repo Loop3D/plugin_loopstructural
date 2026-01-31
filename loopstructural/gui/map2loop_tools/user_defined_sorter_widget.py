@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from PyQt5.QtWidgets import QMessageBox, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QVBoxLayout, QWidget
 
 from loopstructural.gui.modelling.stratigraphic_column import StratColumnWidget
 

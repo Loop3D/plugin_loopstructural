@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - geopandas may be unavailable in tests
 
 try:
     from pandas import DataFrame
-except ImportException:  # pragma: no cover - pandas may be unavailable in tests
+except ImportError:  # pragma: no cover - pandas may be unavailable in tests
     DataFrame = None
 
 

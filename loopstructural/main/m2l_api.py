@@ -515,7 +515,7 @@ def calculate_thickness(
     if calculator_type == "InterpolatedStructure":
         calculator = InterpolatedStructure(
             bounding_box=bounding_box,
-            # dtm_data=dtm_gdal,
+            dtm_data=dtm_gdal,
             is_strike=orientation_type == 'Strike',
             max_line_length=max_line_length,
         )
@@ -524,7 +524,7 @@ def calculate_thickness(
             raise ValueError("max_line_length parameter is required for StructuralPoint calculator")
         calculator = StructuralPoint(
             bounding_box=bounding_box,
-            # dtm_data=dtm_gdal,
+            dtm_data=dtm_gdal,
             is_strike=orientation_type == 'Strike',
             max_line_length=max_line_length,
         )
