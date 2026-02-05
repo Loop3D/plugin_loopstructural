@@ -33,7 +33,9 @@ if importlib.util.find_spec("LoopStructural") is None:
     )
 from loopstructural.debug_manager import DebugManager
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
-from loopstructural.gui.loop_widget import LoopWidget
+
+# from loopstructural.gui.loop_widget import LoopWidget
+from loopstructural.gui.new_widget import LoopWidget
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.processing import (
