@@ -25,29 +25,52 @@ class StratigraphicUnitWidget(QWidget):
         uic.loadUi(os.path.join(os.path.dirname(__file__), "stratigraphic_unit.ui"), self)
         self.uuid = uuid
         self._name = name if name is not None else ""
-        # Convert colour from RGB tuple or string to Qt-compatible hex string
-        if colour is not None:
-            if (
-                isinstance(colour, tuple)
-                or isinstance(colour, list)
-                or isinstance(colour, np.ndarray)
-            ) and len(colour) == 3:
-                # Convert (r, g, b) to "#RRGGBB"
-                if all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in colour):
-                    rgb = [int(c * 255) for c in colour]
-                else:
-                    rgb = [int(c) for c in colour]
-                self.colour = "#{:02x}{:02x}{:02x}".format(*rgb)
-            else:
-                self.colour = str(colour)
-        else:
-            self.colour = ""
+        # Convert colour using helper method
+        self.colour = self._convert_colour(colour)
         self.thickness = thickness  # Optional thickness attribute
-        # Add delete button
+        # Connect buttons
         self.buttonDelete.clicked.connect(self.request_delete)
+        self.buttonColour.clicked.connect(self.onColourSelectClicked)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
-        self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
+        # Initialize UI widgets with the provided values
+        self.lineEditName.setText(self._name)
+        self.spinBoxThickness.setValue(self.thickness)
+        # Set color button style instead of widget background
+        self._update_colour_button()
+
+    def _convert_colour(self, colour):
+        """Convert colour from various formats to Qt-compatible hex string.
+        
+        Parameters
+        ----------
+        colour : str, tuple, list, np.ndarray, or None
+            Colour in various formats: hex string, RGB tuple/list/array
+            
+        Returns
+        -------
+        str
+            Hex color string in format "#RRGGBB", or empty string if None
+        """
+        if colour is None:
+            return ""
+        
+        # If it's already a string, return it
+        if isinstance(colour, str):
+            return colour
+            
+        # Handle tuple, list, or numpy array of RGB values
+        if (isinstance(colour, (tuple, list)) or isinstance(colour, np.ndarray)) and len(colour) >= 3:
+            # Convert (r, g, b) to "#RRGGBB"
+            # Check if values are normalized floats (0.0-1.0) or integers (0-255)
+            if all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in colour[:3]):
+                rgb = [int(c * 255) for c in colour[:3]]
+            else:
+                rgb = [int(c) for c in colour[:3]]
+            return "#{:02x}{:02x}{:02x}".format(*rgb)
+        
+        # Fallback: try to convert to string
+        return str(colour)
 
     @property
     def name(self):
@@ -69,6 +92,15 @@ class StratigraphicUnitWidget(QWidget):
         self.spinBoxThickness.setValue(thickness)
         self.validateFields()
 
+    def _update_colour_button(self):
+        """Update the color button's appearance to show the current color."""
+        if self.colour:
+            self.buttonColour.setStyleSheet(
+                f"background-color: {self.colour}; border: 1px solid #999;"
+            )
+        else:
+            self.buttonColour.setStyleSheet("background-color: #cccccc; border: 1px solid #999;")
+
     def onColourSelectClicked(self):
         """Open a color dialog to select a color for the stratigraphic unit."""
         from PyQt5.QtWidgets import QColorDialog
@@ -76,7 +108,7 @@ class StratigraphicUnitWidget(QWidget):
         color = QColorDialog.getColor()
         if color.isValid():
             self.colour = color.name()
-            self.setStyleSheet(f"background-color: {self.colour};")
+            self._update_colour_button()
             self.colourChanged.emit(self.colour)
 
     def onThicknessChanged(self, thickness: float):
@@ -102,10 +134,6 @@ class StratigraphicUnitWidget(QWidget):
     def request_delete(self):
 
         self.deleteRequested.emit(self)
-
-    def mouseDoubleClickEvent(self, event):
-        """Handle double-click event to open color selection dialog."""
-        self.onColourSelectClicked()
 
     def validateFields(self):
         """Validate the widget fields and update UI hints."""
@@ -133,7 +161,8 @@ class StratigraphicUnitWidget(QWidget):
         # Safely update internal state first
         if data:
             self.name = str(data.get("name", ""))
-            self.colour = data.get("colour", "")
+            # Convert colour using helper method to handle various formats
+            self.colour = self._convert_colour(data.get("colour"))
             # If a thickness value is provided, update the widget's thickness
             if 'thickness' in data and data.get('thickness') is not None:
                 try:
@@ -161,7 +190,7 @@ class StratigraphicUnitWidget(QWidget):
                         # Widget has been deleted; abort GUI updates
                         return
                 try:
-                    self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
+                    self._update_colour_button()
                 except RuntimeError:
                     return
             else:
@@ -171,7 +200,7 @@ class StratigraphicUnitWidget(QWidget):
                     except RuntimeError:
                         return
                 try:
-                    self.setStyleSheet("")
+                    self._update_colour_button()
                 except RuntimeError:
                     return
 

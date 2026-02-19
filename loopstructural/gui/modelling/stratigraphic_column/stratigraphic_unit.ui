@@ -11,7 +11,39 @@
    </rect>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QPushButton" name="buttonColour">
+     <property name="toolTip">
+      <string>Click to change color</string>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>40</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>40</width>
+       <height>16777215</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QLineEdit" name="lineEditName"/>
+   </item>
    <item row="0" column="2">
+    <widget class="QLabel" name="labelThickness">
+     <property name="text">
+      <string>Thickness:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="3">
     <widget class="QDoubleSpinBox" name="spinBoxThickness">
      <property name="suffix">
       <string> m</string>
@@ -27,17 +59,7 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
-    <widget class="QLineEdit" name="lineEditName"/>
-   </item>
-   <item row="0" column="1">
-    <widget class="QLabel" name="labelThickness">
-     <property name="text">
-      <string>Thickness:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="3">
+   <item row="0" column="4">
     <widget class="QPushButton" name="buttonDelete">
      <property name="toolTip">
       <string>Delete this unit</string>
