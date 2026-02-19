@@ -28,6 +28,54 @@ from .splot import SPlotDialog
 logger = getLogger(__name__)
 
 
+# Helper functions for retrieving fault dip and pitch from stored data or calculations
+def retrieve_dip_value(fault, model_manager):
+    """
+    Retrieve dip value from stored fault data or calculate from normal vector.
+    
+    Args:
+        fault: The fault object with a name and fault_normal_vector attribute
+        model_manager: The model manager with faults dictionary
+        
+    Returns:
+        float: The dip angle in degrees
+    """
+    dip = None
+    if model_manager is not None and fault.name in model_manager.faults:
+        fault_data = model_manager.faults[fault.name].get('data')
+        if fault_data is not None and 'dip' in fault_data.columns and not fault_data.empty:
+            dip = fault_data['dip'].mean()
+    
+    # Fallback: calculate from normal vector if not found in stored data
+    if dip is None:
+        try:
+            dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
+        except Exception:
+            dip = 90  # Default value if calculation fails
+    
+    return dip
+
+
+def retrieve_pitch_value(fault, model_manager):
+    """
+    Retrieve pitch value from stored fault data.
+    
+    Args:
+        fault: The fault object with a name attribute
+        model_manager: The model manager with faults dictionary
+        
+    Returns:
+        float: The pitch angle in degrees (default 0)
+    """
+    pitch = 0
+    if model_manager is not None and fault.name in model_manager.faults:
+        fault_data = model_manager.faults[fault.name].get('data')
+        if fault_data is not None and 'pitch' in fault_data.columns and not fault_data.empty:
+            pitch = fault_data['pitch'].mean()
+    
+    return pitch
+
+
 class BaseFeatureDetailsPanel(QWidget):
     def __init__(self, parent=None, *, feature=None, model_manager=None, data_manager=None):
         super().__init__(parent)
@@ -579,25 +627,9 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
             raise ValueError("Fault must be provided.")
         self.fault = fault
         
-        # Try to get dip from stored fault data first
-        dip = None
-        if model_manager is not None and fault.name in model_manager.faults:
-            fault_data = model_manager.faults[fault.name].get('data')
-            if fault_data is not None and 'dip' in fault_data.columns and not fault_data.empty:
-                dip = fault_data['dip'].mean()
-        
-        # Fallback: calculate from normal vector if not found in stored data
-        if dip is None:
-            try:
-                dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
-            except Exception:
-                dip = 90  # Default value if calculation fails
-
-        pitch = 0
-        if model_manager is not None and fault.name in model_manager.faults:
-            fault_data = model_manager.faults[fault.name].get('data')
-            if fault_data is not None and 'pitch' in fault_data.columns and not fault_data.empty:
-                pitch = fault_data['pitch'].mean()
+        # Retrieve dip and pitch using helper functions
+        dip = retrieve_dip_value(fault, model_manager)
+        pitch = retrieve_pitch_value(fault, model_manager)
         
         self.fault_parameters = {
             'displacement': fault.displacement,
