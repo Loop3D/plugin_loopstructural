@@ -148,17 +148,18 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> Optional[gpd.GeoDataFrame]
         if source_crs.isValid() and source_crs != target_crs:
             transform = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
             output_crs = target_crs
-
     for feature in features:
         geom = feature.geometry()
         if geom.isEmpty():
             continue
-
+        
         # Transform geometry if needed
         if transform is not None:
             geom_copy = QgsGeometry(geom)
             try:
                 result = geom_copy.transform(transform)
+                if result == 0:
+                    data['geometry'].append(geom_copy)
                 if result != 0:
                     # Transform returned error code
                     logger.warning(
