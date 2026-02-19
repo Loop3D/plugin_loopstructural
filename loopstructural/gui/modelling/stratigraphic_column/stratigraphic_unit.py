@@ -43,11 +43,13 @@ class StratigraphicUnitWidget(QWidget):
         else:
             self.colour = ""
         self.thickness = thickness  # Optional thickness attribute
-        # Add delete button
+        # Connect buttons
         self.buttonDelete.clicked.connect(self.request_delete)
+        self.buttonColour.clicked.connect(self.onColourSelectClicked)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
-        self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
+        # Set color button style instead of widget background
+        self._update_colour_button()
 
     @property
     def name(self):
@@ -69,6 +71,15 @@ class StratigraphicUnitWidget(QWidget):
         self.spinBoxThickness.setValue(thickness)
         self.validateFields()
 
+    def _update_colour_button(self):
+        """Update the color button's appearance to show the current color."""
+        if self.colour:
+            self.buttonColour.setStyleSheet(
+                f"background-color: {self.colour}; border: 1px solid #999;"
+            )
+        else:
+            self.buttonColour.setStyleSheet("background-color: #cccccc; border: 1px solid #999;")
+
     def onColourSelectClicked(self):
         """Open a color dialog to select a color for the stratigraphic unit."""
         from PyQt5.QtWidgets import QColorDialog
@@ -76,7 +87,7 @@ class StratigraphicUnitWidget(QWidget):
         color = QColorDialog.getColor()
         if color.isValid():
             self.colour = color.name()
-            self.setStyleSheet(f"background-color: {self.colour};")
+            self._update_colour_button()
             self.colourChanged.emit(self.colour)
 
     def onThicknessChanged(self, thickness: float):
@@ -102,10 +113,6 @@ class StratigraphicUnitWidget(QWidget):
     def request_delete(self):
 
         self.deleteRequested.emit(self)
-
-    def mouseDoubleClickEvent(self, event):
-        """Handle double-click event to open color selection dialog."""
-        self.onColourSelectClicked()
 
     def validateFields(self):
         """Validate the widget fields and update UI hints."""
@@ -161,7 +168,7 @@ class StratigraphicUnitWidget(QWidget):
                         # Widget has been deleted; abort GUI updates
                         return
                 try:
-                    self.setStyleSheet(f"background-color: {self.colour};" if self.colour else "")
+                    self._update_colour_button()
                 except RuntimeError:
                     return
             else:
@@ -171,7 +178,7 @@ class StratigraphicUnitWidget(QWidget):
                     except RuntimeError:
                         return
                 try:
-                    self.setStyleSheet("")
+                    self._update_colour_button()
                 except RuntimeError:
                     return
 
