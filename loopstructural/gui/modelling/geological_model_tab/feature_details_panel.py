@@ -578,9 +578,27 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         if fault is None:
             raise ValueError("Fault must be provided.")
         self.fault = fault
-        dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
+        
+        # Try to get dip from stored fault data first
+        dip = None
+        if model_manager is not None and fault.name in model_manager.faults:
+            fault_data = model_manager.faults[fault.name].get('data')
+            if fault_data is not None and 'dip' in fault_data.columns and not fault_data.empty:
+                dip = fault_data['dip'].mean()
+        
+        # Fallback: calculate from normal vector if not found in stored data
+        if dip is None:
+            try:
+                dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
+            except Exception:
+                dip = 90  # Default value if calculation fails
 
         pitch = 0
+        if model_manager is not None and fault.name in model_manager.faults:
+            fault_data = model_manager.faults[fault.name].get('data')
+            if fault_data is not None and 'pitch' in fault_data.columns and not fault_data.empty:
+                pitch = fault_data['pitch'].mean()
+        
         self.fault_parameters = {
             'displacement': fault.displacement,
             'major_axis_length': fault.fault_major_axis,
