@@ -121,18 +121,35 @@ class TestGridExport(unittest.TestCase):
             with open(temp_path, 'r') as f:
                 lines = f.readlines()
             
-            # Should still create file with zeros
+            # Should create file with header
+            self.assertGreater(len(lines), 0)
             self.assertIn("# ASCII Grid Export: test_grid_no_scalars", lines[0])
-            self.assertGreaterEqual(len(lines), 9)  # Header + 4 data lines
             
-            # Verify that values are zero
-            data_lines = lines[5:]
+            # Count non-header lines (data lines)
+            header_count = 0
+            for line in lines:
+                if line.strip().startswith("#"):
+                    header_count += 1
+                else:
+                    break
+            
+            # We should have at least some header and data lines
+            self.assertGreater(header_count, 0)
+            
+            # Verify data lines have zeros for missing scalar data
+            data_lines = lines[header_count:]
+            data_count = 0
             for line in data_lines:
                 if line.strip():
                     parts = line.strip().split()
                     if len(parts) == 4:
+                        data_count += 1
                         value = float(parts[3])
+                        # Should be zero for missing scalar data
                         self.assertAlmostEqual(value, 0.0, places=5)
+            
+            # Should have data for the 4 cells
+            self.assertEqual(data_count, 4, f"Expected 4 data lines, got {data_count}")
             
         finally:
             Path(temp_path).unlink(missing_ok=True)
