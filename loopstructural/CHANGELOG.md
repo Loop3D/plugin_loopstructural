@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.12...v0.1.13) (2026-02-19)
+
+
+### Bug Fixes
+
+* handle geometry transformation result in qgsLayerToGeoDataFrame ([960ac02](https://github.com/Loop3D/plugin_loopstructural/commit/960ac025c2828560f0fde71f29554f02fd306a96))
+
 ## [0.1.12](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.11...v0.1.12) (2026-01-31)
 
 
