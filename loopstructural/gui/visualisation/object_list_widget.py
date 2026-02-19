@@ -1,3 +1,5 @@
+import logging
+
 import pyvista as pv
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
@@ -12,6 +14,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ObjectListWidget(QWidget):
@@ -262,11 +266,19 @@ class ObjectListWidget(QWidget):
         except ImportError:
             has_geoh5py = False
 
-        if hasattr(object, "faces"):  # Likely a surface/mesh
+        # Check if this is a grid/voxel type (UniformGrid, ImageData, StructuredGrid, RectilinearGrid)
+        is_grid = type(mesh).__name__ in ['UniformGrid', 'ImageData', 'StructuredGrid', 'RectilinearGrid']
+        
+        if is_grid:
+            # Grid/voxel meshes support ASCII export
+            formats = ["vtk", "ascii"]
+            if has_geoh5py:
+                formats.append("geoh5")
+        elif hasattr(mesh, "faces"):  # Likely a surface/mesh
             formats = ["obj", "vtk", "ply"]
             if has_geoh5py:
                 formats.append("geoh5")
-        elif hasattr(object, "points"):  # Likely a point cloud
+        elif hasattr(mesh, "points"):  # Likely a point cloud
             formats = ["vtp"]
             if has_geoh5py:
                 formats.append("geoh5")
@@ -279,6 +291,7 @@ class ObjectListWidget(QWidget):
             "vtk": "VTK (*.vtk)",
             "ply": "PLY (*.ply)",
             "vtp": "VTP (*.vtp)",
+            "ascii": "ASCII Grid (*.txt)",
             "geoh5": "Geoh5 (*.geoh5)",
         }
         filters = ";;".join([filter_map[f] for f in formats])
@@ -312,6 +325,9 @@ class ObjectListWidget(QWidget):
                     if hasattr(mesh, "save")
                     else pv.save_meshio(file_path, mesh)
                 )
+            elif selected_format == "ascii":
+                # Export grid/voxel as ASCII: x, y, z, value format
+                self._export_grid_ascii(mesh, file_path, object_label)
             elif selected_format == "geoh5":
                 with geoh5py.Geoh5(file_path, overwrite=True) as geoh5:
                     if hasattr(mesh, "faces"):
@@ -320,10 +336,57 @@ class ObjectListWidget(QWidget):
                         )
                     else:
                         geoh5.add_points(name=object_label, vertices=mesh.points)
-            print(f"Exported {object_label} to {file_path} as {selected_format}")
+            logger.info(f"Exported {object_label} to {file_path} as {selected_format}")
         except Exception as e:
-            print(f"Failed to export object: {e}")
+            logger.error(f"Failed to export object: {e}")
         # Logic for exporting the object
+
+    def _export_grid_ascii(self, mesh, file_path, object_label):
+        """Export a grid/voxel mesh to ASCII format.
+        
+        Format: x, y, z, value (one line per cell center)
+        
+        Parameters
+        ----------
+        mesh : pyvista grid mesh
+            The grid mesh to export
+        file_path : str
+            Path to the output file
+        object_label : str
+            Name of the object (used to determine which scalar array to export)
+        """
+        import numpy as np
+        
+        # Get cell centers
+        cell_centers = mesh.cell_centers()
+        centers = cell_centers.points
+        
+        # Get scalar values - try to use the active scalars or the first available array
+        scalar_name = mesh.active_scalars_name
+        if scalar_name is None:
+            # Try to find any cell data array
+            if mesh.cell_data:
+                scalar_name = list(mesh.cell_data.keys())[0]
+        
+        if scalar_name is not None:
+            values = mesh.cell_data[scalar_name]
+        else:
+            # If no scalar data, use zeros
+            values = np.zeros(mesh.n_cells)
+        
+        # Write to file
+        with open(file_path, 'w') as f:
+            f.write(f"# ASCII Grid Export: {object_label}\n")
+            f.write(f"# Format: x y z value\n")
+            f.write(f"# Number of cells: {mesh.n_cells}\n")
+            if scalar_name:
+                f.write(f"# Scalar field: {scalar_name}\n")
+            f.write("#\n")
+            
+            for i in range(len(centers)):
+                x, y, z = centers[i]
+                value = values[i]
+                f.write(f"{x:.6f} {y:.6f} {z:.6f} {value:.6f}\n")
 
     def remove_selected_object(self):
         selected_items = self.treeWidget.selectedItems()
