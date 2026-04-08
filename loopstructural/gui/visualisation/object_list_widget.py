@@ -376,7 +376,7 @@ class ObjectListWidget(QWidget):
         # Write to file
         with open(file_path, 'w') as f:
             f.write(f"# ASCII Grid Export: {object_label}\n")
-            f.write(f"# Format: x y z value\n")
+            f.write("# Format: x y z value\n")
             f.write(f"# Number of cells: {mesh.n_cells}\n")
             if scalar_name:
                 f.write(f"# Scalar field: {scalar_name}\n")

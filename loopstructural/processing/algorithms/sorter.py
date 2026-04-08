@@ -415,7 +415,7 @@ def build_input_frames(
                 dict(
                     layerId=f.id(),
                     name=f[unit_name_field],
-                    minAge=QVariantCompatToFloat(f, min_age_field),
+                    minAge=qvariantToFloat(f, min_age_field),
                     maxAge=qvariantToFloat(f, max_age_field),
                     group=f[group_field],
                 )
