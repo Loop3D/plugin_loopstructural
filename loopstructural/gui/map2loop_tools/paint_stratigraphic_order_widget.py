@@ -2,10 +2,9 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
-
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from ...main.m2l_api import paint_stratigraphic_order
 
@@ -185,7 +184,6 @@ class PaintStratigraphicOrderWidget(QWidget):
 
                 # Step 1: create a memory copy of the geology layer and copy attributes/geometry
                 try:
-                    from PyQt5.QtCore import QVariant
                     from qgis.core import (
                         QgsFeature,
                         QgsField,
@@ -197,6 +195,8 @@ class PaintStratigraphicOrderWidget(QWidget):
                         QgsVectorLayer,
                         QgsWkbTypes,
                     )
+
+                    from loopstructural.gui.compatibility import QVariantCompat
 
                     geom_type = QgsWkbTypes.displayString(geology_layer.wkbType())
                     crs_auth = (
@@ -240,7 +240,7 @@ class PaintStratigraphicOrderWidget(QWidget):
                 try:
                     if field_name not in [f.name() for f in mem_layer.fields()]:
                         mem_layer.startEditing()
-                        mem_dp.addAttributes([QgsField(field_name, QVariant.Int)])
+                        mem_dp.addAttributes([QgsField(field_name, QVariantCompat.Int)])
                         mem_layer.updateFields()
                         mem_layer.commitChanges()
 

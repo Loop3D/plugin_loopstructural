@@ -1,4 +1,3 @@
-from PyQt5.QtCore import QVariant
 from qgis.core import (
     QgsFeature,
     QgsField,
@@ -7,6 +6,8 @@ from qgis.core import (
     QgsPoint,
     QgsVectorLayer,
 )
+
+from loopstructural.gui.compatibility import QVariantCompat
 
 
 def line_to_point(input_layer_path, output_layer_path):
@@ -18,7 +19,7 @@ def line_to_point(input_layer_path, output_layer_path):
 
     # Create an empty point layer
     fields = QgsFields()
-    fields.append(QgsField("id", QVariant.Int))
+    fields.append(QgsField("id", QVariantCompat.Int))
     point_layer = QgsVectorLayer("Point?crs=" + line_layer.crs().toWkt(), "point_layer", "memory")
     point_layer.dataProvider().addAttributes(fields)
     point_layer.updateFields()

@@ -1,7 +1,7 @@
 import os
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtSvg import QGraphicsSvgItem
+from qgis.PyQt import QtCore, QtGui, QtWidgets
+from qgis.PyQt.QtSvg import QGraphicsSvgItem
 
 
 class TopologyNode(QtWidgets.QGraphicsItem):

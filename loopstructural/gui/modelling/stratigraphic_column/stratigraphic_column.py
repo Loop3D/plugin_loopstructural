@@ -1,5 +1,5 @@
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
-from PyQt5.QtWidgets import (
+from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QListWidget,
     QListWidgetItem,

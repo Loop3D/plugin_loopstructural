@@ -1,9 +1,9 @@
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QWidget
 
 from ....main.helpers import ColumnMatcher, get_layer_names
 

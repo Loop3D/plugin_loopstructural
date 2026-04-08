@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, Tuple
 
-from PyQt5.QtCore import pyqtSignal
 from pyvistaqt import QtInteractor
+from qgis.PyQt.QtCore import pyqtSignal
 
 
 class LoopPyVistaQTPlotter(QtInteractor):

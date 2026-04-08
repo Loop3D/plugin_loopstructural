@@ -1,40 +1,42 @@
-from typing import Any, Optional
-from osgeo import gdal
-import pandas as pd
 import json
+from typing import Any, Optional
 
-from PyQt5.QtCore import QVariant
+import pandas as pd
+
+# ────────────────────────────────────────────────
+#  map2loop sorters
+# ────────────────────────────────────────────────
+from map2loop.sorter import (
+    SorterAgeBased,
+    SorterAlpha,
+    SorterMaximiseContacts,
+    SorterObservationProjections,
+    SorterUseHint,  # kept for backwards compatibility
+    SorterUseNetworkX,
+)
+from osgeo import gdal
 from qgis.core import (
-    QgsFeatureSink,
-    QgsFields,
-    QgsField,
     QgsFeature,
+    QgsFeatureSink,
+    QgsField,
+    QgsFields,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
     QgsProcessingException,
     QgsProcessingFeedback,
     QgsProcessingParameterEnum,
-    QgsProcessingParameterFileDestination,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
     QgsProcessingParameterField,
+    QgsProcessingParameterFileDestination,
     QgsProcessingParameterRasterLayer,
     QgsVectorLayer,
-    QgsWkbTypes
+    QgsWkbTypes,
 )
 
-# ────────────────────────────────────────────────
-#  map2loop sorters
-# ────────────────────────────────────────────────
-from map2loop.sorter import (
-    SorterAlpha,
-    SorterAgeBased,
-    SorterMaximiseContacts,
-    SorterObservationProjections,
-    SorterUseNetworkX,
-    SorterUseHint,      # kept for backwards compatibility
-)
+from loopstructural.gui.compatibility import QVariantCompat
+
 from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame, qvariantToFloat
 
 # a lookup so we don’t need a giant if/else block
@@ -47,17 +49,19 @@ SORTER_LIST = {
     "Observation projections": SorterObservationProjections,
 }
 
+
 class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
     """
     Creates a one-column ‘stratigraphic column’ table ordered
     by the selected map2loop sorter.
     """
+
     METHOD = "METHOD"
     INPUT_GEOLOGY = "INPUT_GEOLOGY"
     INPUT_STRUCTURE = "INPUT_STRUCTURE"
     INPUT_DTM = "INPUT_DTM"
     INPUT_STRATI_COLUMN = "INPUT_STRATI_COLUMN"
-    SORTING_ALGORITHM  = "SORTING_ALGORITHM"
+    SORTING_ALGORITHM = "SORTING_ALGORITHM"
     OUTPUT = "OUTPUT"
     CONTACTS_LAYER = "CONTACTS_LAYER"
 
@@ -81,21 +85,43 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
         selected_algorithm = parameters.get(self.SORTING_ALGORITHM, 0)
 
         if selected_method == 0:  # User-Defined selected
-            self.parameterDefinition(self.INPUT_STRATI_COLUMN).setMetadata({'widget_wrapper': {'visible': True}})
-            self.parameterDefinition(self.SORTING_ALGORITHM).setMetadata({'widget_wrapper': {'visible': False}})
-            self.parameterDefinition(self.INPUT_GEOLOGY).setMetadata({'widget_wrapper': {'visible': False}})
+            self.parameterDefinition(self.INPUT_STRATI_COLUMN).setMetadata(
+                {'widget_wrapper': {'visible': True}}
+            )
+            self.parameterDefinition(self.SORTING_ALGORITHM).setMetadata(
+                {'widget_wrapper': {'visible': False}}
+            )
+            self.parameterDefinition(self.INPUT_GEOLOGY).setMetadata(
+                {'widget_wrapper': {'visible': False}}
+            )
         else:  # Automatic selected
-            self.parameterDefinition(self.INPUT_GEOLOGY).setMetadata({'widget_wrapper': {'visible': True}})
-            self.parameterDefinition(self.SORTING_ALGORITHM).setMetadata({'widget_wrapper': {'visible': True}})
-            self.parameterDefinition(self.INPUT_STRATI_COLUMN).setMetadata({'widget_wrapper': {'visible': False}})
+            self.parameterDefinition(self.INPUT_GEOLOGY).setMetadata(
+                {'widget_wrapper': {'visible': True}}
+            )
+            self.parameterDefinition(self.SORTING_ALGORITHM).setMetadata(
+                {'widget_wrapper': {'visible': True}}
+            )
+            self.parameterDefinition(self.INPUT_STRATI_COLUMN).setMetadata(
+                {'widget_wrapper': {'visible': False}}
+            )
 
             # observation projects
             is_observation_projections = selected_algorithm == 5
-            self.parameterDefinition(self.INPUT_STRUCTURE).setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
-            self.parameterDefinition(self.INPUT_DTM).setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
-            self.parameterDefinition('DIP_FIELD').setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
-            self.parameterDefinition('DIPDIR_FIELD').setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
-            self.parameterDefinition('ORIENTATION_TYPE').setMetadata({'widget_wrapper': {'visible': is_observation_projections}})
+            self.parameterDefinition(self.INPUT_STRUCTURE).setMetadata(
+                {'widget_wrapper': {'visible': is_observation_projections}}
+            )
+            self.parameterDefinition(self.INPUT_DTM).setMetadata(
+                {'widget_wrapper': {'visible': is_observation_projections}}
+            )
+            self.parameterDefinition('DIP_FIELD').setMetadata(
+                {'widget_wrapper': {'visible': is_observation_projections}}
+            )
+            self.parameterDefinition('DIPDIR_FIELD').setMetadata(
+                {'widget_wrapper': {'visible': is_observation_projections}}
+            )
+            self.parameterDefinition('ORIENTATION_TYPE').setMetadata(
+                {'widget_wrapper': {'visible': is_observation_projections}}
+            )
 
         return super().updateParameters(parameters)
 
@@ -104,13 +130,13 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
     # ----------------------------------------------------------
     def initAlgorithm(self, config: Optional[dict[str, Any]] = None) -> None:
 
-         # enum so the user can pick the strategy from a dropdown
+        # enum so the user can pick the strategy from a dropdown
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.SORTING_ALGORITHM,
                 "Sorting strategy",
                 options=list(SORTER_LIST.keys()),
-                defaultValue="Observation projections",                       # Age-based is safest default
+                defaultValue="Observation projections",  # Age-based is safest default
             )
         )
 
@@ -119,7 +145,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_GEOLOGY,
                 "Geology polygons",
                 [QgsProcessing.TypeVectorPolygon],
-                optional=True
+                optional=True,
             )
         )
 
@@ -130,7 +156,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 parentLayerParameterName=self.INPUT_GEOLOGY,
                 type=QgsProcessingParameterField.Any,
                 defaultValue='UNITNAME',
-                optional=True
+                optional=True,
             )
         )
 
@@ -141,7 +167,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 parentLayerParameterName=self.INPUT_GEOLOGY,
                 type=QgsProcessingParameterField.Any,
                 defaultValue='MIN_AGE',
-                optional=True
+                optional=True,
             )
         )
 
@@ -152,7 +178,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 parentLayerParameterName=self.INPUT_GEOLOGY,
                 type=QgsProcessingParameterField.Any,
                 defaultValue='MAX_AGE',
-                optional=True
+                optional=True,
             )
         )
 
@@ -163,12 +189,12 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 parentLayerParameterName=self.INPUT_GEOLOGY,
                 type=QgsProcessingParameterField.Any,
                 defaultValue='GROUP',
-                optional=True
+                optional=True,
             )
         )
 
         self.addParameter(
-        QgsProcessingParameterFeatureSource(
+            QgsProcessingParameterFeatureSource(
                 self.INPUT_STRUCTURE,
                 "Structure",
                 [QgsProcessing.TypeVectorPoint],
@@ -183,7 +209,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 parentLayerParameterName=self.INPUT_STRUCTURE,
                 type=QgsProcessingParameterField.Any,
                 defaultValue='DIP',
-                optional=True
+                optional=True,
             )
         )
         self.addParameter(
@@ -193,7 +219,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 parentLayerParameterName=self.INPUT_STRUCTURE,
                 type=QgsProcessingParameterField.Any,
                 defaultValue='DIPDIR',
-                optional=True
+                optional=True,
             )
         )
 
@@ -201,8 +227,8 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterEnum(
                 'ORIENTATION_TYPE',
                 'Orientation Type',
-                options=['','Dip Direction', 'Strike'],
-                defaultValue=0
+                options=['', 'Dip Direction', 'Strike'],
+                defaultValue=0,
             )
         )
 
@@ -232,9 +258,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFileDestination(
-                "JSON_OUTPUT",
-                "Stratigraphic column json",
-                fileFilter="JSON files (*.json)"
+                "JSON_OUTPUT", "Stratigraphic column json", fileFilter="JSON files (*.json)"
             )
         )
 
@@ -254,19 +278,32 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
         in_layer = self.parameterAsVectorLayer(parameters, self.INPUT_GEOLOGY, context)
         output_file = self.parameterAsFileOutput(parameters, 'JSON_OUTPUT', context)
 
-        units_df, relationships_df, contacts_df= build_input_frames(in_layer,contacts_layer, feedback,parameters)
+        units_df, relationships_df, contacts_df = build_input_frames(
+            in_layer, contacts_layer, feedback, parameters
+        )
 
         if sorter_cls == SorterObservationProjections:
             geology_gdf = qgsLayerToGeoDataFrame(in_layer)
             structure = self.parameterAsVectorLayer(parameters, self.INPUT_STRUCTURE, context)
             dtm = self.parameterAsRasterLayer(parameters, self.INPUT_DTM, context)
-            if geology_gdf is None or geology_gdf.empty or not structure or not structure.isValid() or not dtm or not dtm.isValid():
-                raise QgsProcessingException("Structure and DTM layer are required for observation projections")
+            if (
+                geology_gdf is None
+                or geology_gdf.empty
+                or not structure
+                or not structure.isValid()
+                or not dtm
+                or not dtm.isValid()
+            ):
+                raise QgsProcessingException(
+                    "Structure and DTM layer are required for observation projections"
+                )
 
             structure_gdf = qgsLayerToGeoDataFrame(structure) if structure else None
             dtm_gdal = gdal.Open(dtm.source()) if dtm is not None and dtm.isValid() else None
 
-            unit_name_field = parameters.get('UNIT_NAME_FIELD', 'UNITNAME') if parameters else 'UNITNAME'
+            unit_name_field = (
+                parameters.get('UNIT_NAME_FIELD', 'UNITNAME') if parameters else 'UNITNAME'
+            )
             if unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
                 geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
 
@@ -276,7 +313,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             if dip_field != 'DIP' and dip_field in structure_gdf.columns:
                 structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
             orientation_type = self.parameterAsEnum(parameters, 'ORIENTATION_TYPE', context)
-            orientation_type_name = ['','Dip Direction', 'Strike'][orientation_type]
+            orientation_type_name = ['', 'Dip Direction', 'Strike'][orientation_type]
             if not orientation_type_name:
                 raise QgsProcessingException("Orientation Type is required")
             dipdir_field = parameters.get('DIPDIR_FIELD', 'DIPDIR') if parameters else 'DIPDIR'
@@ -290,24 +327,15 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 elif orientation_type_name == 'Dip Direction':
                     structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
             order = sorter_cls().sort(
-                units_df,
-                relationships_df,
-                contacts_df,
-                geology_gdf,
-                structure_gdf,
-                dtm_gdal
+                units_df, relationships_df, contacts_df, geology_gdf, structure_gdf, dtm_gdal
             )
         else:
-            order = sorter_cls().sort(
-                units_df,
-                relationships_df,
-                contacts_df
-            )
+            order = sorter_cls().sort(units_df, relationships_df, contacts_df)
 
         # 4 ► write an in-memory table with the result
         sink_fields = QgsFields()
-        sink_fields.append(QgsField("order", QVariant.Int))
-        sink_fields.append(QgsField("unit_name", QVariant.String))
+        sink_fields.append(QgsField("order", QVariantCompat.Int))
+        sink_fields.append(QgsField("unit_name", QVariantCompat.String))
 
         (sink, dest_id) = self.parameterAsSink(
             parameters,
@@ -335,10 +363,17 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
     def createInstance(self) -> QgsProcessingAlgorithm:
         return StratigraphySorterAlgorithm()
 
+
 # -------------------------------------------------------------------------
 #  Helper stub – you must replace with *your* conversion logic
 # -------------------------------------------------------------------------
-def build_input_frames(layer: QgsVectorLayer,contacts_layer: QgsVectorLayer, feedback, parameters, user_defined_units=None) -> tuple:
+def build_input_frames(
+    layer: QgsVectorLayer,
+    contacts_layer: QgsVectorLayer,
+    feedback,
+    parameters,
+    user_defined_units=None,
+) -> tuple:
     """
     Placeholder that turns the geology layer (and any other project
     layers) into the four objects required by the sorter.
@@ -352,17 +387,13 @@ def build_input_frames(layer: QgsVectorLayer,contacts_layer: QgsVectorLayer, fee
         units_record = []
         for i, row in enumerate(user_defined_units):
             units_record.append(
-                dict(
-                    layerId=i,
-                    name=row[1],
-                    minAge=row[2],
-                    maxAge=row[3],
-                    group=row[4]
-                    )
+                dict(layerId=i, name=row[1], minAge=row[2], maxAge=row[3], group=row[4])
             )
         units_df = pd.DataFrame.from_records(units_record)
     else:
-        unit_name_field = parameters.get('UNIT_NAME_FIELD', 'UNITNAME') if parameters else 'UNITNAME'
+        unit_name_field = (
+            parameters.get('UNIT_NAME_FIELD', 'UNITNAME') if parameters else 'UNITNAME'
+        )
         min_age_field = parameters.get('MIN_AGE_FIELD', 'MIN_AGE') if parameters else 'MIN_AGE'
         max_age_field = parameters.get('MAX_AGE_FIELD', 'MAX_AGE') if parameters else 'MAX_AGE'
         group_field = parameters.get('GROUP_FIELD', 'GROUP') if parameters else 'GROUP'
@@ -384,7 +415,7 @@ def build_input_frames(layer: QgsVectorLayer,contacts_layer: QgsVectorLayer, fee
                 dict(
                     layerId=f.id(),
                     name=f[unit_name_field],
-                    minAge=qvariantToFloat(f, min_age_field),
+                    minAge=QVariantCompatToFloat(f, min_age_field),
                     maxAge=qvariantToFloat(f, max_age_field),
                     group=f[group_field],
                 )

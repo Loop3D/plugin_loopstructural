@@ -2,9 +2,9 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsProject, QgsVectorFileWriter
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
