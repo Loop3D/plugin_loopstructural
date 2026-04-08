@@ -1,5 +1,12 @@
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (
+from LoopStructural.modelling.features import StructuralFrame
+from LoopStructural.utils import (
+    normal_vector_to_strike_and_dip,
+    plungeazimuth2vector,
+    strikedip2vector,
+)
+from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
+from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -10,16 +17,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
 from qgis.utils import plugins
 
 from LoopStructural import getLogger
-from LoopStructural.modelling.features import StructuralFrame
-from LoopStructural.utils import (
-    normal_vector_to_strike_and_dip,
-    plungeazimuth2vector,
-    strikedip2vector,
-)
 
 from .bounding_box_widget import BoundingBoxWidget
 from .layer_selection_table import LayerSelectionTable
@@ -32,11 +32,11 @@ logger = getLogger(__name__)
 def retrieve_dip_value(fault, model_manager):
     """
     Retrieve dip value from stored fault data or calculate from normal vector.
-    
+
     Args:
         fault: The fault object with a name and fault_normal_vector attribute
         model_manager: The model manager with faults dictionary
-        
+
     Returns:
         float: The dip angle in degrees
     """
@@ -45,25 +45,25 @@ def retrieve_dip_value(fault, model_manager):
         fault_data = model_manager.faults[fault.name].get('data')
         if fault_data is not None and 'dip' in fault_data.columns and not fault_data.empty:
             dip = fault_data['dip'].mean()
-    
+
     # Fallback: calculate from normal vector if not found in stored data
     if dip is None:
         try:
             dip = normal_vector_to_strike_and_dip(fault.fault_normal_vector)[0, 1]
         except Exception:
             dip = 90  # Default value if calculation fails
-    
+
     return dip
 
 
 def retrieve_pitch_value(fault, model_manager):
     """
     Retrieve pitch value from stored fault data.
-    
+
     Args:
         fault: The fault object with a name attribute
         model_manager: The model manager with faults dictionary
-        
+
     Returns:
         float: The pitch angle in degrees (default 0)
     """
@@ -72,7 +72,7 @@ def retrieve_pitch_value(fault, model_manager):
         fault_data = model_manager.faults[fault.name].get('data')
         if fault_data is not None and 'pitch' in fault_data.columns and not fault_data.empty:
             pitch = fault_data['pitch'].mean()
-    
+
     return pitch
 
 
@@ -203,7 +203,7 @@ class BaseFeatureDetailsPanel(QWidget):
 
         # --- Per-feature export controls (for this panel's feature) ---
         try:
-            from PyQt5.QtWidgets import QFormLayout
+            from qgis.PyQt.QtWidgets import QFormLayout
         except Exception:
             # imports may fail outside QGIS environment; we'll handle at runtime
             pass
@@ -406,7 +406,8 @@ class BaseFeatureDetailsPanel(QWidget):
         try:
             # QGIS imports (guarded)
             from qgis.core import QgsFeature, QgsField, QgsPoint, QgsProject, QgsVectorLayer
-            from qgis.PyQt.QtCore import QVariant
+
+            from loopstructural.gui.compatibility import QVariantCompat
         except Exception as e:
             # Not running inside QGIS — nothing to do
             logger.info('Not running inside QGIS, cannot export points')
@@ -542,15 +543,15 @@ class BaseFeatureDetailsPanel(QWidget):
         qfields = []
         for c in cols:
             sample = gdf[c].dropna()
-            qtype = QVariant.String
+            qtype = QVariantCompat.String
             if not sample.empty:
                 v = sample.iloc[0]
                 if isinstance(v, (int,)):
-                    qtype = QVariant.Int
+                    qtype = QVariantCompat.Int
                 elif isinstance(v, (float,)):
-                    qtype = QVariant.Double
+                    qtype = QVariantCompat.Double
                 else:
-                    qtype = QVariant.String
+                    qtype = QVariantCompat.String
             prov.addAttributes([QgsField(c, qtype)])
             qfields.append(c)
         mem_layer.updateFields()
@@ -626,11 +627,11 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         if fault is None:
             raise ValueError("Fault must be provided.")
         self.fault = fault
-        
+
         # Retrieve dip and pitch using helper functions
         dip = retrieve_dip_value(fault, model_manager)
         pitch = retrieve_pitch_value(fault, model_manager)
-        
+
         self.fault_parameters = {
             'displacement': fault.displacement,
             'major_axis_length': fault.fault_major_axis,

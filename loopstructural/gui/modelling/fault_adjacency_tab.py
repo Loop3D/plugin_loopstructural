@@ -1,5 +1,6 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import (
     QGroupBox,
     QLabel,
     QPushButton,
@@ -8,8 +9,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 
 
 class FaultAdjacencyTab(QWidget):

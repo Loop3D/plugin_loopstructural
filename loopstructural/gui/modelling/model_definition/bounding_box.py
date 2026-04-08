@@ -1,9 +1,9 @@
 import os
 
 import numpy as np
-from PyQt5.QtWidgets import QWidget
 from qgis.core import QgsProject
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QWidget
 
 from loopstructural.main.data_manager import default_bounding_box
 

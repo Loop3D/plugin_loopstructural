@@ -2,11 +2,9 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
-from qgis.core import QgsRasterLayer
-from qgis.core import QgsMapLayerProxyModel
-
+from qgis.core import QgsMapLayerProxyModel, QgsRasterLayer
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.main.helpers import get_layer_names
 from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST

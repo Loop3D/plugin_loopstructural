@@ -27,8 +27,10 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QDateTime, QVariant
+from qgis.PyQt.QtCore import QDateTime
 from shapely.geometry import LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon
+
+from loopstructural.gui.compatibility import QVariantCompat
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +154,7 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> Optional[gpd.GeoDataFrame]
         geom = feature.geometry()
         if geom.isEmpty():
             continue
-        
+
         # Transform geometry if needed
         if transform is not None:
             geom_copy = QgsGeometry(geom)
@@ -181,7 +183,7 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> Optional[gpd.GeoDataFrame]
 
         # Copy field values
         for f in fields:
-            if f.type() == QVariant.String:
+            if f.type() == QVariantCompat.String:
                 data[f.name()].append(str(feature[f.name()]))
             else:
                 data[f.name()].append(feature[f.name()])
@@ -454,16 +456,16 @@ def GeoDataFrameToQgsLayer(
     fields = QgsFields()
     non_geom_cols = [c for c in geodataframe.columns if c != geodataframe.geometry.name]
 
-    def _qvariant_type(dtype) -> QVariant.Type:
+    def _qvariant_type(dtype) -> QVariantCompat.Type:
         if pd.api.types.is_integer_dtype(dtype):
-            return QVariant.Int
+            return QVariantCompat.Int
         if pd.api.types.is_float_dtype(dtype):
-            return QVariant.Double
+            return QVariantCompat.Double
         if pd.api.types.is_bool_dtype(dtype):
-            return QVariant.Bool
+            return QVariantCompat.Bool
         if pd.api.types.is_datetime64_any_dtype(dtype):
-            return QVariant.DateTime
-        return QVariant.String
+            return QVariantCompat.DateTime
+        return QVariantCompat.String
 
     for col in non_geom_cols:
         fields.append(QgsField(str(col), _qvariant_type(geodataframe[col].dtype)))
@@ -537,37 +539,37 @@ def GeoDataFrameToQgsLayer(
 # ---------- helpers ----------
 
 
-def _qvariant_type_from_dtype(dtype) -> QVariant.Type:
+def _qvariant_type_from_dtype(dtype) -> QVariantCompat.Type:
     """Map a pandas dtype to a QVariant type."""
     import numpy as np
 
     if np.issubdtype(dtype, np.integer):
         # prefer 64-bit when detected
         try:
-            return QVariant.LongLong
+            return QVariantCompat.LongLong
         except AttributeError:
-            return QVariant.Int
+            return QVariantCompat.Int
     if np.issubdtype(dtype, np.floating):
-        return QVariant.Double
+        return QVariantCompat.Double
     if np.issubdtype(dtype, np.bool_):
-        return QVariant.Bool
+        return QVariantCompat.Bool
     # datetimes
     try:
         import pandas as pd
 
         if pd.api.types.is_datetime64_any_dtype(dtype):
-            return QVariant.DateTime
+            return QVariantCompat.DateTime
         if pd.api.types.is_datetime64_ns_dtype(dtype):
-            return QVariant.DateTime
+            return QVariantCompat.DateTime
         if pd.api.types.is_datetime64_dtype(dtype):
-            return QVariant.DateTime
+            return QVariantCompat.DateTime
         if pd.api.types.is_timedelta64_dtype(dtype):
             # store as string "HH:MM:SS" fallback
-            return QVariant.String
+            return QVariantCompat.String
     except Exception:
         pass
     # default to string
-    return QVariant.String
+    return QVariantCompat.String
 
 
 def _fields_from_dataframe(df, drop_cols=None) -> QgsFields:
@@ -981,12 +983,12 @@ def dataframeToQgsTable(self, df, parameters, context, feedback, param_name):
 
     def to_qvariant_type(s):
         if pd.api.types.is_bool_dtype(s):
-            return QVariant.Bool
+            return QVariantCompat.Bool
         if pd.api.types.is_integer_dtype(s):
-            return QVariant.LongLong
+            return QVariantCompat.LongLong
         if pd.api.types.is_float_dtype(s):
-            return QVariant.Double
-        return QVariant.String
+            return QVariantCompat.Double
+        return QVariantCompat.String
 
     for col in df.columns:
         fields.append(QgsField(str(col), to_qvariant_type(df[col])))
@@ -1021,8 +1023,9 @@ def dataframeToQgsTable(self, df, parameters, context, feedback, param_name):
     return sink, dest_id
 
 
-from PyQt5.QtCore import QVariant
 from qgis.core import NULL
+
+from loopstructural.gui.compatibility import QVariantCompat
 
 
 def qvariantToFloat(f, field_name):
@@ -1041,7 +1044,7 @@ def qvariantToFloat(f, field_name):
         except ValueError:
             pass
     # residual QVariant
-    if isinstance(val, QVariant):
+    if isinstance(val, QVariantCompat):
         # toDouble() -> (value, ok)
         d, ok = val.toDouble()
         return float(d) if ok else None
@@ -1144,16 +1147,16 @@ def geodataframeToMemoryLayer(geodataframe, layer_name: str = "GeoDataFrame Laye
     fields = QgsFields()
     non_geom_cols = [c for c in geodataframe.columns if c != geodataframe.geometry.name]
 
-    def _qvariant_type(dtype) -> QVariant.Type:
+    def _qvariant_type(dtype) -> QVariantCompat.Type:
         if pd.api.types.is_integer_dtype(dtype):
-            return QVariant.Int
+            return QVariantCompat.Int
         if pd.api.types.is_float_dtype(dtype):
-            return QVariant.Double
+            return QVariantCompat.Double
         if pd.api.types.is_bool_dtype(dtype):
-            return QVariant.Bool
+            return QVariantCompat.Bool
         if pd.api.types.is_datetime64_any_dtype(dtype):
-            return QVariant.DateTime
-        return QVariant.String
+            return QVariantCompat.DateTime
+        return QVariantCompat.String
 
     for col in non_geom_cols:
         fields.append(QgsField(str(col), _qvariant_type(geodataframe[col].dtype)))

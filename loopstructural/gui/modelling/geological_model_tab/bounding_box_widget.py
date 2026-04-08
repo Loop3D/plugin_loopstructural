@@ -1,15 +1,16 @@
 import numpy as np
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from qgis.gui import QgsCollapsibleGroupBox
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import (
+    QDoubleSpinBox,
     QGridLayout,
     QLabel,
-    QDoubleSpinBox,
     QVBoxLayout,
     QWidget,
 )
-from qgis.gui import QgsCollapsibleGroupBox
 
 from LoopStructural import getLogger
+
 logger = getLogger(__name__)
 
 
@@ -108,7 +109,9 @@ class BoundingBoxWidget(QWidget):
         self.nsteps_z.valueChanged.connect(self._on_nsteps_changed)
 
         # register update callback so this widget stays in sync
-        if self.data_manager is not None and hasattr(self.data_manager, 'set_bounding_box_update_callback'):
+        if self.data_manager is not None and hasattr(
+            self.data_manager, 'set_bounding_box_update_callback'
+        ):
             try:
                 self.data_manager.set_bounding_box_update_callback(self._on_bounding_box_updated)
             except Exception:
@@ -125,7 +128,11 @@ class BoundingBoxWidget(QWidget):
             except Exception:
                 logger.debug('Failed to get bounding box from data_manager', exc_info=True)
                 bounding_box = None
-        if bounding_box is None and self.model_manager is not None and getattr(self.model_manager, 'model', None) is not None:
+        if (
+            bounding_box is None
+            and self.model_manager is not None
+            and getattr(self.model_manager, 'model', None) is not None
+        ):
             try:
                 bounding_box = getattr(self.model_manager.model, 'bounding_box', None)
             except Exception:
@@ -154,10 +161,16 @@ class BoundingBoxWidget(QWidget):
         if bb is None:
             return
         try:
-            bb.nsteps = np.array([int(self.nsteps_x.value()), int(self.nsteps_y.value()), int(self.nsteps_z.value())])
+            bb.nsteps = np.array(
+                [int(self.nsteps_x.value()), int(self.nsteps_y.value()), int(self.nsteps_z.value())]
+            )
         except Exception:
             try:
-                bb.nsteps = [int(self.nsteps_x.value()), int(self.nsteps_y.value()), int(self.nsteps_z.value())]
+                bb.nsteps = [
+                    int(self.nsteps_x.value()),
+                    int(self.nsteps_y.value()),
+                    int(self.nsteps_z.value()),
+                ]
             except Exception:
                 pass
         if self.model_manager is not None:
@@ -198,7 +211,11 @@ class BoundingBoxWidget(QWidget):
                     nsteps = list(bounding_box.nsteps)
                 except Exception:
                     try:
-                        nsteps = [int(bounding_box.nsteps[0]), int(bounding_box.nsteps[1]), int(bounding_box.nsteps[2])]
+                        nsteps = [
+                            int(bounding_box.nsteps[0]),
+                            int(bounding_box.nsteps[1]),
+                            int(bounding_box.nsteps[2]),
+                        ]
                     except Exception:
                         nsteps = None
                 if nsteps is not None:
