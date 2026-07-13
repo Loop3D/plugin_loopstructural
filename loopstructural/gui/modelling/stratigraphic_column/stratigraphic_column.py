@@ -1,14 +1,19 @@
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
+from qgis.core import QgsMapLayerProxyModel
+from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QHBoxLayout,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
+from loopstructural.main.helpers import ColumnMatcher, get_layer_names
 
 from .stratigraphic_unit import StratigraphicUnitWidget
 
@@ -66,6 +71,32 @@ class StratColumnWidget(QWidget):
             self.init_stratigraphic_column_from_basal_contacts
         )
         layout.addWidget(initFromBasalContactsButton)
+
+        # Layer/field pickers for pushing colours back onto a map layer
+        layerRow = QHBoxLayout()
+        self.unitsLayerComboBox = QgsMapLayerComboBox()
+        self.unitsLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+        self.unitsLayerComboBox.setAllowEmptyLayer(True)
+        self.unitsLayerComboBox.setCurrentIndex(-1)
+        self.unitsLayerFieldComboBox = QgsFieldComboBox()
+        self.unitsLayerComboBox.layerChanged.connect(self._on_units_layer_changed)
+        self.unitsLayerFieldComboBox.fieldChanged.connect(self._persist_units_layer_selection)
+        layerRow.addWidget(self.unitsLayerComboBox)
+        layerRow.addWidget(self.unitsLayerFieldComboBox)
+        layout.addLayout(layerRow)
+
+        # add apply colours to map button
+        applyColoursButton = QPushButton("Apply Colours to Map Layer")
+        applyColoursButton.setToolTip(
+            "Push the colours defined in the stratigraphic column onto the "
+            "selected layer above as a categorized renderer."
+        )
+        applyColoursButton.clicked.connect(self.apply_colours_to_layer)
+        layout.addWidget(applyColoursButton)
+
+        self._guess_units_layer()
+        self._restore_units_layer_selection()
+
         clearButton = QPushButton("Clear Stratigraphic Column")
         clearButton.clicked.connect(self.clearColumn)
         layout.addWidget(clearButton)
@@ -165,6 +196,81 @@ class StratColumnWidget(QWidget):
             self.update_display()
         else:
             print("Error: Data manager is not initialized.")
+
+    def _guess_units_layer(self):
+        """Attempt to auto-select the geological units layer and unit name field."""
+        layer_names = get_layer_names(self.unitsLayerComboBox)
+        matcher = ColumnMatcher(layer_names)
+        layer_match = matcher.find_match('GEOLOGY')
+        if layer_match and self.data_manager:
+            layer = self.data_manager.find_layer_by_name(layer_match)
+            if layer:
+                self.unitsLayerComboBox.setLayer(layer)
+
+    def _restore_units_layer_selection(self):
+        """Restore a previously persisted units layer/field selection."""
+        if not self.data_manager:
+            return
+        settings = self.data_manager.get_widget_settings('stratigraphic_column_widget', {})
+        if not settings:
+            return
+        if layer_name := settings.get('units_layer'):
+            layer = self.data_manager.find_layer_by_name(layer_name)
+            if layer:
+                self.unitsLayerComboBox.setLayer(layer)
+        if field := settings.get('units_layer_field'):
+            self.unitsLayerFieldComboBox.setField(field)
+
+    def _persist_units_layer_selection(self):
+        """Persist the current units layer/field selection."""
+        if not self.data_manager:
+            return
+        layer = self.unitsLayerComboBox.currentLayer()
+        self.data_manager.set_widget_settings(
+            'stratigraphic_column_widget',
+            {
+                'units_layer': layer.name() if layer else None,
+                'units_layer_field': self.unitsLayerFieldComboBox.currentField(),
+            },
+        )
+
+    def _on_units_layer_changed(self, layer):
+        """Update the field combo box when the units layer changes."""
+        self.unitsLayerFieldComboBox.setLayer(layer)
+        if layer:
+            fields = [field.name() for field in layer.fields()]
+            matcher = ColumnMatcher(fields)
+            if unit_match := matcher.find_match('UNITNAME'):
+                self.unitsLayerFieldComboBox.setField(unit_match)
+        self._persist_units_layer_selection()
+
+    def apply_colours_to_layer(self):
+        """Push the stratigraphic column's colours onto the selected units layer."""
+        if not self.data_manager:
+            print("Error: Data manager is not initialized.")
+            return
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+        if layer is None or not field_name:
+            QMessageBox.warning(
+                self,
+                "Apply Colours to Map Layer",
+                "Please select a units layer and unit name field above.",
+            )
+            return
+        applied = self.data_manager.apply_stratigraphic_colours_to_layer(layer, field_name)
+        if applied:
+            QMessageBox.information(
+                self,
+                "Apply Colours to Map Layer",
+                f"Applied stratigraphic column colours to layer '{layer.name()}'.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Apply Colours to Map Layer",
+                "Could not apply colours. The stratigraphic column may have no units.",
+            )
 
     def add_unit(self, *, unit_data=None, create_new=True):
         if unit_data is None:

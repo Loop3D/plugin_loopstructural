@@ -2,13 +2,40 @@ import json
 from collections import defaultdict
 
 import numpy as np
-from qgis.core import QgsCoordinateReferenceSystem, QgsPointXY, QgsProject, QgsVectorLayer
+from qgis.core import (
+    QgsCategorizedSymbolRenderer,
+    QgsCoordinateReferenceSystem,
+    QgsPointXY,
+    QgsProject,
+    QgsRendererCategory,
+    QgsSymbol,
+    QgsVectorLayer,
+)
+from qgis.PyQt.QtGui import QColor
 
 from LoopStructural import FaultTopology, StratigraphicColumn
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
+
+
+def _colour_to_qcolor(colour):
+    """Convert a stratigraphic unit colour (hex string, colour name, or RGB tuple/array) to a QColor."""
+    if colour is None:
+        return None
+    if isinstance(colour, str):
+        qcolour = QColor(colour)
+        return qcolour if qcolour.isValid() else None
+    if isinstance(colour, (tuple, list, np.ndarray)) and len(colour) >= 3:
+        rgb = list(colour[:3])
+        if all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in rgb):
+            rgb = [int(c * 255) for c in rgb]
+        else:
+            rgb = [int(c) for c in rgb]
+        return QColor(*rgb)
+    return None
+
 
 __title__ = "LoopStructural"
 default_bounding_box = {
@@ -346,6 +373,49 @@ class ModellingDataManager:
         self.update_stratigraphy()
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
+
+    def apply_stratigraphic_colours_to_layer(self, layer, field_name):
+        """Push the stratigraphic column's unit colours onto a map layer.
+
+        Builds a categorized renderer on the given layer, keyed by
+        ``field_name``, using the colour assigned to each unit in the
+        stratigraphic column.
+
+        Parameters
+        ----------
+        layer : QgsVectorLayer
+            The layer to style (e.g. the geological units/geology layer).
+        field_name : str
+            Name of the field on ``layer`` holding the stratigraphic unit name.
+
+        Returns
+        -------
+        bool
+            True if the renderer was applied, False otherwise (e.g. no layer
+            or field given, or no units in the stratigraphic column).
+        """
+        if layer is None or not field_name:
+            self.logger(message="No layer/unit name field set, cannot apply stratigraphic colours.")
+            return False
+
+        categories = []
+        for unit in self._stratigraphic_column.order:
+            if unit.element_type != StratigraphicColumnElementType.UNIT:
+                continue
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            qcolour = _colour_to_qcolor(unit.colour)
+            if qcolour is not None:
+                symbol.setColor(qcolour)
+            categories.append(QgsRendererCategory(unit.name, symbol, unit.name))
+
+        if not categories:
+            self.logger(message="Stratigraphic column has no units, cannot apply colours.")
+            return False
+
+        layer.setRenderer(QgsCategorizedSymbolRenderer(field_name, categories))
+        layer.triggerRepaint()
+        self.logger(message=f"Applied stratigraphic column colours to layer '{layer.name()}'.")
+        return True
 
     def get_stratigraphic_unit_names(self):
         """Get the names of the stratigraphic units in the column."""
