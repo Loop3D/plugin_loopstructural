@@ -3,7 +3,7 @@
 
 pytest-cov>=4
 packaging>=23
-pyvista>=0.4 #3D visualisation/vtk meshing
+pyvista>=0.48.4 #3D visualisation/vtk meshing
 LoopStructural>=1.6.23 #3D geological modelling
 geoh5py>=0.9 #saving models to hdf5
 dill>=0.4.1     #saving models to python
