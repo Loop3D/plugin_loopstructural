@@ -1,9 +1,11 @@
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
-from qgis.core import QgsMapLayerProxyModel
+from qgis.core import QgsMapLayerProxyModel, QgsStyle
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -93,6 +95,26 @@ class StratColumnWidget(QWidget):
         )
         applyColoursButton.clicked.connect(self.apply_colours_to_layer)
         layout.addWidget(applyColoursButton)
+
+        # Colour ramp picker + apply stratigraphic age button
+        ageRow = QHBoxLayout()
+        ageRow.addWidget(QLabel("Colour ramp:"))
+        self.strat_ageColorRampComboBox = QComboBox()
+        ramp_names = sorted(QgsStyle().defaultStyle().colorRampNames())
+        self.strat_ageColorRampComboBox.addItems(ramp_names)
+        default_ramp_index = self.strat_ageColorRampComboBox.findText('Viridis')
+        if default_ramp_index >= 0:
+            self.strat_ageColorRampComboBox.setCurrentIndex(default_ramp_index)
+        ageRow.addWidget(self.strat_ageColorRampComboBox)
+        layout.addLayout(ageRow)
+
+        applyAgeButton = QPushButton("Apply Stratigraphic Age to Map Layer")
+        applyAgeButton.setToolTip(
+            "Write a 'strat_order' field (0 = first unit in the column) onto "
+            "the selected layer above and style it with a graduated colour ramp."
+        )
+        applyAgeButton.clicked.connect(self.apply_age_to_layer)
+        layout.addWidget(applyAgeButton)
 
         self._guess_units_layer()
         self._restore_units_layer_selection()
@@ -270,6 +292,38 @@ class StratColumnWidget(QWidget):
                 self,
                 "Apply Colours to Map Layer",
                 "Could not apply colours. The stratigraphic column may have no units.",
+            )
+
+    def apply_age_to_layer(self):
+        """Write the stratigraphic order onto the selected units layer and style it by a graduated ramp."""
+        if not self.data_manager:
+            print("Error: Data manager is not initialized.")
+            return
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+        if layer is None or not field_name:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Age to Map Layer",
+                "Please select a units layer and unit name field above.",
+            )
+            return
+        ramp_name = self.strat_ageColorRampComboBox.currentText()
+        applied = self.data_manager.apply_stratigraphic_age_to_layer(
+            layer, field_name, ramp_name=ramp_name
+        )
+        if applied:
+            QMessageBox.information(
+                self,
+                "Apply Stratigraphic Age to Map Layer",
+                f"Applied stratigraphic age and graduated styling to layer '{layer.name()}'.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Age to Map Layer",
+                "Could not apply stratigraphic age. The stratigraphic column may have no "
+                "units, or no features matched a stratigraphic unit.",
             )
 
     def add_unit(self, *, unit_data=None, create_new=True):

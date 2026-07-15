@@ -5,9 +5,12 @@ import numpy as np
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,
+    QgsGraduatedSymbolRenderer,
     QgsPointXY,
     QgsProject,
     QgsRendererCategory,
+    QgsRendererRange,
+    QgsStyle,
     QgsSymbol,
     QgsVectorLayer,
 )
@@ -17,6 +20,7 @@ from LoopStructural import FaultTopology, StratigraphicColumn
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
+from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
 
@@ -415,6 +419,81 @@ class ModellingDataManager:
         layer.setRenderer(QgsCategorizedSymbolRenderer(field_name, categories))
         layer.triggerRepaint()
         self.logger(message=f"Applied stratigraphic column colours to layer '{layer.name()}'.")
+        return True
+
+    def apply_stratigraphic_age_to_layer(self, layer, field_name, ramp_name=None):
+        """Write the stratigraphic order onto a layer and style it with a graduated colour ramp.
+
+        Writes an integer 'strat_order' field to ``layer`` (0 = first unit in
+        the stratigraphic column) matched via ``field_name``, then applies a
+        graduated renderer over that field.
+
+        Parameters
+        ----------
+        layer : QgsVectorLayer
+            The layer to update (e.g. the geological units/geology layer).
+        field_name : str
+            Name of the field on ``layer`` holding the stratigraphic unit name.
+        ramp_name : str, optional
+            Name of a QGIS colour ramp (from QgsStyle) to use for the
+            graduated renderer. Falls back to any available ramp if not found.
+
+        Returns
+        -------
+        bool
+            True if the field was written and the renderer applied, False otherwise.
+        """
+        if layer is None or not field_name:
+            self.logger(message="No layer/unit name field set, cannot apply stratigraphic age.")
+            return False
+
+        unit_names = self.get_stratigraphic_unit_names()
+        if not unit_names:
+            self.logger(message="Stratigraphic column has no units, cannot apply stratigraphic age.")
+            return False
+
+        age_field_name = "strat_order"
+        try:
+            paint_stratigraphic_order(layer, unit_names, field_name)
+        except Exception as err:
+            self.logger(message=f"Failed to write stratigraphic order onto layer: {err}")
+            return False
+
+        unique_values = set()
+        for feature in layer.getFeatures():
+            value = feature[age_field_name]
+            if value is None or (hasattr(value, 'isNull') and value.isNull()):
+                continue
+            unique_values.add(int(value))
+        unique_values = sorted(unique_values)
+
+        if not unique_values:
+            self.logger(
+                message="No features matched a stratigraphic unit, cannot style layer by age."
+            )
+            return False
+
+        style = QgsStyle().defaultStyle()
+        ramp = style.colorRamp(ramp_name) if ramp_name else None
+        if ramp is None:
+            ramp_names = style.colorRampNames()
+            if ramp_names:
+                ramp = style.colorRamp(ramp_names[0])
+
+        n = len(unique_values)
+        ranges = []
+        for i, value in enumerate(unique_values):
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            if ramp is not None:
+                symbol.setColor(ramp.color(i / (n - 1) if n > 1 else 0))
+            ranges.append(QgsRendererRange(value - 0.5, value + 0.5, symbol, str(value)))
+
+        layer.setRenderer(QgsGraduatedSymbolRenderer(age_field_name, ranges))
+        layer.triggerRepaint()
+        self.logger(
+            message=f"Applied stratigraphic age field '{age_field_name}' and graduated "
+            f"styling to layer '{layer.name()}'."
+        )
         return True
 
     def get_stratigraphic_unit_names(self):
