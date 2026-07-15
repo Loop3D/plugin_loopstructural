@@ -3,7 +3,14 @@ from typing import Optional, Union
 
 import numpy as np
 from LoopStructural.datatypes import VectorPoints
-from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import (
+    QMenu,
+    QPushButton,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger(__name__)
 

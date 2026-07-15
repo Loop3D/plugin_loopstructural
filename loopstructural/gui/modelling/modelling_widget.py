@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from loopstructural.gui.modelling.fault_adjacency_tab import FaultAdjacencyTab
 from loopstructural.gui.modelling.geological_history_tab import GeologialHistoryTab

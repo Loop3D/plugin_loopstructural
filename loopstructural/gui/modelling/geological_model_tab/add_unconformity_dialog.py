@@ -1,13 +1,14 @@
-from PyQt5.QtWidgets import (
+from LoopStructural.modelling.features import FeatureType
+from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
     QVBoxLayout,
-
 )
-from LoopStructural.modelling.features import FeatureType
+
+
 class AddUnconformityDialog(QDialog):
     def __init__(self, parent=None, data_manager=None, model_manager=None):
         super().__init__(parent)
@@ -61,8 +62,9 @@ class AddUnconformityDialog(QDialog):
             self.model_manager.add_unconformity(foliation_name, value, feature_type)
             super().accept()
         except ValueError as e:
-            from PyQt5.QtWidgets import QMessageBox
+            from qgis.PyQt.QtWidgets import QMessageBox
 
             QMessageBox.critical(self, "Error", str(e))
+
     def reject(self):
         super().reject()

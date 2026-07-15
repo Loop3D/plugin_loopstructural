@@ -5,7 +5,7 @@ This module exposes `LoopWidget` which provides the primary user
 interface for interacting with LoopStructural features inside QGIS.
 """
 
-from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from .modelling.modelling_widget import ModellingWidget
 from .visualisation.visualisation_widget import VisualisationWidget

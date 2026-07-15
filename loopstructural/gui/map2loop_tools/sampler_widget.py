@@ -2,9 +2,9 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsProject, QgsWkbTypes
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -226,7 +226,8 @@ class SamplerWidget(QWidget):
             QgsPointXY,
             QgsVectorLayer,
         )
-        from qgis.PyQt.QtCore import QVariant
+
+        from loopstructural.gui.compatibility import QVariantCompat
 
         from ...main.m2l_api import sample_contacts
 
@@ -293,11 +294,11 @@ class SamplerWidget(QWidget):
                     dtype_str = str(dtype)
 
                     if dtype_str in ['float16', 'float32', 'float64']:
-                        field_type = QVariant.Double
+                        field_type = QVariantCompat.Double
                     elif dtype_str in ['int8', 'int16', 'int32', 'int64']:
-                        field_type = QVariant.Int
+                        field_type = QVariantCompat.Int
                     else:
-                        field_type = QVariant.String
+                        field_type = QVariantCompat.String
 
                     fields.append(QgsField(column_name, field_type))
 

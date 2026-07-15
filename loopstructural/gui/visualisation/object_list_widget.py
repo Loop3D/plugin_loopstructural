@@ -1,8 +1,8 @@
 import logging
 
 import pyvista as pv
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QHBoxLayout,  # Add missing import
@@ -36,8 +36,10 @@ class ObjectListWidget(QWidget):
         self.treeWidget.installEventFilter(self)
         self.treeWidget.itemSelectionChanged.connect(self.on_object_selected)
         self.treeWidget.itemDoubleClicked.connect(self.onDoubleClick)
+
     def onDoubleClick(self, item, column):
         self.viewer.reset_camera()
+
     def on_object_selected(self):
         selected_items = self.treeWidget.selectedItems()
         if not selected_items:
@@ -53,6 +55,7 @@ class ObjectListWidget(QWidget):
         if hasattr(self, 'properties_widget') and self.properties_widget:
 
             self.properties_widget.setCurrentObject(object_label)
+
     def update_object_list(self, new_object):
         """Rebuild the tree so top-level items are the entries in
         `viewer.meshes`. Each mesh gets a visibility checkbox and child
@@ -262,13 +265,19 @@ class ObjectListWidget(QWidget):
         formats = []
         try:
             import geoh5py
+
             has_geoh5py = True
         except ImportError:
             has_geoh5py = False
 
         # Check if this is a grid/voxel type (UniformGrid, ImageData, StructuredGrid, RectilinearGrid)
-        is_grid = type(mesh).__name__ in ['UniformGrid', 'ImageData', 'StructuredGrid', 'RectilinearGrid']
-        
+        is_grid = type(mesh).__name__ in [
+            'UniformGrid',
+            'ImageData',
+            'StructuredGrid',
+            'RectilinearGrid',
+        ]
+
         if is_grid:
             # Grid/voxel meshes support ASCII export
             formats = ["vtk", "ascii"]
@@ -310,30 +319,20 @@ class ObjectListWidget(QWidget):
 
         try:
             if selected_format == "obj":
-                (
-                    mesh.save(file_path)
-                    if hasattr(mesh, "save")
-                    else pv.save_meshio(file_path, mesh)
-                )
+                (mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh))
             elif selected_format == "vtk":
                 mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh)
             elif selected_format == "ply":
                 pv.save_meshio(file_path, mesh)
             elif selected_format == "vtp":
-                (
-                    mesh.save(file_path)
-                    if hasattr(mesh, "save")
-                    else pv.save_meshio(file_path, mesh)
-                )
+                (mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh))
             elif selected_format == "ascii":
                 # Export grid/voxel as ASCII: x, y, z, value format
                 self._export_grid_ascii(mesh, file_path, object_label)
             elif selected_format == "geoh5":
                 with geoh5py.Geoh5(file_path, overwrite=True) as geoh5:
                     if hasattr(mesh, "faces"):
-                        geoh5.add_surface(
-                            name=object_label, vertices=mesh.points, faces=mesh.faces
-                        )
+                        geoh5.add_surface(name=object_label, vertices=mesh.points, faces=mesh.faces)
                     else:
                         geoh5.add_points(name=object_label, vertices=mesh.points)
             logger.info(f"Exported {object_label} to {file_path} as {selected_format}")
@@ -343,9 +342,9 @@ class ObjectListWidget(QWidget):
 
     def _export_grid_ascii(self, mesh, file_path, object_label):
         """Export a grid/voxel mesh to ASCII format.
-        
+
         Format: x, y, z, value (one line per cell center)
-        
+
         Parameters
         ----------
         mesh : pyvista grid mesh
@@ -356,33 +355,33 @@ class ObjectListWidget(QWidget):
             Name of the object (used to determine which scalar array to export)
         """
         import numpy as np
-        
+
         # Get cell centers
         cell_centers = mesh.cell_centers()
         centers = cell_centers.points
-        
+
         # Get scalar values - try to use the active scalars or the first available array
         scalar_name = mesh.active_scalars_name
         if scalar_name is None:
             # Try to find any cell data array
             if mesh.cell_data:
                 scalar_name = list(mesh.cell_data.keys())[0]
-        
+
         if scalar_name is not None:
             values = mesh.cell_data[scalar_name]
         else:
             # If no scalar data, use zeros
             values = np.zeros(mesh.n_cells)
-        
+
         # Write to file
         with open(file_path, 'w') as f:
             f.write(f"# ASCII Grid Export: {object_label}\n")
-            f.write(f"# Format: x y z value\n")
+            f.write("# Format: x y z value\n")
             f.write(f"# Number of cells: {mesh.n_cells}\n")
             if scalar_name:
                 f.write(f"# Scalar field: {scalar_name}\n")
             f.write("#\n")
-            
+
             for i in range(len(centers)):
                 x, y, z = centers[i]
                 value = values[i]
@@ -419,17 +418,19 @@ class ObjectListWidget(QWidget):
             self.load_feature_from_file()
         elif action == addQgsLayerAction:
             self.add_object_from_qgis_layer()
+
     def add_feature_from_geological_model(self):
         # Logic to add a feature from the geological model
         print("Adding feature from geological model")
+
     def add_object_from_qgis_layer(self):
         """Show a dialog to pick a QGIS point vector layer, convert it to a VTK/PyVista
         point cloud and copy numeric attributes as point scalars.
         """
         # Local imports so the module can still be imported when QGIS GUI isn't available
         try:
-            from qgis.gui import QgsMapLayerComboBox
             from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
+            from qgis.gui import QgsMapLayerComboBox
         except Exception as e:
             print("QGIS GUI components are not available:", e)
             return
@@ -439,11 +440,11 @@ class ObjectListWidget(QWidget):
         except Exception as e:
             print("Could not import qgsLayerToGeoDataFrame:", e)
             return
-        from loopstructural.main.model_manager import AllSampler
-
-        from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, QMessageBox
         import numpy as np
         import pandas as pd
+        from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox, QMessageBox, QVBoxLayout
+
+        from loopstructural.main.model_manager import AllSampler
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Add from QGIS layer")
@@ -470,7 +471,10 @@ class ObjectListWidget(QWidget):
 
         # Basic geometry check - ensure the layer contains point geometry
         try:
-            if layer.wkbType() != QgsWkbTypes.Point and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.PointGeometry:
+            if (
+                layer.wkbType() != QgsWkbTypes.Point
+                and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.PointGeometry
+            ):
                 # Some QGIS versions use different enums; allow via proxy filter primarily
                 # If the check fails, continue but warn
                 print("Selected layer does not appear to be a point layer. Proceeding anyway.")
@@ -482,19 +486,23 @@ class ObjectListWidget(QWidget):
         gdf = qgsLayerToGeoDataFrame(layer)
         sampler = AllSampler()
         # sample the points from the gdf with no DTM and include Z if present
-        df = sampler(gdf,None,True)
+        df = sampler(gdf, None, True)
         if df is None or df.empty:
             QMessageBox.warning(self, "No data", "Selected layer contains no points.")
             return
 
         # Ensure X,Y,Z columns present
         if not {"X", "Y", "Z"}.issubset(df.columns):
-            QMessageBox.warning(self, "Invalid data", "Layer conversion did not produce X/Y/Z columns.")
+            QMessageBox.warning(
+                self, "Invalid data", "Layer conversion did not produce X/Y/Z columns."
+            )
             return
 
         # Build points array
         try:
-            pts = np.vstack([df["X"].to_numpy(), df["Y"].to_numpy(), df["Z"].to_numpy()]).T.astype(float)
+            pts = np.vstack([df["X"].to_numpy(), df["Y"].to_numpy(), df["Z"].to_numpy()]).T.astype(
+                float
+            )
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to build point coordinates: {e}")
             return

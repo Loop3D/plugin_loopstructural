@@ -153,9 +153,9 @@ class PlgLogger(logging.Handler):
             try:
                 from qgis.PyQt.QtCore import QTimer as _QTimer
             except Exception:
-                # fall back to PyQt5/PySide2 if qgis.PyQt namespace isn't present
+                # fall back to qgis.PyQt/PySide2 if qgis.PyQt namespace isn't present
                 try:
-                    from PyQt5.QtCore import QTimer as _QTimer  # type: ignore
+                    from qgis.PyQt.QtCore import QTimer as _QTimer  # type: ignore
                 except Exception:
                     try:
                         from PySide2.QtCore import QTimer as _QTimer  # type: ignore

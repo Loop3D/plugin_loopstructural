@@ -1,13 +1,23 @@
-from PyQt5.QtCore import Qt
-
-from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QLabel, QComboBox, QSlider, QCheckBox, QColorDialog, QPushButton, QHBoxLayout, QLineEdit, QSizePolicy
-)
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Add plotting imports for scalar histogram
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-import matplotlib.pyplot as plt
-import numpy as np
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import (
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSizePolicy,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
+)
+
 
 class ObjectPropertiesWidget(QWidget):
     def __init__(self, parent=None, *, viewer=None):
@@ -147,7 +157,11 @@ class ObjectPropertiesWidget(QWidget):
                     pass
             # store color in metadata
             if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                self.viewer.meshes[self.current_object_name]['color'] = (color.redF(), color.greenF(), color.blueF())
+                self.viewer.meshes[self.current_object_name]['color'] = (
+                    color.redF(),
+                    color.greenF(),
+                    color.blueF(),
+                )
         except Exception:
             pass
 
@@ -169,7 +183,13 @@ class ObjectPropertiesWidget(QWidget):
                     pass
             # store in metadata
             if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                self.viewer.meshes[self.current_object_name].set('kwargs', {**self.viewer.meshes[self.current_object_name].get('kwargs', {}), 'opacity': value})
+                self.viewer.meshes[self.current_object_name].set(
+                    'kwargs',
+                    {
+                        **self.viewer.meshes[self.current_object_name].get('kwargs', {}),
+                        'opacity': value,
+                    },
+                )
         except Exception:
             pass
 
@@ -215,7 +235,10 @@ class ObjectPropertiesWidget(QWidget):
                 kwargs['show_edges'] = bool(show)
                 mesh_entry['kwargs'] = kwargs
                 # persist back to viewer.meshes
-                if hasattr(self.viewer, 'meshes') and self.current_object_name in self.viewer.meshes:
+                if (
+                    hasattr(self.viewer, 'meshes')
+                    and self.current_object_name in self.viewer.meshes
+                ):
                     self.viewer.meshes[self.current_object_name] = mesh_entry
             except Exception:
                 pass
@@ -263,7 +286,10 @@ class ObjectPropertiesWidget(QWidget):
                 kwargs = mesh_entry.get('kwargs', {}) if isinstance(mesh_entry, dict) else {}
                 kwargs['line_width'] = width
                 mesh_entry['kwargs'] = kwargs
-                if hasattr(self.viewer, 'meshes') and self.current_object_name in self.viewer.meshes:
+                if (
+                    hasattr(self.viewer, 'meshes')
+                    and self.current_object_name in self.viewer.meshes
+                ):
                     self.viewer.meshes[self.current_object_name] = mesh_entry
             except Exception:
                 pass
@@ -313,7 +339,9 @@ class ObjectPropertiesWidget(QWidget):
             prev_scalars = kwargs.get('scalars')
             if prev_scalars:
                 sel_name = prev_scalars
-                if f"cell:{prev_scalars}" in [self.scalar_combo.itemText(i) for i in range(self.scalar_combo.count())]:
+                if f"cell:{prev_scalars}" in [
+                    self.scalar_combo.itemText(i) for i in range(self.scalar_combo.count())
+                ]:
                     sel_name = f"cell:{prev_scalars}"
                 idx = self.scalar_combo.findText(sel_name)
                 if idx >= 0:
@@ -338,8 +366,16 @@ class ObjectPropertiesWidget(QWidget):
                     vals = next(iter(cdata.values()))
                 if vals is not None:
                     try:
-                        mn = float(getattr(vals, 'min', lambda: min(vals))()) if hasattr(vals, 'min') else float(min(vals))
-                        mx = float(getattr(vals, 'max', lambda: max(vals))()) if hasattr(vals, 'max') else float(max(vals))
+                        mn = (
+                            float(getattr(vals, 'min', lambda: min(vals))())
+                            if hasattr(vals, 'min')
+                            else float(min(vals))
+                        )
+                        mx = (
+                            float(getattr(vals, 'max', lambda: max(vals))())
+                            if hasattr(vals, 'max')
+                            else float(max(vals))
+                        )
                         self.range_min.setText(str(mn))
                         self.range_max.setText(str(mx))
                     except Exception:
@@ -434,7 +470,13 @@ class ObjectPropertiesWidget(QWidget):
         if not self.color_with_scalar_checkbox.isChecked():
             try:
                 if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                    self.viewer.meshes[self.current_object_name].set('kwargs', {**self.viewer.meshes[self.current_object_name].get('kwargs', {}), 'scalars': None})
+                    self.viewer.meshes[self.current_object_name].set(
+                        'kwargs',
+                        {
+                            **self.viewer.meshes[self.current_object_name].get('kwargs', {}),
+                            'scalars': None,
+                        },
+                    )
             except Exception:
                 pass
             return
@@ -479,7 +521,15 @@ class ObjectPropertiesWidget(QWidget):
             pass
 
         try:
-            self.viewer.add_mesh_object(mesh, name=self.current_object_name, scalars=scalars, cmap=cmap, clim=clim, opacity=opacity, show_scalar_bar=show_scalar_bar)
+            self.viewer.add_mesh_object(
+                mesh,
+                name=self.current_object_name,
+                scalars=scalars,
+                cmap=cmap,
+                clim=clim,
+                opacity=opacity,
+                show_scalar_bar=show_scalar_bar,
+            )
             self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
         except Exception:
             try:
@@ -498,7 +548,9 @@ class ObjectPropertiesWidget(QWidget):
             self.color_button.setEnabled(not checked)
             self.hist_canvas.setVisible(checked)
 
-            if self.current_object_name and self.current_object_name in getattr(self.viewer, 'meshes', {}):
+            if self.current_object_name and self.current_object_name in getattr(
+                self.viewer, 'meshes', {}
+            ):
                 current_scalar = self.scalar_combo.currentText()
                 if checked:
                     try:
@@ -521,7 +573,9 @@ class ObjectPropertiesWidget(QWidget):
                             except Exception:
                                 pass
                         stored = self.viewer.meshes[self.current_object_name].get('kwargs', {})
-                        color = self.viewer.meshes[self.current_object_name].get('color') or stored.get('color')
+                        color = self.viewer.meshes[self.current_object_name].get(
+                            'color'
+                        ) or stored.get('color')
                         if color is not None and hasattr(actor, 'prop'):
                             try:
                                 actor.prop.color = color
@@ -534,7 +588,8 @@ class ObjectPropertiesWidget(QWidget):
 
     def _on_colormap_changed(self, cmap: str):
         """Apply or persist selected colormap for the current object.
-        Best-effort: try in-place application via _apply_scalar_to_actor, otherwise remove and re-add the mesh with the new cmap."""
+        Best-effort: try in-place application via _apply_scalar_to_actor, otherwise remove and re-add the mesh with the new cmap.
+        """
         try:
             if not self.current_object_name or self.viewer is None:
                 return
@@ -597,12 +652,22 @@ class ObjectPropertiesWidget(QWidget):
                 pass
 
             try:
-                self.viewer.add_mesh_object(mesh, name=self.current_object_name, scalars=scalars, cmap=cmap or None, clim=clim, opacity=opacity, show_scalar_bar=show_scalar_bar)
+                self.viewer.add_mesh_object(
+                    mesh,
+                    name=self.current_object_name,
+                    scalars=scalars,
+                    cmap=cmap or None,
+                    clim=clim,
+                    opacity=opacity,
+                    show_scalar_bar=show_scalar_bar,
+                )
                 self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
             except Exception:
                 try:
                     self.viewer.add_mesh_object(mesh, name=self.current_object_name)
-                    self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
+                    self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get(
+                        'mesh'
+                    )
                 except Exception:
                     pass
         except Exception:
@@ -633,7 +698,14 @@ class ObjectPropertiesWidget(QWidget):
         try:
             self.hist_ax.clear()
             if values is None:
-                self.hist_ax.text(0.5, 0.5, 'No scalar selected', ha='center', va='center', transform=self.hist_ax.transAxes)
+                self.hist_ax.text(
+                    0.5,
+                    0.5,
+                    'No scalar selected',
+                    ha='center',
+                    va='center',
+                    transform=self.hist_ax.transAxes,
+                )
                 self.hist_ax.set_xticks([])
                 self.hist_ax.set_yticks([])
             else:
@@ -656,7 +728,12 @@ class ObjectPropertiesWidget(QWidget):
             # if plotter can update scalars more directly, prefer that
             if plotter is not None and hasattr(plotter, 'update_scalars') and values is not None:
                 try:
-                    plotter.update_scalars(values, mesh=mesh_entry.get('mesh'), render=False, name=self.current_object_name)
+                    plotter.update_scalars(
+                        values,
+                        mesh=mesh_entry.get('mesh'),
+                        render=False,
+                        name=self.current_object_name,
+                    )
                 except Exception:
                     pass
 
@@ -707,6 +784,7 @@ class ObjectPropertiesWidget(QWidget):
                 else:
                     try:
                         import numpy as _np
+
                         arr = _np.asarray(values) if values is not None else None
                         if arr is not None and arr.size > 0:
                             mn = float(_np.nanmin(arr))
@@ -728,10 +806,14 @@ class ObjectPropertiesWidget(QWidget):
                     vtkLookupTable = None
                     try:
                         from vtk import vtkLookupTable as _vtkLookupTable  # type: ignore
+
                         vtkLookupTable = _vtkLookupTable
                     except Exception:
                         try:
-                            from vtkmodules.vtkCommonCore import vtkLookupTable as _vtkLookupTable  # type: ignore
+                            from vtkmodules.vtkCommonCore import (
+                                vtkLookupTable as _vtkLookupTable,  # type: ignore
+                            )
+
                             vtkLookupTable = _vtkLookupTable
                         except Exception:
                             vtkLookupTable = None
@@ -741,6 +823,7 @@ class ObjectPropertiesWidget(QWidget):
                         lut.Build()
                         try:
                             import matplotlib.cm as mcm
+
                             cm = mcm.get_cmap(cmap)
                             for i in range(256):
                                 r, g, b, a = cm(i / 255.0)
@@ -789,7 +872,10 @@ class ObjectPropertiesWidget(QWidget):
                 if clim is not None:
                     kwargs['clim'] = (float(clim[0]), float(clim[1]))
                 mesh_entry['kwargs'] = kwargs
-                if hasattr(self.viewer, 'meshes') and self.current_object_name in self.viewer.meshes:
+                if (
+                    hasattr(self.viewer, 'meshes')
+                    and self.current_object_name in self.viewer.meshes
+                ):
                     self.viewer.meshes[self.current_object_name] = mesh_entry
             except Exception:
                 pass

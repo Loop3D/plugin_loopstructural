@@ -1,7 +1,7 @@
 import os
 
-from PyQt5.QtWidgets import QDialog, QDialogButtonBox
-from PyQt5.uic import loadUi
+from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox
+from qgis.PyQt.uic import loadUi
 
 from .layer_selection_table import LayerSelectionTable
 
@@ -19,7 +19,7 @@ class AddFoliationDialog(QDialog):
         self.layer_table = LayerSelectionTable(
             data_manager=self.data_manager,
             feature_name_provider=lambda: self.name,
-            name_validator=lambda: (self.name_valid, self.name_error)
+            name_validator=lambda: (self.name_valid, self.name_error),
         )
 
         # Replace or integrate with existing UI
@@ -27,7 +27,6 @@ class AddFoliationDialog(QDialog):
 
         self.buttonBox.accepted.connect(self.add_foliation)
         self.buttonBox.rejected.connect(self.cancel)
-
 
         self.name_valid = False
         self.name_error = ""
@@ -93,7 +92,6 @@ class AddFoliationDialog(QDialog):
 
         folded_feature_name = None
 
-
         self.data_manager.add_foliation_to_model(self.name, folded_feature_name=folded_feature_name)
         self.accept()  # Close the dialog
 
@@ -135,7 +133,8 @@ class AddFoliationDialog(QDialog):
             else:
                 # Fallback: add to parent widget directly
                 if hasattr(table_parent, 'layout') and not table_parent.layout():
-                    from PyQt5.QtWidgets import QVBoxLayout
+                    from qgis.PyQt.QtWidgets import QVBoxLayout
+
                     layout = QVBoxLayout(table_parent)
                     table_parent.setLayout(layout)
                     layout.addWidget(self.layer_table)

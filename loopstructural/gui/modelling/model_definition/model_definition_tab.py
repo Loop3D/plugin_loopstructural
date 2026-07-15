@@ -1,11 +1,11 @@
-from PyQt5.QtWidgets import QSizePolicy
+from qgis.PyQt.QtWidgets import QSizePolicy
 
 from loopstructural.gui.modelling.base_tab import BaseTab
 
 from .bounding_box import BoundingBoxWidget
+from .dem import DEMWidget
 from .fault_layers import FaultLayersWidget
 from .stratigraphic_layers import StratigraphicLayersWidget
-from .dem import DEMWidget
 
 
 class ModelDefinitionTab(BaseTab):

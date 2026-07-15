@@ -2,8 +2,9 @@ import types
 
 import pytest
 from qgis.core import QgsFeature, QgsField, QgsFields, QgsVectorLayer, QgsWkbTypes
-from qgis.PyQt.QtCore import QVariant
 from qgis.testing import start_app
+
+from loopstructural.gui.compatibility import QVariantCompat
 
 
 # Monkeypatch uic.loadUi to avoid needing the .ui file and to provide minimal widgets
@@ -122,7 +123,7 @@ class DummyDebug:
 def make_geology_layer():
     # create a memory polygon layer with UNITNAME field and 3 polygons
     fields = QgsFields()
-    fields.append(QgsField('UNITNAME', QVariant.String))
+    fields.append(QgsField('UNITNAME', QVariantCompat.String))
 
     uri = 'Polygon?crs=EPSG:4326'
     layer = QgsVectorLayer(uri, 'geology', 'memory')

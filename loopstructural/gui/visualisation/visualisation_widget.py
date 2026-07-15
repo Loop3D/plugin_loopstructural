@@ -1,13 +1,13 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import (
     QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
+from .feature_list_widget import FeatureListWidget
 from .loop_pyvistaqt_wrapper import LoopPyVistaQTPlotter
 from .object_list_widget import ObjectListWidget
-from .feature_list_widget import FeatureListWidget
 from .object_properties_widget import ObjectPropertiesWidget
 
 
@@ -34,7 +34,9 @@ class VisualisationWidget(QWidget):
         # self.plotter.add_axes()
         self.objectPropertiesWidget = ObjectPropertiesWidget(viewer=self.plotter)
 
-        self.objectList = ObjectListWidget(viewer=self.plotter,properties_widget=self.objectPropertiesWidget)
+        self.objectList = ObjectListWidget(
+            viewer=self.plotter, properties_widget=self.objectPropertiesWidget
+        )
 
         # Modify layout to stack object list and feature list vertically
         sidebarSplitter = QSplitter(Qt.Vertical, self)

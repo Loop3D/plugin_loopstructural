@@ -653,9 +653,10 @@ def paint_stratigraphic_order(
     strat_order_field = "strat_order"
     if strat_order_field not in geology_fields:
         from qgis.core import QgsField
-        from qgis.PyQt.QtCore import QVariant
 
-        new_field = QgsField(strat_order_field, QVariant.Int)
+        from loopstructural.gui.compatibility import QVariantCompat
+
+        new_field = QgsField(strat_order_field, QVariantCompat.Int)
         geology_layer.dataProvider().addAttributes([new_field])
         geology_layer.updateFields()
         if updater:

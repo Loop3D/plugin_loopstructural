@@ -4,7 +4,7 @@ This module provides QDialog wrappers that use map2loop classes directly
 instead of QGIS processing algorithms.
 """
 
-from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
+from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 
 
 class SamplerDialog(QDialog):
@@ -23,7 +23,9 @@ class SamplerDialog(QDialog):
         from .sampler_widget import SamplerWidget
 
         layout = QVBoxLayout(self)
-        self.widget = SamplerWidget(self, data_manager=self.data_manager, debug_manager=self.debug_manager)
+        self.widget = SamplerWidget(
+            self, data_manager=self.data_manager, debug_manager=self.debug_manager
+        )
         layout.addWidget(self.widget)
 
         # Replace the run button with dialog buttons

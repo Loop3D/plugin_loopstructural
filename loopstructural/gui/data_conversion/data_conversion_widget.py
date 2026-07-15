@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (
+from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
+from qgis.gui import QgsMapLayerComboBox
+from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -21,8 +23,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
-from qgis.gui import QgsMapLayerComboBox
 
 from ...main.helpers import ColumnMatcher
 from ...main.vectorLayerWrapper import QgsLayerFromDataFrame, QgsLayerFromGeoDataFrame

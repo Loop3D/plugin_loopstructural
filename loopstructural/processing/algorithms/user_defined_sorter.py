@@ -1,29 +1,35 @@
 import numpy as np
-
-from PyQt5.QtCore import QVariant
 from qgis.core import (
-    QgsFeatureSink,
-    QgsFields,
-    QgsField,
+    QgsCoordinateReferenceSystem,
     QgsFeature,
+    QgsFeatureSink,
+    QgsField,
+    QgsFields,
     QgsProcessingAlgorithm,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterMatrix,
-    QgsCoordinateReferenceSystem,
+    QgsSettings,
     QgsWkbTypes,
-    QgsSettings
 )
 
+from loopstructural.gui.compatibility import QVariantCompat
 
 
 class UserDefinedStratigraphyAlgorithm(QgsProcessingAlgorithm):
     INPUT_STRATI_COLUMN = "INPUT_STRATI_COLUMN"
     OUTPUT = "OUTPUT"
 
-    def name(self): return "loop_sorter_2"
-    def displayName(self): return "User-Defined Stratigraphic Column"
-    def group(self): return "Stratigraphy"
-    def groupId(self): return "Stratigraphy_Column"
+    def name(self):
+        return "loop_sorter_2"
+
+    def displayName(self):
+        return "User-Defined Stratigraphic Column"
+
+    def group(self):
+        return "Stratigraphy"
+
+    def groupId(self):
+        return "Stratigraphy_Column"
 
     def initAlgorithm(self, config=None):
         strati_settings = QgsSettings()
@@ -34,7 +40,7 @@ class UserDefinedStratigraphyAlgorithm(QgsProcessingAlgorithm):
                 description="Stratigraphic Order",
                 headers=["Unit"],
                 numberRows=0,
-                defaultValue=last_strati_column
+                defaultValue=last_strati_column,
             )
         )
         self.addParameter(
@@ -64,13 +70,16 @@ class UserDefinedStratigraphyAlgorithm(QgsProcessingAlgorithm):
 
         # 3) Prepare sink
         sink_fields = QgsFields()
-        sink_fields.append(QgsField("order", QVariant.Int))      # or QVariant.LongLong
-        sink_fields.append(QgsField("unit_name", QVariant.String))
+        sink_fields.append(QgsField("order", QVariantCompat.Int))  # or QVariant.LongLong
+        sink_fields.append(QgsField("unit_name", QVariantCompat.String))
 
-        crs = context.project().crs() if context and context.project() else QgsCoordinateReferenceSystem()
+        crs = (
+            context.project().crs()
+            if context and context.project()
+            else QgsCoordinateReferenceSystem()
+        )
         sink, dest_id = self.parameterAsSink(
-            parameters, self.OUTPUT, context,
-            sink_fields, QgsWkbTypes.NoGeometry, crs
+            parameters, self.OUTPUT, context, sink_fields, QgsWkbTypes.NoGeometry, crs
         )
 
         # 4) Insert features

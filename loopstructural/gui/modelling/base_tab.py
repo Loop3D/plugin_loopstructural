@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 from qgis.gui import QgsCollapsibleGroupBox
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 
 class BaseTab(QWidget):
