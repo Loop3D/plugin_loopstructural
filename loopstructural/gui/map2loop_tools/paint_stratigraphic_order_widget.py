@@ -2,10 +2,9 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
-
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from ...main.m2l_api import paint_stratigraphic_order
 
@@ -41,7 +40,6 @@ class PaintStratigraphicOrderWidget(QWidget):
         try:
             self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
             # stratigraphic column layer removed from UI
-            pass
         except Exception:
             # If QGIS isn't available, skip filter setup
             pass
@@ -61,7 +59,6 @@ class PaintStratigraphicOrderWidget(QWidget):
             if self._debug.is_debug():
                 raise e
             # if QGIS unavailable, leave empty
-            pass
 
         # Default: no duplication
         try:
@@ -133,7 +130,6 @@ class PaintStratigraphicOrderWidget(QWidget):
         """Set up field combo boxes based on current layers."""
         self._on_geology_layer_changed()
         # stratigraphic column layer removed from UI
-        pass
 
     def _on_geology_layer_changed(self):
         """Update unit name field combo box when geology layer changes."""
@@ -185,7 +181,6 @@ class PaintStratigraphicOrderWidget(QWidget):
 
                 # Step 1: create a memory copy of the geology layer and copy attributes/geometry
                 try:
-                    from PyQt5.QtCore import QVariant
                     from qgis.core import (
                         QgsFeature,
                         QgsField,
@@ -197,6 +192,8 @@ class PaintStratigraphicOrderWidget(QWidget):
                         QgsVectorLayer,
                         QgsWkbTypes,
                     )
+
+                    from loopstructural.gui.compatibility import QVariantCompat
 
                     geom_type = QgsWkbTypes.displayString(geology_layer.wkbType())
                     crs_auth = (
@@ -240,7 +237,7 @@ class PaintStratigraphicOrderWidget(QWidget):
                 try:
                     if field_name not in [f.name() for f in mem_layer.fields()]:
                         mem_layer.startEditing()
-                        mem_dp.addAttributes([QgsField(field_name, QVariant.Int)])
+                        mem_dp.addAttributes([QgsField(field_name, QVariantCompat.Int)])
                         mem_layer.updateFields()
                         mem_layer.commitChanges()
 

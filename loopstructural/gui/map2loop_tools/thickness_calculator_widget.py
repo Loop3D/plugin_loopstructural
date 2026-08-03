@@ -3,9 +3,9 @@
 import os
 
 import pandas as pd
-from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -443,7 +443,7 @@ class ThicknessCalculatorWidget(QWidget):
                 )
             if PlgOptionsManager.get_debug_mode():
                 raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
             return False
 
     def get_parameters(self):

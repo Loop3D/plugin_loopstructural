@@ -1,5 +1,6 @@
-from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import (
+from LoopStructural.modelling.features import FeatureType
+from qgis.PyQt.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtWidgets import (
     QMenu,
     QMessageBox,
     QProgressDialog,
@@ -10,8 +11,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from LoopStructural.modelling.features import FeatureType
 
 # Import the AddFaultDialog
 from .add_fault_dialog import AddFaultDialog
@@ -150,7 +149,7 @@ class GeologicalModelTab(QWidget):
                     "Please set the bounding box before initializing the model.",
                 )
                 return
-            
+
             # Validate model CRS
             if not self.data_manager.is_model_crs_valid():
                 crs = self.data_manager.get_model_crs()
@@ -163,7 +162,7 @@ class GeologicalModelTab(QWidget):
                     except Exception:
                         crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
                     msg = f"Model CRS must be projected (in meters), not geographic.\nSelected CRS: {crs_desc}\n\nPlease select a valid projected CRS in the Model Definition tab."
-                
+
                 QMessageBox.critical(
                     self,
                     "Invalid Model CRS",

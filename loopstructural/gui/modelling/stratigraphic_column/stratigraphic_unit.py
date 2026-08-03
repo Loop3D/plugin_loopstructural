@@ -2,9 +2,9 @@ import os
 from typing import Optional
 
 import numpy as np
-from PyQt5 import uic
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QWidget
+from qgis.PyQt import uic
+from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtWidgets import QWidget
 
 
 class StratigraphicUnitWidget(QWidget):
@@ -41,12 +41,12 @@ class StratigraphicUnitWidget(QWidget):
 
     def _convert_colour(self, colour):
         """Convert colour from various formats to Qt-compatible hex string.
-        
+
         Parameters
         ----------
         colour : str, tuple, list, np.ndarray, or None
             Colour in various formats: hex string, RGB tuple/list/array
-            
+
         Returns
         -------
         str
@@ -54,13 +54,15 @@ class StratigraphicUnitWidget(QWidget):
         """
         if colour is None:
             return ""
-        
+
         # If it's already a string, return it
         if isinstance(colour, str):
             return colour
-            
+
         # Handle tuple, list, or numpy array of RGB values
-        if (isinstance(colour, (tuple, list)) or isinstance(colour, np.ndarray)) and len(colour) >= 3:
+        if (isinstance(colour, (tuple, list)) or isinstance(colour, np.ndarray)) and len(
+            colour
+        ) >= 3:
             # Convert (r, g, b) to "#RRGGBB"
             # Check if values are normalized floats (0.0-1.0) or integers (0-255)
             if all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in colour[:3]):
@@ -68,7 +70,7 @@ class StratigraphicUnitWidget(QWidget):
             else:
                 rgb = [int(c) for c in colour[:3]]
             return "#{:02x}{:02x}{:02x}".format(*rgb)
-        
+
         # Fallback: try to convert to string
         return str(colour)
 
@@ -103,7 +105,7 @@ class StratigraphicUnitWidget(QWidget):
 
     def onColourSelectClicked(self):
         """Open a color dialog to select a color for the stratigraphic unit."""
-        from PyQt5.QtWidgets import QColorDialog
+        from qgis.PyQt.QtWidgets import QColorDialog
 
         color = QColorDialog.getColor()
         if color.isValid():

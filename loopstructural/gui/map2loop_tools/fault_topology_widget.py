@@ -3,9 +3,9 @@
 import os
 
 import geopandas as gpd
-from PyQt5.QtWidgets import QDialog, QMessageBox
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 
 class FaultTopologyWidget(QDialog):

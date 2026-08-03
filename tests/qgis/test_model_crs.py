@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject
 

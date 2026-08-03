@@ -1,4 +1,6 @@
-from PyQt5.QtWidgets import (
+from qgis.core import QgsMapLayerProxyModel
+from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
+from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -9,8 +11,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qgis.core import QgsMapLayerProxyModel
-from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
 
 class LayerSelectionTable(QWidget):
@@ -155,7 +155,7 @@ class LayerSelectionTable(QWidget):
                 data_manager=self.data_manager,
                 feature_name=self.get_feature_name(),
                 layer_type=type_combo.currentText(),
-                existing_data=self._get_existing_data_for_button(btn)
+                existing_data=self._get_existing_data_for_button(btn),
             )
 
             if dialog.exec_() == QDialog.Accepted:
@@ -344,7 +344,9 @@ class LayerSelectionTable(QWidget):
 class LayerSelectionDialog(QDialog):
     """Dialog for selecting layers and configuring their fields."""
 
-    def __init__(self, parent=None, data_manager=None, feature_name="", layer_type="", existing_data=None):
+    def __init__(
+        self, parent=None, data_manager=None, feature_name="", layer_type="", existing_data=None
+    ):
         super().__init__(parent)
         self.data_manager = data_manager
         self.feature_name = feature_name
@@ -445,7 +447,7 @@ class LayerSelectionDialog(QDialog):
         self.field_combos = {
             'strike_field': self.strike_field_combo,
             'dip_field': self.dip_field_combo,
-            'format': self.format_combo
+            'format': self.format_combo,
         }
 
     def _setup_value_fields(self, layout):
@@ -464,9 +466,7 @@ class LayerSelectionDialog(QDialog):
 
         self.layer_combo.layerChanged.connect(self.value_field_combo.setLayer)
 
-        self.field_combos = {
-            'value_field': self.value_field_combo
-        }
+        self.field_combos = {'value_field': self.value_field_combo}
 
     def _setup_inequality_fields(self, layout):
         """Setup fields for inequality data type."""
@@ -495,7 +495,7 @@ class LayerSelectionDialog(QDialog):
 
         self.field_combos = {
             'lower_field': self.lower_field_combo,
-            'upper_field': self.upper_field_combo
+            'upper_field': self.upper_field_combo,
         }
 
     def _validate_layer_selection(self):
@@ -521,12 +521,15 @@ class LayerSelectionDialog(QDialog):
         self.layer_data = {
             'layer': self.layer_combo.currentLayer(),
             'layer_name': self.layer_combo.currentLayer().name(),
-            'type': self.layer_type
+            'type': self.layer_type,
         }
 
         # Add type-specific data
         if self.layer_type == "Orientation":
-            if not self.field_combos['strike_field'].currentField() or not self.field_combos['dip_field'].currentField():
+            if (
+                not self.field_combos['strike_field'].currentField()
+                or not self.field_combos['dip_field'].currentField()
+            ):
                 return
             self.layer_data['strike_field'] = self.field_combos['strike_field'].currentField()
             self.layer_data['dip_field'] = self.field_combos['dip_field'].currentField()
@@ -538,7 +541,10 @@ class LayerSelectionDialog(QDialog):
             self.layer_data['value_field'] = self.field_combos['value_field'].currentField()
 
         elif self.layer_type == "Inequality":
-            if not self.field_combos['lower_field'].currentField() or not self.field_combos['upper_field'].currentField():
+            if (
+                not self.field_combos['lower_field'].currentField()
+                or not self.field_combos['upper_field'].currentField()
+            ):
                 return
             self.layer_data['lower_field'] = self.field_combos['lower_field'].currentField()
             self.layer_data['upper_field'] = self.field_combos['upper_field'].currentField()

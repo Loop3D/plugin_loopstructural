@@ -4,7 +4,8 @@ from qgis.core import (
     QgsRaster,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QVariant
+
+from loopstructural.gui.compatibility import QVariantCompat
 
 
 def callableToLayer(callable, layer, dtm, name: str):
@@ -28,7 +29,7 @@ def callableToLayer(callable, layer, dtm, name: str):
     """
     layer.startEditing()
     if name not in [field.name() for field in layer.fields()]:
-        layer.dataProvider().addAttributes([QgsField(name, QVariant.Double)])
+        layer.dataProvider().addAttributes([QgsField(name, QVariantCompat.Double)])
         layer.updateFields()
 
     for feature in layer.getFeatures():

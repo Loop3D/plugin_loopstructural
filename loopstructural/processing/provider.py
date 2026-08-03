@@ -32,7 +32,6 @@ class LoopstructuralProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):
         """Load all algorithms belonging to this provider."""
-        pass
 
     def id(self) -> str:
         """Return unique provider id.
@@ -95,7 +94,7 @@ class Map2LoopProvider(QgsProcessingProvider):
         :return: provider long name
         :rtype: str
         """
-        return self.tr("{} - Tools".format(__title__))
+        return self.tr(f"{__title__} - Tools")
 
     def icon(self) -> QIcon:
         """QIcon used for your provider inside the Processing toolbox menu.

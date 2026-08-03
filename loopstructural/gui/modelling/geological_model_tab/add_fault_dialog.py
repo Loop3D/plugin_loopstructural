@@ -1,7 +1,7 @@
 import os
 
-from PyQt5.QtWidgets import QDialog
-from PyQt5.uic import loadUi
+from qgis.PyQt.QtWidgets import QDialog
+from qgis.PyQt.uic import loadUi
 
 
 class AddFaultDialog(QDialog):

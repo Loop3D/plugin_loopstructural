@@ -3,7 +3,14 @@ from typing import Optional, Union
 
 import numpy as np
 from LoopStructural.datatypes import VectorPoints
-from PyQt5.QtWidgets import QMenu, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import (
+    QMenu,
+    QPushButton,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -339,7 +346,6 @@ class FeatureListWidget(QWidget):
                     _log(f"Removed existing mesh: {mesh_name}")
                 except Exception:
                     _log(f"Failed to remove existing mesh: {mesh_name}")
-                    pass
 
                 try:
                     # Surfaces associated with individual features

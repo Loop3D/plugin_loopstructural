@@ -106,8 +106,8 @@ class LoopstructuralPlugin:
     def initGui(self):
         """Set up plugin UI elements."""
         self.injectLogHandler()
-        self.toolbar = self.iface.addToolBar(u'LoopStructural')
-        self.toolbar.setObjectName(u'LoopStructural')
+        self.toolbar = self.iface.addToolBar('LoopStructural')
+        self.toolbar.setObjectName('LoopStructural')
         # settings page within the QGIS preferences menu
         self.options_factory = PlgOptionsFactory()
         self.iface.registerOptionsWidgetFactory(self.options_factory)
@@ -133,7 +133,7 @@ class LoopstructuralPlugin:
             self.iface.mainWindow(),
         )
         self.action_settings.triggered.connect(
-            lambda: self.iface.showOptionsDialog(currentPage="mOptionsPage{}".format(__title__))
+            lambda: self.iface.showOptionsDialog(currentPage=f"mOptionsPage{__title__}")
         )
         self.action_modelling = QAction(
             QIcon(os.path.dirname(__file__) + "/icon.png"),

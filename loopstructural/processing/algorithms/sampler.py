@@ -8,35 +8,39 @@
 *                                                                         *
 ***************************************************************************
 """
+
 # Python imports
 from typing import Any, Optional
-from qgis.PyQt.QtCore import QVariant
-from osgeo import gdal
+
 import pandas as pd
+from map2loop.sampler import SamplerDecimator, SamplerSpacing
+from osgeo import gdal
 
 # QGIS imports
 from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsFeature,
+    QgsField,
+    QgsFields,
+    QgsGeometry,
+    QgsPointXY,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingContext,
     QgsProcessingException,
     QgsProcessingFeedback,
+    QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
-    QgsProcessingParameterRasterLayer,
-    QgsProcessingParameterEnum,
     QgsProcessingParameterNumber,
-    QgsFields,
-    QgsField,
-    QgsFeature,
-    QgsGeometry,
-    QgsPointXY,
+    QgsProcessingParameterRasterLayer,
     QgsWkbTypes,
-    QgsCoordinateReferenceSystem
 )
+
+from loopstructural.gui.compatibility import QVariantCompat
+
 # Internal imports
 from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame
-from map2loop.sampler import SamplerDecimator, SamplerSpacing
 
 
 class SamplerAlgorithm(QgsProcessingAlgorithm):
@@ -70,14 +74,12 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
     def initAlgorithm(self, config: Optional[dict[str, Any]] = None) -> None:
         """Initialize the algorithm parameters."""
 
-
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.INPUT_SAMPLER_TYPE,
                 "SAMPLER_TYPE",
-                ["Decimator (Point Geometry Data)",
-                 "Spacing (Line Geometry Data)"],
-                defaultValue=0
+                ["Decimator (Point Geometry Data)", "Spacing (Line Geometry Data)"],
+                defaultValue=0,
             )
         )
 
@@ -166,7 +168,9 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
 
         if sampler_type == "Decimator":
             feedback.pushInfo("Sampling...")
-            sampler = SamplerDecimator(decimation=decimation, dtm_data=dtm_gdal, geology_data=geology)
+            sampler = SamplerDecimator(
+                decimation=decimation, dtm_data=dtm_gdal, geology_data=geology
+            )
             samples = sampler.sample(spatial_data_gdf)
 
         if sampler_type == "Spacing":
@@ -175,11 +179,11 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             samples = sampler.sample(spatial_data_gdf)
 
         fields = QgsFields()
-        fields.append(QgsField("ID", QVariant.String))
-        fields.append(QgsField("X", QVariant.Double))
-        fields.append(QgsField("Y", QVariant.Double))
-        fields.append(QgsField("Z", QVariant.Double))
-        fields.append(QgsField("featureId", QVariant.String))
+        fields.append(QgsField("ID", QVariantCompat.String))
+        fields.append(QgsField("X", QVariantCompat.Double))
+        fields.append(QgsField("Y", QVariantCompat.Double))
+        fields.append(QgsField("Z", QVariantCompat.Double))
+        fields.append(QgsField("featureId", QVariantCompat.String))
 
         crs = None
         if spatial_data_gdf is not None and spatial_data_gdf.crs is not None:
@@ -190,8 +194,12 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             self.OUTPUT,
             context,
             fields,
-            QgsWkbTypes.PointZ if 'Z' in (samples.columns if samples is not None else []) else QgsWkbTypes.Point,
-            crs
+            (
+                QgsWkbTypes.PointZ
+                if 'Z' in (samples.columns if samples is not None else [])
+                else QgsWkbTypes.Point
+            ),
+            crs,
         )
 
         if samples is not None and not samples.empty:
@@ -203,16 +211,18 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
                     wkt = f"POINT Z ({row['X']} {row['Y']} {row['Z']})"
                     feature.setGeometry(QgsGeometry.fromWkt(wkt))
                 else:
-                    #spacing has no z values
+                    # spacing has no z values
                     feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(row['X'], row['Y'])))
 
-                feature.setAttributes([
-                    str(row.get('ID', '')),
-                    float(row.get('X', 0)),
-                    float(row.get('Y', 0)),
-                    float(row.get('Z', 0)) if pd.notna(row.get('Z')) else 0.0,
-                    str(row.get('featureId', ''))
-                ])
+                feature.setAttributes(
+                    [
+                        str(row.get('ID', '')),
+                        float(row.get('X', 0)),
+                        float(row.get('Y', 0)),
+                        float(row.get('Z', 0)) if pd.notna(row.get('Z')) else 0.0,
+                        str(row.get('featureId', '')),
+                    ]
+                )
 
                 sink.addFeature(feature)
 

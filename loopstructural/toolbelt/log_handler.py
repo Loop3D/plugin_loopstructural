@@ -87,9 +87,7 @@ class PlgLogger(logging.Handler):
             try:
                 message = str(message)
             except Exception as err:
-                err_msg = "Log message must be a string, not: {}. Trace: {}".format(
-                    type(message), err
-                )
+                err_msg = f"Log message must be a string, not: {type(message)}. Trace: {err}"
                 logging.error(err_msg)
                 message = err_msg
 
@@ -153,9 +151,9 @@ class PlgLogger(logging.Handler):
             try:
                 from qgis.PyQt.QtCore import QTimer as _QTimer
             except Exception:
-                # fall back to PyQt5/PySide2 if qgis.PyQt namespace isn't present
+                # fall back to qgis.PyQt/PySide2 if qgis.PyQt namespace isn't present
                 try:
-                    from PyQt5.QtCore import QTimer as _QTimer  # type: ignore
+                    from qgis.PyQt.QtCore import QTimer as _QTimer  # type: ignore
                 except Exception:
                     try:
                         from PySide2.QtCore import QTimer as _QTimer  # type: ignore
@@ -221,9 +219,7 @@ class PlgLoggerHandler(logging.Handler):
 
     @staticmethod
     def _map_log_level(py_level):
-        if py_level >= logging.CRITICAL:
-            return 2
-        elif py_level >= logging.ERROR:
+        if py_level >= logging.CRITICAL or py_level >= logging.ERROR:
             return 2
         elif py_level >= logging.WARNING:
             return 1

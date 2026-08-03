@@ -1,7 +1,7 @@
 import os
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtSvg import QGraphicsSvgItem
+from qgis.PyQt import QtCore, QtGui, QtWidgets
+from qgis.PyQt.QtSvg import QGraphicsSvgItem
 
 
 class TopologyNode(QtWidgets.QGraphicsItem):
@@ -67,7 +67,6 @@ class TopologyNode(QtWidgets.QGraphicsItem):
     def paint(self, painter, option, widget=None):
         """Delegate paint to the shape_item."""
         # No custom painting is needed since the shape_item handles rendering.
-        pass
 
     def add_edge(self, edge):
         self.edges.append(edge)

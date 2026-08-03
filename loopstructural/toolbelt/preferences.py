@@ -129,7 +129,7 @@ class PlgOptionsManager:
             out_value = settings.value(key=key, defaultValue=default, type=exp_type)
         except Exception as err:
             log_hdlr.PlgLogger.log(
-                message="Error occurred trying to get settings: {}.Trace: {}".format(key, err)
+                message=f"Error occurred trying to get settings: {key}.Trace: {err}"
             )
             out_value = None
 
@@ -199,7 +199,7 @@ class PlgOptionsManager:
                     pass
         except Exception as err:
             log_hdlr.PlgLogger.log(
-                message="Error occurred trying to set settings: {}.Trace: {}".format(key, err)
+                message=f"Error occurred trying to set settings: {key}.Trace: {err}"
             )
             out_value = False
 

@@ -2,9 +2,9 @@
 
 import os
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
 from qgis.core import QgsProject, QgsWkbTypes
 from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -190,7 +190,6 @@ class SamplerWidget(QWidget):
                     self.samplerTypeComboBox.setCurrentIndex(idx)
                 except Exception as e:
                     print(e)
-                    pass
                 self.samplerTypeComboBox.setEnabled(False)
                 self.runButton.setEnabled(True)
             elif geom_type == QgsWkbTypes.LineGeometry:
@@ -200,7 +199,6 @@ class SamplerWidget(QWidget):
                     self.samplerTypeComboBox.setCurrentIndex(idx)
                 except Exception as e:
                     print(e)
-                    pass
                 self.samplerTypeComboBox.setEnabled(False)
                 self.runButton.setEnabled(False)
             else:
@@ -226,7 +224,8 @@ class SamplerWidget(QWidget):
             QgsPointXY,
             QgsVectorLayer,
         )
-        from qgis.PyQt.QtCore import QVariant
+
+        from loopstructural.gui.compatibility import QVariantCompat
 
         from ...main.m2l_api import sample_contacts
 
@@ -293,11 +292,11 @@ class SamplerWidget(QWidget):
                     dtype_str = str(dtype)
 
                     if dtype_str in ['float16', 'float32', 'float64']:
-                        field_type = QVariant.Double
+                        field_type = QVariantCompat.Double
                     elif dtype_str in ['int8', 'int16', 'int32', 'int64']:
-                        field_type = QVariant.Int
+                        field_type = QVariantCompat.Int
                     else:
-                        field_type = QVariant.String
+                        field_type = QVariantCompat.String
 
                     fields.append(QgsField(column_name, field_type))
 
@@ -371,7 +370,7 @@ class SamplerWidget(QWidget):
                 )
             if PlgOptionsManager.get_debug_mode():
                 raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
             return False
 
     def get_parameters(self):
@@ -401,11 +400,11 @@ class SamplerWidget(QWidget):
         """
         if 'sampler_type' in params:
             self.samplerTypeComboBox.setCurrentIndex(params['sampler_type'])
-        if 'dtm_layer' in params and params['dtm_layer']:
+        if params.get('dtm_layer'):
             self.dtmLayerComboBox.setLayer(params['dtm_layer'])
-        if 'geology_layer' in params and params['geology_layer']:
+        if params.get('geology_layer'):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if 'spatial_data_layer' in params and params['spatial_data_layer']:
+        if params.get('spatial_data_layer'):
             self.spatialDataLayerComboBox.setLayer(params['spatial_data_layer'])
         if 'decimation' in params:
             self.decimationSpinBox.setValue(params['decimation'])
