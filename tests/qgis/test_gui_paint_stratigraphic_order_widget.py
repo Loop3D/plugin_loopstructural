@@ -1,7 +1,6 @@
-import types
 
 import pytest
-from qgis.core import QgsFeature, QgsField, QgsFields, QgsVectorLayer, QgsWkbTypes
+from qgis.core import QgsFeature, QgsField, QgsFields, QgsVectorLayer
 from qgis.testing import start_app
 
 from loopstructural.gui.compatibility import QVariantCompat
@@ -88,7 +87,6 @@ class DummyButton:
 
 @pytest.fixture(autouse=True)
 def patch_uic_loadui(monkeypatch):
-    import qgis.PyQt.uic as uic
 
     def fake_loadUi(ui_path, widget):
         # attach the minimal attributes the widget expects
@@ -145,7 +143,7 @@ def make_geology_layer():
 
 
 def test_widget_paint_stratigraphic_order(tmp_path):
-    qgs = start_app()
+    start_app()
     # import widget after patching loadUi
     from loopstructural.gui.map2loop_tools.paint_stratigraphic_order_widget import (
         PaintStratigraphicOrderWidget,
