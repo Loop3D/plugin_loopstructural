@@ -238,15 +238,36 @@ class ObjectListWidget(QWidget):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
 
+        zoom_action = menu.addAction("Zoom to Object")
         export_action = menu.addAction("Export Object")
         remove_action = menu.addAction("Remove Object")
 
         action = menu.exec_(self.mapToGlobal(event.pos()))
 
-        if action == export_action:
+        if action == zoom_action:
+            self.zoom_to_selected_object()
+        elif action == export_action:
             self.export_selected_object()
         elif action == remove_action:
             self.remove_selected_object()
+
+    def zoom_to_selected_object(self):
+        selected_items = self.treeWidget.selectedItems()
+        if not selected_items:
+            return
+
+        item_widget = self.treeWidget.itemWidget(selected_items[0], 0)
+        object_label = item_widget.findChild(QLabel).text()
+        mesh_dict = self.viewer.meshes.get(object_label, None)
+        if mesh_dict is None:
+            return
+        mesh = mesh_dict.get('mesh', None)
+        if mesh is None or not hasattr(mesh, 'bounds'):
+            return
+        try:
+            self.viewer.reset_camera(bounds=mesh.bounds)
+        except Exception as e:
+            logger.error(f"Failed to zoom to object {object_label}: {e}")
 
     def export_selected_object(self):
         selected_items = self.treeWidget.selectedItems()
