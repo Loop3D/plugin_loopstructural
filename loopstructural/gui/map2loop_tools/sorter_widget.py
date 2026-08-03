@@ -442,7 +442,7 @@ class SorterWidget(QWidget):
                 )
             if PlgOptionsManager.get_debug_mode():
                 raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
             return False
 
     def get_parameters(self):
@@ -484,7 +484,7 @@ class SorterWidget(QWidget):
         """
         if 'sorting_algorithm' in params:
             self.sortingAlgorithmComboBox.setCurrentIndex(params['sorting_algorithm'])
-        if 'geology_layer' in params and params['geology_layer']:
+        if params.get('geology_layer'):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if 'contacts_layer' in params and params['contacts_layer']:
+        if params.get('contacts_layer'):
             self.contactsLayerComboBox.setLayer(params['contacts_layer'])

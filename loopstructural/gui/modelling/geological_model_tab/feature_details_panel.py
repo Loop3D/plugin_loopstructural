@@ -315,10 +315,10 @@ class BaseFeatureDetailsPanel(QWidget):
                 self, 'bb_nelements_spinbox'
             ):
                 try:
-                    self.bb_nelements_spinbox.setValue(int(getattr(bounding_box, 'nelements')))
+                    self.bb_nelements_spinbox.setValue(int(bounding_box.nelements))
                 except Exception:
                     try:
-                        self.bb_nelements_spinbox.setValue(getattr(bounding_box, 'nelements'))
+                        self.bb_nelements_spinbox.setValue(bounding_box.nelements)
                     except Exception:
                         logger.debug(
                             'Could not set nelements spinbox from bounding_box', exc_info=True
@@ -604,7 +604,6 @@ class BaseFeatureDetailsPanel(QWidget):
             self._rebuild_timer.start()
         except Exception:
             logger.debug('Failed to schedule debounced rebuild', exc_info=True)
-            pass
 
     def _perform_rebuild(self):
         """Perform the actual build operation when the debounce timer fires."""

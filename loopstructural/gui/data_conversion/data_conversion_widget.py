@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
 from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorLayer

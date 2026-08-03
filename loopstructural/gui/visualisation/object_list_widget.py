@@ -84,7 +84,7 @@ class ObjectListWidget(QWidget):
             if hasattr(self.viewer, 'actors') and mesh_name in getattr(self.viewer, 'actors', {}):
                 initial_visibility = bool(self.viewer.actors[mesh_name].visibility)
             elif hasattr(mesh, 'visibility'):
-                initial_visibility = bool(getattr(mesh, 'visibility'))
+                initial_visibility = bool(mesh.visibility)
         except Exception:
             initial_visibility = True
 
@@ -164,7 +164,7 @@ class ObjectListWidget(QWidget):
         # Determine initial visibility
         visibility = False
         if instance is not None and hasattr(instance, 'visibility'):
-            visibility = bool(getattr(instance, 'visibility'))
+            visibility = bool(instance.visibility)
 
         visibilityCheckbox = QCheckBox()
         visibilityCheckbox.setChecked(visibility)
@@ -339,10 +339,8 @@ class ObjectListWidget(QWidget):
                 break
 
         try:
-            if selected_format == "obj":
+            if selected_format == "obj" or selected_format == "vtk":
                 (mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh))
-            elif selected_format == "vtk":
-                mesh.save(file_path) if hasattr(mesh, "save") else pv.save_meshio(file_path, mesh)
             elif selected_format == "ply":
                 pv.save_meshio(file_path, mesh)
             elif selected_format == "vtp":

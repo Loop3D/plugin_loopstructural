@@ -40,7 +40,6 @@ class PaintStratigraphicOrderWidget(QWidget):
         try:
             self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
             # stratigraphic column layer removed from UI
-            pass
         except Exception:
             # If QGIS isn't available, skip filter setup
             pass
@@ -60,7 +59,6 @@ class PaintStratigraphicOrderWidget(QWidget):
             if self._debug.is_debug():
                 raise e
             # if QGIS unavailable, leave empty
-            pass
 
         # Default: no duplication
         try:
@@ -132,7 +130,6 @@ class PaintStratigraphicOrderWidget(QWidget):
         """Set up field combo boxes based on current layers."""
         self._on_geology_layer_changed()
         # stratigraphic column layer removed from UI
-        pass
 
     def _on_geology_layer_changed(self):
         """Update unit name field combo box when geology layer changes."""

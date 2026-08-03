@@ -443,7 +443,7 @@ class ThicknessCalculatorWidget(QWidget):
                 )
             if PlgOptionsManager.get_debug_mode():
                 raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
             return False
 
     def get_parameters(self):

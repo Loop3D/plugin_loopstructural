@@ -2,6 +2,8 @@ import json
 from collections import defaultdict
 
 import numpy as np
+from LoopStructural.datatypes import BoundingBox
+from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,
@@ -17,8 +19,6 @@ from qgis.core import (
 from qgis.PyQt.QtGui import QColor
 
 from LoopStructural import FaultTopology, StratigraphicColumn
-from LoopStructural.datatypes import BoundingBox
-from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
 
 from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame

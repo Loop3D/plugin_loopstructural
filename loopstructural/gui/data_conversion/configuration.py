@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, MutableMapping
 from copy import deepcopy
-from typing import Any, Dict, Iterable, MutableMapping
+from typing import Any, Dict
 
 
 class Config:

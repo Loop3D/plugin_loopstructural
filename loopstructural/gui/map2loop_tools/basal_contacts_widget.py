@@ -277,11 +277,11 @@ class BasalContactsWidget(QWidget):
         params : dict
             Dictionary of parameters to set.
         """
-        if 'geology_layer' in params and params['geology_layer']:
+        if params.get('geology_layer'):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if 'faults_layer' in params and params['faults_layer']:
+        if params.get('faults_layer'):
             self.faultsLayerComboBox.setLayer(params['faults_layer'])
-        if 'ignore_units' in params and params['ignore_units']:
+        if params.get('ignore_units'):
             self.ignoreUnitsLineEdit.setText(', '.join(params['ignore_units']))
         if 'all_contacts' in params:
             self.allContactsCheckBox.setChecked(params['all_contacts'])
@@ -310,7 +310,7 @@ class BasalContactsWidget(QWidget):
                 if v is None:
                     return True
                 # PyQGIS QVariant null check
-                if hasattr(v, "isNull") and callable(getattr(v, "isNull")) and v.isNull():
+                if hasattr(v, "isNull") and callable(v.isNull) and v.isNull():
                     return True
                 # Empty strings or literal "NULL" (case-insensitive)
                 if isinstance(v, str):

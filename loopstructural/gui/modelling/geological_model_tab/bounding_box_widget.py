@@ -93,7 +93,7 @@ class BoundingBoxWidget(QWidget):
                 self.nsteps_z.setValue(1)
             try:
                 if getattr(bb, 'nelements', None) is not None:
-                    self.nelements.setValue(int(getattr(bb, 'nelements')))
+                    self.nelements.setValue(int(bb.nelements))
             except Exception:
                 self.nelements.setValue(getattr(bb, 'nelements', 1000) if bb is not None else 1000)
         else:
@@ -124,7 +124,7 @@ class BoundingBoxWidget(QWidget):
                 if hasattr(self.data_manager, 'get_bounding_box'):
                     bounding_box = self.data_manager.get_bounding_box()
                 elif hasattr(self.data_manager, 'bounding_box'):
-                    bounding_box = getattr(self.data_manager, 'bounding_box')
+                    bounding_box = self.data_manager.bounding_box
             except Exception:
                 logger.debug('Failed to get bounding box from data_manager', exc_info=True)
                 bounding_box = None
@@ -200,10 +200,10 @@ class BoundingBoxWidget(QWidget):
         try:
             if getattr(bounding_box, 'nelements', None) is not None:
                 try:
-                    self.nelements.setValue(int(getattr(bounding_box, 'nelements')))
+                    self.nelements.setValue(int(bounding_box.nelements))
                 except Exception:
                     try:
-                        self.nelements.setValue(getattr(bounding_box, 'nelements'))
+                        self.nelements.setValue(bounding_box.nelements)
                     except Exception:
                         logger.debug('Could not set nelements', exc_info=True)
             if getattr(bounding_box, 'nsteps', None) is not None:

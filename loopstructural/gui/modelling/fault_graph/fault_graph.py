@@ -67,7 +67,6 @@ class TopologyNode(QtWidgets.QGraphicsItem):
     def paint(self, painter, option, widget=None):
         """Delegate paint to the shape_item."""
         # No custom painting is needed since the shape_item handles rendering.
-        pass
 
     def add_edge(self, edge):
         self.edges.append(edge)

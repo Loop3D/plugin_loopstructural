@@ -190,7 +190,6 @@ class SamplerWidget(QWidget):
                     self.samplerTypeComboBox.setCurrentIndex(idx)
                 except Exception as e:
                     print(e)
-                    pass
                 self.samplerTypeComboBox.setEnabled(False)
                 self.runButton.setEnabled(True)
             elif geom_type == QgsWkbTypes.LineGeometry:
@@ -200,7 +199,6 @@ class SamplerWidget(QWidget):
                     self.samplerTypeComboBox.setCurrentIndex(idx)
                 except Exception as e:
                     print(e)
-                    pass
                 self.samplerTypeComboBox.setEnabled(False)
                 self.runButton.setEnabled(False)
             else:
@@ -372,7 +370,7 @@ class SamplerWidget(QWidget):
                 )
             if PlgOptionsManager.get_debug_mode():
                 raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
             return False
 
     def get_parameters(self):
@@ -402,11 +400,11 @@ class SamplerWidget(QWidget):
         """
         if 'sampler_type' in params:
             self.samplerTypeComboBox.setCurrentIndex(params['sampler_type'])
-        if 'dtm_layer' in params and params['dtm_layer']:
+        if params.get('dtm_layer'):
             self.dtmLayerComboBox.setLayer(params['dtm_layer'])
-        if 'geology_layer' in params and params['geology_layer']:
+        if params.get('geology_layer'):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if 'spatial_data_layer' in params and params['spatial_data_layer']:
+        if params.get('spatial_data_layer'):
             self.spatialDataLayerComboBox.setLayer(params['spatial_data_layer'])
         if 'decimation' in params:
             self.decimationSpinBox.setValue(params['decimation'])

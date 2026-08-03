@@ -675,4 +675,3 @@ def paint_stratigraphic_order(
     geology_layer.commitChanges()
     if updater:
         updater("Stratigraphic order painted successfully.")
-    return

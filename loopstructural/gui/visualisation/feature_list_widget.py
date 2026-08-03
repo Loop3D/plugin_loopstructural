@@ -346,7 +346,6 @@ class FeatureListWidget(QWidget):
                     _log(f"Removed existing mesh: {mesh_name}")
                 except Exception:
                     _log(f"Failed to remove existing mesh: {mesh_name}")
-                    pass
 
                 try:
                     # Surfaces associated with individual features

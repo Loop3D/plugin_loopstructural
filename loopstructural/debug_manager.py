@@ -245,13 +245,13 @@ class DebugManager:
         """
         try:
             self.plugin.log(
-                message=f"[map2loop] {context_label} parameters: {str(params)}",
+                message=f"[map2loop] {context_label} parameters: {params!s}",
                 log_level=0,
             )
         except Exception as err:
             self.plugin.log(
                 message=(
-                    f"[map2loop] {context_label} parameters (stringified due to {err}): {str(params)}"
+                    f"[map2loop] {context_label} parameters (stringified due to {err}): {params!s}"
                 ),
                 log_level=0,
             )

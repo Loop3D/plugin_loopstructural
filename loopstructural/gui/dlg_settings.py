@@ -30,7 +30,7 @@ from loopstructural.toolbelt.preferences import PlgSettingsStructure
 # ########## Globals ###############
 # ##################################
 
-FORM_CLASS, _ = uic.loadUiType(Path(__file__).parent / "{}.ui".format(Path(__file__).stem))
+FORM_CLASS, _ = uic.loadUiType(Path(__file__).parent / f"{Path(__file__).stem}.ui")
 
 
 # ############################################################################
@@ -48,7 +48,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
 
         # load UI and set objectName
         self.setupUi(self)
-        self.setObjectName("mOptionsPage{}".format(__title__))
+        self.setObjectName(f"mOptionsPage{__title__}")
 
         _report_context_message = quote(
             "> Reported from plugin settings\n\n"

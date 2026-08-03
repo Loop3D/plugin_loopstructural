@@ -390,7 +390,7 @@ class ObjectPropertiesWidget(QWidget):
             mapper = getattr(actor, 'mapper', None)
             vis = False
             if mapper is not None and hasattr(mapper, 'scalar_visibility'):
-                vis = bool(getattr(mapper, 'scalar_visibility'))
+                vis = bool(mapper.scalar_visibility)
             self.scalar_bar_checkbox.setChecked(vis)
         except Exception:
             pass
@@ -405,7 +405,7 @@ class ObjectPropertiesWidget(QWidget):
                 try:
                     prop = getattr(actor, 'prop', None)
                     if prop is not None and hasattr(prop, 'edge_visibility'):
-                        show_edges = bool(getattr(prop, 'edge_visibility'))
+                        show_edges = bool(prop.edge_visibility)
                     elif hasattr(actor, 'GetProperty'):
                         p = actor.GetProperty()
                         if hasattr(p, 'GetEdgeVisibility'):
@@ -416,7 +416,7 @@ class ObjectPropertiesWidget(QWidget):
                 try:
                     prop = getattr(actor, 'prop', None)
                     if prop is not None and hasattr(prop, 'line_width'):
-                        line_width = float(getattr(prop, 'line_width'))
+                        line_width = float(prop.line_width)
                     elif hasattr(actor, 'GetProperty'):
                         p = actor.GetProperty()
                         if hasattr(p, 'GetLineWidth'):

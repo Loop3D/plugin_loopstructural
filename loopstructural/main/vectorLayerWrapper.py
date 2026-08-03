@@ -673,7 +673,6 @@ def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
             return QgsCoordinateReferenceSystem.fromEpsgId(int(epsg))
     except Exception:
         logger.debug("Failed to convert EPSG code to QgsCoordinateReferenceSystem", exc_info=True)
-        pass
     if isinstance(crs_info, str):
         try:
             temp = QgsCoordinateReferenceSystem(crs_info)
@@ -1141,7 +1140,6 @@ def geodataframeToMemoryLayer(geodataframe, layer_name: str = "GeoDataFrame Laye
                     crs = QgsCoordinateReferenceSystem.fromEpsgId(int(epsg))
             except Exception as e:
                 print("Error building CRS from EPSG", e)
-                pass
 
     # --- Build QGIS fields from pandas dtypes
     fields = QgsFields()
