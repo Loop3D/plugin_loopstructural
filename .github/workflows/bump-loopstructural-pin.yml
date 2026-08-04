@@ -18,7 +18,12 @@ jobs:
       - name: Get latest LoopStructural release
         id: latest
         run: |
-          latest=$(curl -s https://api.github.com/repos/Loop3D/LoopStructural/releases/latest | jq -r .tag_name | sed 's/^v//')
+          # LoopStructural is a release-please monorepo (LoopStructural itself,
+          # plus loop_common/loop_interpolation sub-packages), so `releases/latest`
+          # can return whichever component's release was published last, not
+          # necessarily the LoopStructural package. Read the manifest instead —
+          # it maps package name to version unambiguously.
+          latest=$(curl -s https://raw.githubusercontent.com/Loop3D/LoopStructural/master/.release-please-manifest.json | jq -r '.["LoopStructural"]')
           echo "version=$latest" >> "$GITHUB_OUTPUT"
 
       - name: Bump pins if minor version changed
