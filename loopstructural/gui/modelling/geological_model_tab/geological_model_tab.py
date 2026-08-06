@@ -1,10 +1,14 @@
 from LoopStructural.modelling.features import FeatureType
 from qgis.PyQt.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from qgis.PyQt.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
     QMenu,
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -24,17 +28,65 @@ from .feature_details_panel import (
 )
 
 
+def _build_status_icon(color: str, *, filled: bool, checkmark: bool) -> QIcon:
+    """Draw a small coloured circle (optionally with a checkmark) for the
+    feature-list build-status indicator. Drawn on the fly rather than shipped
+    as a resource file, so the colours stay consistent regardless of the
+    active icon theme.
+    """
+    size = 14
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    if filled:
+        painter.setBrush(QColor(color))
+        painter.setPen(Qt.NoPen)
+    else:
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(color), 1.5))
+    painter.drawEllipse(1, 1, size - 2, size - 2)
+    if checkmark:
+        pen = QPen(QColor('white'), 2)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.drawLine(4, 7, 6, 10)
+        painter.drawLine(6, 10, 10, 4)
+    painter.end()
+    return QIcon(pixmap)
+
+
+_MODEL_STATE_LABELS = {
+    'empty': "Model status: not initialized",
+    'initialized': "Model status: initialized (not solved)",
+    'solved': "Model status: solved",
+}
+
+
 class GeologicalModelTab(QWidget):
     def __init__(self, parent=None, *, model_manager=None, data_manager=None):
         super().__init__(parent)
         self.model_manager = model_manager
         self.data_manager = data_manager
+        # Build-status icons for the feature list, created once and reused.
+        self._built_icon = _build_status_icon('#2e8b40', filled=True, checkmark=True)
+        self._unbuilt_icon = _build_status_icon('#9a9a9a', filled=False, checkmark=False)
+        self._unknown_icon = _build_status_icon('#c8c8c8', filled=False, checkmark=False)
+
         # Register update observer using Observable API if available
         if self.model_manager is not None:
             try:
-                # listen for model-level updates
+                # listen for model-level updates, plus per-feature/whole-model
+                # solve events so build-status ticks stay current
                 self._disp_model = self.model_manager.attach(
                     self.update_feature_list, 'model_updated'
+                )
+                self._disp_feature_updated = self.model_manager.attach(
+                    self.update_feature_list, 'feature_updated'
+                )
+                self._disp_all_features_updated = self.model_manager.attach(
+                    self.update_feature_list, 'all_features_updated'
                 )
                 # show progress when model updates start/finish (covers indirect calls)
                 self._disp_update_start = self.model_manager.attach(
@@ -54,9 +106,10 @@ class GeologicalModelTab(QWidget):
         # Main layout
         mainLayout = QVBoxLayout(self)
 
-        # Splitter for collapsible layout
+        # Splitter for collapsible layout. Given all the stretch so the
+        # button/status row above it never competes for space.
         splitter = QSplitter(self)
-        mainLayout.addWidget(splitter)
+        mainLayout.addWidget(splitter, 1)
 
         # Feature list panel
 
@@ -86,13 +139,30 @@ class GeologicalModelTab(QWidget):
         splitter.setStretchFactor(1, 0)  # Feature details panel
         splitter.setOrientation(Qt.Horizontal)  # Add horizontal slider
 
-        # Initialize Model button
+        # Initialize / Solve Model buttons + a status summary of where the
+        # model currently is: empty -> initialized (unsolved) -> solved.
         self.initializeModelButton = QPushButton("Initialize Model")
-        mainLayout.insertWidget(0, self.initializeModelButton)
+        self.solveModelButton = QPushButton("Solve Model")
+        self.solveModelButton.setEnabled(False)  # nothing to solve until initialized
+        self.modelStatusLabel = QLabel(_MODEL_STATE_LABELS['empty'])
+
+        buttonRow = QHBoxLayout()
+        buttonRow.setContentsMargins(0, 0, 0, 0)
+        buttonRow.addWidget(self.initializeModelButton)
+        buttonRow.addWidget(self.solveModelButton)
+        buttonRow.addStretch(1)
+        buttonRow.addWidget(self.modelStatusLabel)
+        buttonRowWidget = QWidget()
+        buttonRowWidget.setLayout(buttonRow)
+        # Fixed vertical size policy so this row only ever takes the height
+        # its contents need, leaving the rest of the tab to the feature list.
+        buttonRowWidget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        mainLayout.insertWidget(0, buttonRowWidget, 0)
 
         # Action buttons
 
         self.initializeModelButton.clicked.connect(self.initialize_model)
+        self.solveModelButton.clicked.connect(self.solve_model)
 
         # Connect feature selection to update details panel
         self.featureList.itemClicked.connect(self.on_feature_selected)
@@ -100,6 +170,11 @@ class GeologicalModelTab(QWidget):
         # thread handle to keep worker alive while running
         self._model_update_thread = None
         self._model_update_worker = None
+
+        # populate immediately in case a model already exists (e.g. tab
+        # re-created after a model was loaded)
+        if self.model_manager is not None:
+            self.update_feature_list()
 
     def show_add_feature_menu(self, *args):
         menu = QMenu(self)
@@ -170,115 +245,152 @@ class GeologicalModelTab(QWidget):
                 )
                 return
 
-        # create progress dialog. Non-modal so the rest of QGIS (map canvas,
-        # other panels) stays usable while the update runs in the background
-        # thread; only the Initialize Model button is disabled below to avoid
-        # a second update being started concurrently.
-        progress = QProgressDialog("Updating geological model...", "Cancel", 0, 0, self)
+        self._run_model_task(
+            lambda progress_callback: self.model_manager.update_model(
+                notify_observers=False, progress_callback=progress_callback
+            ),
+            title="Updating Model",
+            initial_label="Updating geological model...",
+        )
+
+    def solve_model(self):
+        # Build/interpolate every feature already added to the model. Only
+        # meaningful once Initialize Model has created some features.
+        if not self.model_manager or self.model_manager.model_state == 'empty':
+            return
+        self._run_model_task(
+            lambda progress_callback: self.model_manager.update_all_features(
+                progress_callback=progress_callback, notify_observers=False
+            ),
+            title="Solving Model",
+            initial_label="Solving geological model...",
+        )
+
+    def _run_model_task(self, target, *, title, initial_label):
+        """Run `target(progress_callback)` on a background QThread with a
+        non-modal progress dialog, so the rest of QGIS stays usable. Both
+        Initialize Model and Solve Model share this: they disable each other
+        while either is running so only one model update runs at a time.
+
+        The worker's signals are connected to *bound methods of this widget*
+        (`_on_task_progress` etc.) rather than local closures. That matters:
+        PyQt only auto-queues a cross-thread signal delivery when it can tell
+        which thread the receiver lives in, and it can only do that for a
+        bound QObject method (via `receiver.thread()`) -- not for a plain
+        closure. Connecting to closures meant the progress/finished handlers
+        could run directly on the worker thread instead of being marshalled
+        to the GUI thread, which is what made "Solve Model" freeze QGIS
+        despite the work already being on a background QThread.
+        """
+        progress = QProgressDialog(initial_label, "Cancel", 0, 0, self)
         progress.setWindowModality(Qt.NonModal)
-        progress.setWindowTitle("Updating Model")
+        progress.setWindowTitle(title)
         progress.setCancelButton(None)
         progress.setMinimumDuration(0)
         progress.show()
 
         self.initializeModelButton.setEnabled(False)
+        self.solveModelButton.setEnabled(False)
 
-        # worker and thread
+        # Only one task runs at a time (buttons are disabled above for the
+        # duration), so it's safe to stash the per-run state needed by the
+        # bound slot methods below directly on self.
+        self._task_title = title
+        self._task_progress_dialog = progress
+
         thread = QThread(self)
-        worker = _ModelUpdateWorker(self.model_manager)
+        worker = _ModelUpdateWorker(target)
         worker.moveToThread(thread)
 
-        # When thread starts run worker.run
         thread.started.connect(worker.run)
-
-        # relay per-step progress (fault/group currently being built) to the dialog
-        def _on_progress(message, current, total):
-            try:
-                if total > 0:
-                    if progress.maximum() != total:
-                        progress.setMaximum(total)
-                    progress.setValue(current)
-                progress.setLabelText(message)
-            except Exception:
-                pass
-
-        worker.progress.connect(_on_progress)
-
-        # on worker finished, notify observers on main thread and cleanup
-        def _on_finished():
-            try:
-                # notify observers now on main thread
-                try:
-                    self.model_manager.notify('model_updated')
-                except Exception:
-                    for obs in getattr(self.model_manager, 'observers', []):
-                        try:
-                            obs()
-                        except Exception as e:
-                            self._debug.log_error("Error notifying observer", e)
-            finally:
-                self.initializeModelButton.setEnabled(True)
-                try:
-                    progress.close()
-                except Exception:
-                    pass
-                # cleanup worker/thread
-                try:
-                    worker.deleteLater()
-                except Exception:
-                    pass
-                try:
-                    thread.quit()
-                    thread.wait(2000)
-                except Exception:
-                    pass
-
-        def _on_error(tb):
-            self.initializeModelButton.setEnabled(True)
-            try:
-                progress.close()
-            except Exception:
-                pass
-            try:
-                QMessageBox.critical(
-                    self,
-                    "Model update failed",
-                    f"An error occurred while updating the model:\n{tb}",
-                )
-            except Exception:
-                pass
-            # ensure thread cleanup
-            try:
-                worker.deleteLater()
-            except Exception:
-                pass
-            try:
-                thread.quit()
-                thread.wait(2000)
-            except Exception:
-                pass
-
-        worker.finished.connect(_on_finished)
-        worker.error.connect(_on_error)
+        worker.progress.connect(self._on_task_progress)
+        worker.finished.connect(self._on_task_finished)
+        worker.error.connect(self._on_task_error)
         thread.finished.connect(thread.deleteLater)
+
         self._model_update_thread = thread
         self._model_update_worker = worker
         thread.start()
+
+    @pyqtSlot(str, int, int)
+    def _on_task_progress(self, message, current, total):
+        progress = self._task_progress_dialog
+        try:
+            if total > 0:
+                if progress.maximum() != total:
+                    progress.setMaximum(total)
+                progress.setValue(current)
+            progress.setLabelText(message)
+        except Exception:
+            pass
+
+    @pyqtSlot()
+    def _on_task_finished(self):
+        try:
+            # notify observers now on the GUI thread
+            try:
+                self.model_manager.notify('model_updated')
+            except Exception:
+                for obs in getattr(self.model_manager, 'observers', []):
+                    try:
+                        obs()
+                    except Exception as e:
+                        self._debug.log_error("Error notifying observer", e)
+        finally:
+            self._finish_task()
+
+    @pyqtSlot(str)
+    def _on_task_error(self, tb):
+        try:
+            QMessageBox.critical(
+                self,
+                f"{self._task_title} failed",
+                f"An error occurred while updating the model:\n{tb}",
+            )
+        except Exception:
+            pass
+        self._finish_task()
+
+    def _finish_task(self):
+        self.initializeModelButton.setEnabled(True)
+        self.solveModelButton.setEnabled(self.model_manager.model_state != 'empty')
+        try:
+            self._task_progress_dialog.close()
+        except Exception:
+            pass
+        try:
+            self._model_update_worker.deleteLater()
+        except Exception:
+            pass
+        try:
+            self._model_update_thread.quit()
+            self._model_update_thread.wait(2000)
+        except Exception:
+            pass
 
     def update_feature_list(self, *args, **kwargs):
         self.featureList.clear()  # Clear the feature list before populating it
         for feature in self.model_manager.features():
             if feature.name.startswith("__"):
                 continue
-            items = self.featureList.findItems(feature.name, Qt.MatchExactly)
-            if items:
-                # If the feature already exists, skip adding it again
-                continue
             item = QTreeWidgetItem(self.featureList)
             item.setText(0, feature.name)
             item.setData(0, 1, feature)
+            item.setIcon(0, self._status_icon(self.model_manager.is_feature_built(feature)))
             self.featureList.addTopLevelItem(item)
-        # self.featureList.itemClicked.connect(self.on_feature_selected)
+        self._refresh_model_status()
+
+    def _status_icon(self, built):
+        if built is True:
+            return self._built_icon
+        if built is False:
+            return self._unbuilt_icon
+        return self._unknown_icon
+
+    def _refresh_model_status(self):
+        state = self.model_manager.model_state if self.model_manager is not None else 'empty'
+        self.modelStatusLabel.setText(_MODEL_STATE_LABELS.get(state, "Model status: unknown"))
+        self.solveModelButton.setEnabled(state != 'empty')
 
     def on_feature_selected(self, item):
         feature_name = item.text(0)
@@ -402,22 +514,26 @@ class GeologicalModelTab(QWidget):
 
 
 class _ModelUpdateWorker(QObject):
-    """Worker that runs model_manager.update_model in a background thread.
+    """Runs an arbitrary long-running model update in a background thread.
+
+    `target` is called as `target(progress_callback)`, where `progress_callback`
+    forwards to the `progress` signal below -- used for both "Initialize Model"
+    (model_manager.update_model) and "Solve Model" (model_manager.update_all_features).
 
     Emits finished when done and error with a string if an exception occurs.
-    Emits progress(message, current, total) as each fault/stratigraphic group
-    is built, so the GUI can show what's currently happening. `progress.emit`
-    is safe to call from this worker thread: Qt automatically queues the
-    delivery to slots living on the main thread.
+    Emits progress(message, current, total) as each fault/stratigraphic
+    group/feature is built, so the GUI can show what's currently happening.
+    `progress.emit` is safe to call from this worker thread: Qt automatically
+    queues the delivery to slots living on the main thread.
     """
 
     finished = pyqtSignal()
     error = pyqtSignal(str)
     progress = pyqtSignal(str, int, int)
 
-    def __init__(self, model_manager):
+    def __init__(self, target):
         super().__init__()
-        self.model_manager = model_manager
+        self._target = target
 
     def _report_progress(self, message, current, total):
         self.progress.emit(message, current, total)
@@ -425,15 +541,7 @@ class _ModelUpdateWorker(QObject):
     @pyqtSlot()
     def run(self):
         try:
-            # perform the expensive update
-            # run update without notifying observers from the background thread
-            try:
-                self.model_manager.update_model(
-                    notify_observers=False, progress_callback=self._report_progress
-                )
-            except TypeError:
-                # fallback if update_model signature not available
-                self.model_manager.update_model()
+            self._target(self._report_progress)
         except Exception as e:
             try:
                 import traceback

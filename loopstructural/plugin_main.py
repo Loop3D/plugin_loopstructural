@@ -101,14 +101,32 @@ class LoopstructuralPlugin:
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
         handler.setLevel(logging.WARNING)
 
+        # Threshold is re-read from settings on every record rather than fixed
+        # at startup, so toggling debug_mode in the plugin options immediately
+        # surfaces LoopStructural's per-feature/per-coordinate build/solve
+        # logging (logger.info(...) in its builders) -- the most direct way to
+        # see which feature "Solve Model" is currently stuck on.
+        def _current_threshold():
+            try:
+                if PlgOptionsManager.get_plg_settings().debug_mode:
+                    return logging.INFO
+            except Exception:
+                pass
+            return logging.WARNING
+
         # LoopStructural 1.7 replaced global handler rewiring with add_sink():
         # LoopStructural.setLogging() only rewires loggers that already exist
         # at call time, so LoopStructural.getLogger() calls made later (e.g.
         # lazily-imported GUI modules) never picked up our handler. add_sink()
         # registers the sink so every logger created afterwards forwards to it too.
         def _forward_to_handler(record):
-            if record.levelno >= handler.level:
-                handler.emit(record)
+            if record.levelno < _current_threshold():
+                return
+            # Only pop up a message-bar toast for warnings/errors; the debug-mode
+            # INFO chatter (one message per feature/coordinate) would otherwise
+            # spam a toast per step. It's still visible in the Log Messages panel.
+            handler.push = record.levelno >= logging.WARNING
+            handler.emit(record)
 
         LoopStructural.add_sink(_forward_to_handler)
         setLogging_m2l(level="warning", handler=handler)

@@ -434,23 +434,36 @@ class GeologicalModelManager(Observable):
         self._emit('foliation_features_updated')
 
     def _report_progress(self, message: str):
-        """Report progress on a long-running model update, if a caller is listening.
+        """Report progress on a long-running model update.
 
-        `update_model` stashes a `_progress_callback`/`_progress_total` pair for the
-        duration of the update; this increments the step counter and forwards
-        `(message, current, total)` to that callback. No-op if nothing is listening
-        (e.g. when `update_fault_features`/`update_foliation_features` are called
-        directly, outside of `update_model`).
+        `update_model`/`update_all_features` stash a `_progress_callback`/
+        `_progress_total` pair for the duration of the update; this increments
+        the step counter and forwards `(message, current, total)` to that
+        callback, if one was given (e.g. the GUI's progress dialog).
+
+        Always also logs the step via the debug manager (when one is
+        configured), independent of whether a progress_callback was supplied.
+        With the plugin's Debug Mode setting enabled this is the way to see
+        which feature a long-running Initialize/Solve is currently on, e.g.
+        to tell a slow solve apart from a genuine hang.
         """
-        callback = getattr(self, '_progress_callback', None)
-        if callback is None:
-            return
         self._progress_current = getattr(self, '_progress_current', 0) + 1
+        current = self._progress_current
         total = getattr(self, '_progress_total', 0)
-        try:
-            callback(message, self._progress_current, total)
-        except Exception:
-            pass
+
+        dbg = getattr(self, '_debug_manager', None)
+        if dbg is not None:
+            try:
+                dbg.log(f"{message} ({current}/{total})", log_level=0)
+            except Exception:
+                pass
+
+        callback = getattr(self, '_progress_callback', None)
+        if callback is not None:
+            try:
+                callback(message, current, total)
+            except Exception:
+                pass
 
     def update_fault_features(self):
         """Update the fault features in the geological model."""
@@ -528,6 +541,49 @@ class GeologicalModelManager(Observable):
                         positive = bool(abut_value > 0)
                         self.model[f].add_abutting_fault(self.model[f2], positive=positive)
 
+    def is_feature_built(self, feature) -> Optional[bool]:
+        """Best-effort check of whether `feature` has been solved (interpolated).
+
+        Reads LoopStructural's internal builder `_up_to_date` flag(s) rather than
+        calling `builder.up_to_date()`, since that method rebuilds as a side
+        effect when the feature is stale -- not something a passive status check
+        should trigger. Faults and structural frames delegate to three
+        per-coordinate sub-builders and never set their own top-level flag, so
+        those are checked individually.
+
+        Returns
+        -------
+        bool or None
+            True/False if the build state could be determined, otherwise None
+            (unrecognised builder shape).
+        """
+        builder = getattr(feature, 'builder', None)
+        if builder is None:
+            return None
+        sub_builders = getattr(builder, 'builders', None)
+        if sub_builders:
+            try:
+                return all(getattr(b, '_up_to_date', False) for b in sub_builders)
+            except Exception:
+                return None
+        if hasattr(builder, '_up_to_date'):
+            return bool(builder._up_to_date)
+        return None
+
+    @property
+    def model_state(self) -> str:
+        """Coarse summary of the model's build state, for display in the GUI.
+
+        Returns 'empty' (no features yet), 'initialized' (features exist but at
+        least one hasn't been solved) or 'solved' (every feature is up to date).
+        """
+        features = [f for f in self.features() if not f.name.startswith('__')]
+        if not features:
+            return 'empty'
+        if all(self.is_feature_built(f) for f in features):
+            return 'solved'
+        return 'initialized'
+
     @property
     def valid(self):
         valid = True
@@ -579,12 +635,27 @@ class GeologicalModelManager(Observable):
         self._progress_callback = progress_callback
         self._progress_total = len(self.faults) + group_count
         self._progress_current = 0
+        dbg = getattr(self, '_debug_manager', None)
+        if dbg is not None:
+            try:
+                dbg.log(
+                    f"Initialize Model: building {len(self.faults)} fault(s) and "
+                    f"{group_count} stratigraphic group(s)",
+                    log_level=0,
+                )
+            except Exception:
+                pass
         try:
             # Update the model with stratigraphy
             self.update_fault_features()
             self.update_foliation_features()
         finally:
             self._progress_callback = None
+        if dbg is not None:
+            try:
+                dbg.log("Initialize Model: finished", log_level=0)
+            except Exception:
+                pass
 
         # Notify observers using the Observable framework if requested
         if notify_observers:
@@ -609,10 +680,41 @@ class GeologicalModelManager(Observable):
         self._emit('feature_updated', feature_name)
         self._emit('model_update_finished')
 
-    def update_all_features(self, subset: Optional[Union[list, str]] = None):
-        """Update all features in the geological model."""
+    def update_all_features(
+        self,
+        subset: Optional[Union[list, str]] = None,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+        notify_observers: bool = True,
+    ):
+        """Update (solve) all features in the geological model.
+
+        Parameters
+        ----------
+        subset : list, str, or None
+            Optional subset of feature names (or 'faults'/'stratigraphy') to
+            update; all features are solved if not provided.
+        progress_callback : callable or None
+            Optional callable invoked as `callback(message, current, total)` as
+            each feature is solved, mirroring `update_model`'s progress
+            reporting. See `update_model` for thread-safety notes.
+        notify_observers : bool
+            If True (default) observers will be notified via `_emit` around the
+            solve. Pass False when calling from a background thread: this
+            plugin's GUI observers are plain Python callbacks (not Qt signals),
+            so `_emit` invokes them synchronously on whatever thread calls this
+            method -- if that's a worker thread, GUI-touching observers end up
+            creating/mutating Qt widgets off the GUI thread, which is undefined
+            behaviour in Qt and can hang or corrupt the application. The caller
+            is then responsible for notifying observers from the main thread
+            once the background call returns (see `update_model` and the GUI's
+            `_run_model_task`/`_on_task_finished`).
+        """
         # Allow UI to react to a feature update
-        self._emit('model_update_started')
+        if notify_observers:
+            self._emit('model_update_started')
+        dbg = getattr(self, '_debug_manager', None)
+        self._progress_callback = progress_callback
+        self._progress_current = 0
         if subset is not None:
 
             if isinstance(subset, str):
@@ -624,15 +726,46 @@ class GeologicalModelManager(Observable):
                     ]
                 else:
                     subset = [subset]
-            for feature_name in subset:
-                feature = self.model.get_feature_by_name(feature_name)
-                if feature is not None:
-                    feature.builder.update()
+            self._progress_total = len(subset)
+            if dbg is not None:
+                try:
+                    dbg.log(f"Solve Model: solving {len(subset)} feature(s)", log_level=0)
+                except Exception:
+                    pass
+            try:
+                for feature_name in subset:
+                    feature = self.model.get_feature_by_name(feature_name)
+                    if feature is not None:
+                        self._report_progress(f"Solving '{feature_name}'")
+                        feature.builder.update()
+            finally:
+                self._progress_callback = None
         else:
-            self.model.update()
+            # mirrors GeologicalModel.update(), but reports progress per visible
+            # feature instead of requiring tqdm
+            visible_features = [f for f in self.model.features if not f.name.startswith('__')]
+            self._progress_total = len(visible_features)
+            if dbg is not None:
+                try:
+                    dbg.log(f"Solve Model: solving {len(visible_features)} feature(s)", log_level=0)
+                except Exception:
+                    pass
+            try:
+                for f in self.model.features:
+                    if not f.name.startswith('__'):
+                        self._report_progress(f"Solving '{f.name}'")
+                    f.builder.up_to_date()
+            finally:
+                self._progress_callback = None
+        if dbg is not None:
+            try:
+                dbg.log("Solve Model: finished", log_level=0)
+            except Exception:
+                pass
         # Notify observers and include feature name for interested listeners
-        self._emit('all_features_updated')
-        self._emit('model_update_finished')
+        if notify_observers:
+            self._emit('all_features_updated')
+            self._emit('model_update_finished')
 
     def features(self):
         """Return the list of features currently held by the internal model.
