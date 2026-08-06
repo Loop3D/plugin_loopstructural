@@ -595,7 +595,24 @@ class BaseFeatureDetailsPanel(QWidget):
 
         Multiple calls will reset the timer so only a single rebuild occurs
         after user activity has settled.
+
+        Callers are expected to have already flagged the feature's builder as
+        not up to date (either via `update_build_arguments`, which does this
+        itself, or by calling `builder.set_not_up_to_date(...)` directly).
+        This notifies observers immediately -- on the GUI thread, since this
+        is only ever called from a widget's valueChanged handler -- so the
+        feature list's tick flips to "not built" right away instead of
+        lagging behind by `delay_ms` until the rebuild actually runs.
         """
+        if self.model_manager is not None:
+            try:
+                self.model_manager.notify('model_updated')
+            except Exception:
+                for obs in getattr(self.model_manager, 'observers', []):
+                    try:
+                        obs()
+                    except Exception:
+                        pass
         try:
             if self._rebuild_timer is None:
                 return
@@ -646,20 +663,28 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
         def update_major_axis(value):
             self.fault.fault_major_axis = value
-            # schedule a debounced rebuild so multiple rapid edits are coalesced
+            # these mutate the fault/builder directly rather than going through
+            # update_build_arguments (which self-flags dirty), so we have to
+            # mark it stale by hand or the debounced rebuild below is a no-op:
+            # builder.update() checks _up_to_date first and skips rebuilding
+            # entirely if nothing told it the fault changed.
+            self.fault.builder.set_not_up_to_date(self)
             self.schedule_rebuild()
 
         def update_minor_axis(value):
             self.fault.fault_minor_axis = value
+            self.fault.builder.set_not_up_to_date(self)
             self.schedule_rebuild()
 
         def update_intermediate_axis(value):
             self.fault.fault_intermediate_axis = value
+            self.fault.builder.set_not_up_to_date(self)
             self.schedule_rebuild()
 
         def update_dip(value):
             strike = normal_vector_to_strike_and_dip(self.fault.fault_normal_vector)[0, 0]
             self.fault.builder.fault_normal_vector = strikedip2vector([strike], [value])[0]
+            self.fault.builder.set_not_up_to_date(self)
             self.schedule_rebuild()
 
         # Fault displacement slider

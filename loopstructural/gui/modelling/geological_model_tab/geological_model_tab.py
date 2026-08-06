@@ -28,11 +28,11 @@ from .feature_details_panel import (
 )
 
 
-def _build_status_icon(color: str, *, filled: bool, checkmark: bool) -> QIcon:
-    """Draw a small coloured circle (optionally with a checkmark) for the
-    feature-list build-status indicator. Drawn on the fly rather than shipped
-    as a resource file, so the colours stay consistent regardless of the
-    active icon theme.
+def _build_status_icon(color: str, *, filled: bool, mark: str = None) -> QIcon:
+    """Draw a small coloured circle with an optional check/cross mark for the
+    feature-list build-status indicator. `mark` is 'check', 'cross', or None.
+    Drawn on the fly rather than shipped as a resource file, so the colours
+    stay consistent regardless of the active icon theme.
     """
     size = 14
     pixmap = QPixmap(size, size)
@@ -46,13 +46,17 @@ def _build_status_icon(color: str, *, filled: bool, checkmark: bool) -> QIcon:
         painter.setBrush(Qt.NoBrush)
         painter.setPen(QPen(QColor(color), 1.5))
     painter.drawEllipse(1, 1, size - 2, size - 2)
-    if checkmark:
+    if mark:
         pen = QPen(QColor('white'), 2)
         pen.setCapStyle(Qt.RoundCap)
         pen.setJoinStyle(Qt.RoundJoin)
         painter.setPen(pen)
-        painter.drawLine(4, 7, 6, 10)
-        painter.drawLine(6, 10, 10, 4)
+        if mark == 'check':
+            painter.drawLine(4, 7, 6, 10)
+            painter.drawLine(6, 10, 10, 4)
+        elif mark == 'cross':
+            painter.drawLine(4, 4, 10, 10)
+            painter.drawLine(10, 4, 4, 10)
     painter.end()
     return QIcon(pixmap)
 
@@ -70,9 +74,9 @@ class GeologicalModelTab(QWidget):
         self.model_manager = model_manager
         self.data_manager = data_manager
         # Build-status icons for the feature list, created once and reused.
-        self._built_icon = _build_status_icon('#2e8b40', filled=True, checkmark=True)
-        self._unbuilt_icon = _build_status_icon('#9a9a9a', filled=False, checkmark=False)
-        self._unknown_icon = _build_status_icon('#c8c8c8', filled=False, checkmark=False)
+        self._built_icon = _build_status_icon('#2e8b40', filled=True, mark='check')
+        self._unbuilt_icon = _build_status_icon('#c0392b', filled=True, mark='cross')
+        self._unknown_icon = _build_status_icon('#9a9a9a', filled=False, mark=None)
 
         # Register update observer using Observable API if available
         if self.model_manager is not None:

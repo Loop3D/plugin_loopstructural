@@ -541,7 +541,7 @@ class GeologicalModelManager(Observable):
                         positive = bool(abut_value > 0)
                         self.model[f].add_abutting_fault(self.model[f2], positive=positive)
 
-    def is_feature_built(self, feature) -> Optional[bool]:
+    def is_feature_built(self, feature, _seen: Optional[set] = None) -> Optional[bool]:
         """Best-effort check of whether `feature` has been solved (interpolated).
 
         Reads LoopStructural's internal builder `_up_to_date` flag(s) rather than
@@ -551,24 +551,48 @@ class GeologicalModelManager(Observable):
         per-coordinate sub-builders and never set their own top-level flag, so
         those are checked individually.
 
+        Also checks transitively through `builder.faults` -- the features this
+        one was cut/affected by (e.g. faults a stratigraphic surface is cut
+        by). LoopStructural doesn't retroactively invalidate a feature when
+        something it depends on changes; a dependency becoming stale only
+        matters the next time *its own* `up_to_date()` is called, which also
+        rebuilds it as a side effect. So without this, editing a fault would
+        only show the fault itself as "not built" while every surface it
+        cuts kept showing a stale green tick.
+
         Returns
         -------
         bool or None
             True/False if the build state could be determined, otherwise None
             (unrecognised builder shape).
         """
+        if _seen is None:
+            _seen = set()
+        if id(feature) in _seen:
+            return True  # cycle guard: don't re-derive, assume fine
+        _seen.add(id(feature))
+
         builder = getattr(feature, 'builder', None)
         if builder is None:
             return None
         sub_builders = getattr(builder, 'builders', None)
         if sub_builders:
             try:
-                return all(getattr(b, '_up_to_date', False) for b in sub_builders)
+                own_built = all(getattr(b, '_up_to_date', False) for b in sub_builders)
             except Exception:
                 return None
-        if hasattr(builder, '_up_to_date'):
-            return bool(builder._up_to_date)
-        return None
+        elif hasattr(builder, '_up_to_date'):
+            own_built = bool(builder._up_to_date)
+        else:
+            return None
+
+        if not own_built:
+            return False
+
+        for dependency in getattr(builder, 'faults', None) or []:
+            if self.is_feature_built(dependency, _seen) is False:
+                return False
+        return True
 
     @property
     def model_state(self) -> str:
