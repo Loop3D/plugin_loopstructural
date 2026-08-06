@@ -170,13 +170,18 @@ class GeologicalModelTab(QWidget):
                 )
                 return
 
-        # create progress dialog (indeterminate)
+        # create progress dialog. Non-modal so the rest of QGIS (map canvas,
+        # other panels) stays usable while the update runs in the background
+        # thread; only the Initialize Model button is disabled below to avoid
+        # a second update being started concurrently.
         progress = QProgressDialog("Updating geological model...", "Cancel", 0, 0, self)
-        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setWindowModality(Qt.NonModal)
         progress.setWindowTitle("Updating Model")
         progress.setCancelButton(None)
         progress.setMinimumDuration(0)
         progress.show()
+
+        self.initializeModelButton.setEnabled(False)
 
         # worker and thread
         thread = QThread(self)
@@ -185,6 +190,19 @@ class GeologicalModelTab(QWidget):
 
         # When thread starts run worker.run
         thread.started.connect(worker.run)
+
+        # relay per-step progress (fault/group currently being built) to the dialog
+        def _on_progress(message, current, total):
+            try:
+                if total > 0:
+                    if progress.maximum() != total:
+                        progress.setMaximum(total)
+                    progress.setValue(current)
+                progress.setLabelText(message)
+            except Exception:
+                pass
+
+        worker.progress.connect(_on_progress)
 
         # on worker finished, notify observers on main thread and cleanup
         def _on_finished():
@@ -199,6 +217,7 @@ class GeologicalModelTab(QWidget):
                         except Exception as e:
                             self._debug.log_error("Error notifying observer", e)
             finally:
+                self.initializeModelButton.setEnabled(True)
                 try:
                     progress.close()
                 except Exception:
@@ -215,6 +234,7 @@ class GeologicalModelTab(QWidget):
                     pass
 
         def _on_error(tb):
+            self.initializeModelButton.setEnabled(True)
             try:
                 progress.close()
             except Exception:
@@ -300,7 +320,7 @@ class GeologicalModelTab(QWidget):
                     "Updating geological model...", None, 0, 0, self
                 )
                 self._progress_dialog.setWindowTitle("Updating Model")
-                self._progress_dialog.setWindowModality(Qt.ApplicationModal)
+                self._progress_dialog.setWindowModality(Qt.NonModal)
                 self._progress_dialog.setCancelButton(None)
                 self._progress_dialog.setMinimumDuration(0)
             self._progress_dialog.show()
@@ -385,14 +405,22 @@ class _ModelUpdateWorker(QObject):
     """Worker that runs model_manager.update_model in a background thread.
 
     Emits finished when done and error with a string if an exception occurs.
+    Emits progress(message, current, total) as each fault/stratigraphic group
+    is built, so the GUI can show what's currently happening. `progress.emit`
+    is safe to call from this worker thread: Qt automatically queues the
+    delivery to slots living on the main thread.
     """
 
     finished = pyqtSignal()
     error = pyqtSignal(str)
+    progress = pyqtSignal(str, int, int)
 
     def __init__(self, model_manager):
         super().__init__()
         self.model_manager = model_manager
+
+    def _report_progress(self, message, current, total):
+        self.progress.emit(message, current, total)
 
     @pyqtSlot()
     def run(self):
@@ -400,7 +428,9 @@ class _ModelUpdateWorker(QObject):
             # perform the expensive update
             # run update without notifying observers from the background thread
             try:
-                self.model_manager.update_model(notify_observers=False)
+                self.model_manager.update_model(
+                    notify_observers=False, progress_callback=self._report_progress
+                )
             except TypeError:
                 # fallback if update_model signature not available
                 self.model_manager.update_model()

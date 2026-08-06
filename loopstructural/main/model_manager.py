@@ -383,6 +383,7 @@ class GeologicalModelManager(Observable):
         """
         stratigraphic_column = {}
         for _i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
+            self._report_progress(f"Building stratigraphic group '{group.name}'")
             # check if the attribute is none, if its none we want so skip as it could be an
             # ambiguous attribute and cause multiple data assocaited with different features
             # to be applied the same value.
@@ -432,9 +433,29 @@ class GeologicalModelManager(Observable):
         # foliation features were rebuilt; let observers know
         self._emit('foliation_features_updated')
 
+    def _report_progress(self, message: str):
+        """Report progress on a long-running model update, if a caller is listening.
+
+        `update_model` stashes a `_progress_callback`/`_progress_total` pair for the
+        duration of the update; this increments the step counter and forwards
+        `(message, current, total)` to that callback. No-op if nothing is listening
+        (e.g. when `update_fault_features`/`update_foliation_features` are called
+        directly, outside of `update_model`).
+        """
+        callback = getattr(self, '_progress_callback', None)
+        if callback is None:
+            return
+        self._progress_current = getattr(self, '_progress_current', 0) + 1
+        total = getattr(self, '_progress_total', 0)
+        try:
+            callback(message, self._progress_current, total)
+        except Exception:
+            pass
+
     def update_fault_features(self):
         """Update the fault features in the geological model."""
         for fault_name, fault_data in self.faults.items():
+            self._report_progress(f"Building fault '{fault_name}'")
             if qgisAttributeIsNone(fault_name):
                 # check if the attribute is none, if its none we want so skip as it could be an
                 # ambiguous attribute and cause multiple data assocaited with different features
@@ -487,7 +508,25 @@ class GeologicalModelManager(Observable):
                     relationship = self.fault_topology.get_fault_relationship(f, f2)
 
                     if relationship is FaultRelationshipType.ABUTTING:
-                        self.model[f].add_abutting_fault(self.model[f2])
+                        # Determine which side of f2 to keep ourselves, ignoring any
+                        # regions already applied to f2 (e.g. from an earlier abutting
+                        # relationship in the fault network). LoopStructural's own
+                        # auto-detection inside add_abutting_fault evaluates f2 with
+                        # its existing regions applied, so if f's trace falls where f2
+                        # has already been cropped away, it gets an all-NaN value,
+                        # nanmedian(...) > 0 silently becomes False, and the wrong side
+                        # is kept -- which can crop the fault away entirely.
+                        pts = (
+                            self.model[f]
+                            .__getitem__(0)
+                            .builder.data[["X", "Y", "Z"]]
+                            .to_numpy()
+                        )
+                        abut_value = np.nanmedian(
+                            self.model[f2].evaluate_value(pts, ignore_regions=True)
+                        )
+                        positive = bool(abut_value > 0)
+                        self.model[f].add_abutting_fault(self.model[f2], positive=positive)
 
     @property
     def valid(self):
@@ -504,7 +543,11 @@ class GeologicalModelManager(Observable):
                     valid = False
         return valid
 
-    def update_model(self, notify_observers: bool = True):
+    def update_model(
+        self,
+        notify_observers: bool = True,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
+    ):
         """Update the geological model with the current stratigraphy and faults.
 
         Parameters
@@ -514,6 +557,13 @@ class GeologicalModelManager(Observable):
             completes. If False, the caller is responsible for notifying
             observers from the main thread (useful when performing the update
             in a background thread).
+        progress_callback : callable or None
+            Optional callable invoked as `callback(message, current, total)` as
+            each fault/stratigraphic group is built, so callers (e.g. a GUI
+            progress dialog) can report what step is currently running. Safe to
+            call from a background thread as long as the callback itself is
+            thread-safe (e.g. it forwards to a Qt signal rather than touching
+            widgets directly).
         """
 
         self.model.features = []
@@ -523,10 +573,19 @@ class GeologicalModelManager(Observable):
         if notify_observers:
             self._emit('model_update_started')
 
-        # Update the model with stratigraphy
-        self.update_fault_features()
-        self.update_foliation_features()
-        
+        group_count = (
+            len(self.stratigraphic_column.get_groups()) if self.stratigraphic_column else 0
+        )
+        self._progress_callback = progress_callback
+        self._progress_total = len(self.faults) + group_count
+        self._progress_current = 0
+        try:
+            # Update the model with stratigraphy
+            self.update_fault_features()
+            self.update_foliation_features()
+        finally:
+            self._progress_callback = None
+
         # Notify observers using the Observable framework if requested
         if notify_observers:
             self._emit('model_updated')
