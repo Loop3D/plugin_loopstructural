@@ -101,6 +101,10 @@ class LayerSelectionTable(QWidget):
         row = self.table.rowCount()
         self.table.insertRow(row)
 
+        if layer_data.get('processed'):
+            self._add_processed_row(row, layer_data)
+            return
+
         # Type dropdown
         type_combo = self._create_type_combo()
         type_combo.setCurrentText(layer_data.get('type', 'Value'))
@@ -113,6 +117,33 @@ class LayerSelectionTable(QWidget):
 
         # Delete button
         del_btn = self._create_delete_button(row)
+        self.table.setCellWidget(row, 2, del_btn)
+
+    def _add_processed_row(self, row, layer_data):
+        """Render a row added automatically by the data-processing workflow
+        (basal contacts / structural orientations / fault traces).
+
+        These rows aren't backed by a per-row layer/field selection made
+        through this table -- they mirror what `data_manager` synced in from
+        the model manager -- so they're read-only: no field picker to edit,
+        and nothing here to delete (that data is managed by the map2loop
+        tool widgets, not this table).
+        """
+        type_label = QLabel(layer_data.get('type', 'Processed'))
+        self.table.setCellWidget(row, 0, type_label)
+
+        layer_btn = QPushButton(layer_data.get('layer_name', 'Unknown'))
+        layer_btn.setEnabled(False)
+        layer_btn.selected_layer = layer_data.get('layer_name')
+        layer_btn.setToolTip(
+            "Added automatically by the data processing workflow. Use "
+            "'View Data Used by Interpolator' below to inspect it on the map."
+        )
+        self.table.setCellWidget(row, 1, layer_btn)
+
+        del_btn = QPushButton("Delete")
+        del_btn.setEnabled(False)
+        del_btn.setToolTip("Managed by the data processing workflow, not editable here.")
         self.table.setCellWidget(row, 2, del_btn)
 
     def add_item_row(self):
@@ -194,7 +225,11 @@ class LayerSelectionTable(QWidget):
         """Update delete button connections after row deletion to maintain correct row indices."""
         for row in range(self.table.rowCount()):
             delete_btn = self.table.cellWidget(row, 2)
-            if delete_btn:
+            # Processed rows' delete buttons are disabled and were never
+            # connected in the first place -- disconnect() with no prior
+            # connection raises, and there's no row-index-dependent state to
+            # refresh on them anyway.
+            if delete_btn and delete_btn.isEnabled():
                 # Disconnect old connections
                 delete_btn.clicked.disconnect()
                 # Reconnect with correct row index

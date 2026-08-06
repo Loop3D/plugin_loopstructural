@@ -644,6 +644,7 @@ class ModellingDataManager:
                         else False
                     ),
                 )
+            self._sync_processed_feature_data()
         else:
             self.logger(message="Model manager is not set, cannot update foliation features.")
 
@@ -669,6 +670,7 @@ class ModellingDataManager:
                 fault_displacement_field=self._fault_traces['fault_displacement_field'],
                 use_z_coordinate=self._fault_traces['use_z_coordinate'],
             )
+            self._sync_processed_feature_data()
         else:
             self.logger(message="Model manager is not set, cannot update faults.")
 
@@ -676,8 +678,91 @@ class ModellingDataManager:
         """Update the stratigraphic column in the model manager."""
         if self._model_manager is not None:
             self._model_manager.groups = self._stratigraphic_column.get_groups()
+            self._sync_processed_feature_data()
         else:
             self.logger(message="Model manager is not set, cannot update stratigraphic column.")
+
+    def _sync_processed_feature_data(self):
+        """Mirror data ingested by the automated data-processing workflow
+        (basal contacts / structural orientations / fault traces) into
+        `feature_data` as read-only rows.
+
+        That workflow writes straight into the model manager (`stratigraphy`
+        / `faults`) and never goes through `update_feature_data`, so the
+        per-feature "Data Layers" table stayed empty even when the
+        interpolator had plenty of data -- there was no way to see, from the
+        table, that a feature's constraints came from an automatically
+        processed basal-contacts/orientations/fault-trace layer rather than
+        one picked via "Add Data". Rows created here are flagged
+        `processed=True` so the table can render them read-only and so this
+        sync can safely drop and rebuild them each time without touching
+        manually added rows.
+        """
+        for entries in self.feature_data.values():
+            for key in [k for k, v in entries.items() if v.get('processed')]:
+                del entries[key]
+
+        if self._model_manager is None:
+            return
+
+        if self._stratigraphic_column is not None:
+            for group in self._stratigraphic_column.get_groups():
+                for unit in group.units:
+                    unit_data = self._model_manager.stratigraphy.get(unit.name)
+                    if not unit_data:
+                        continue
+                    contact = unit_data.get('contact')
+                    if (
+                        contact is not None
+                        and not contact.empty
+                        and self._basal_contacts is not None
+                    ):
+                        self._add_processed_feature_row(
+                            group.name,
+                            self._basal_contacts.get('layer'),
+                            'Contact (auto)',
+                            unit.name,
+                        )
+                    orientations = unit_data.get('orientations')
+                    if (
+                        orientations is not None
+                        and not orientations.empty
+                        and self._structural_orientations is not None
+                    ):
+                        self._add_processed_feature_row(
+                            group.name,
+                            self._structural_orientations.get('layer'),
+                            'Orientation (auto)',
+                            unit.name,
+                        )
+
+        if self._fault_traces is not None:
+            for fault_name, fault_data in self._model_manager.faults.items():
+                data = fault_data.get('data')
+                if data is not None and not data.empty:
+                    self._add_processed_feature_row(
+                        fault_name,
+                        self._fault_traces.get('layer'),
+                        'Fault trace (auto)',
+                        fault_name,
+                    )
+
+    def _add_processed_feature_row(self, feature_name, layer, type_label, source_name):
+        """Add a single read-only, workflow-derived row to `feature_data`.
+
+        Keyed on a string distinct from a plain layer name so a processed row
+        never collides with (or is silently overwritten by, or overwrites) a
+        manually added row that happens to reference the same physical layer.
+        """
+        if layer is None:
+            return
+        display_name = f"{source_name} ({layer.name()}, auto)"
+        self.feature_data[feature_name][display_name] = {
+            'layer': layer,
+            'layer_name': display_name,
+            'type': type_label,
+            'processed': True,
+        }
 
     def clear_data(self):
         """Clear all data in the manager."""

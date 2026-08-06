@@ -107,6 +107,13 @@ class GeologicalModelManager(Observable):
         # updates are performed in background threads)
         self._suppress_notifications = False
         self._debug_manager = debug_manager
+        # True once the fault topology (abutting/faulted/stratigraphy
+        # relationships) has changed since the model was last (re-)built by
+        # Initialize Model. Those relationships are only applied while
+        # constructing fault features in `update_fault_features`, so unlike a
+        # parameter tweak, `update_all_features`/Solve Model can't pick them
+        # up -- see `set_fault_topology`.
+        self._topology_dirty = False
 
     @contextmanager
     def suspend_notifications(self):
@@ -146,6 +153,7 @@ class GeologicalModelManager(Observable):
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
         self.dem_function = lambda x, y: 0
+        self._topology_dirty = False
         self._emit('model_updated')
         self._emit('model_update_finished')
 
@@ -183,8 +191,85 @@ class GeologicalModelManager(Observable):
         self._emit('stratigraphic_column_changed')
 
     def set_fault_topology(self, fault_topology):
-        """Set the fault topology for the geological model manager."""
+        """Set the fault topology for the geological model manager.
+
+        Also attaches an observer so that editing a fault-fault (abutting/
+        faulted) or fault-stratigraphy relationship -- e.g. from the Fault
+        Adjacency tab -- is reflected in the model's build status. See
+        `_on_fault_topology_changed`.
+        """
         self.fault_topology = fault_topology
+        if fault_topology is not None:
+            try:
+                # no event name given: fires for every notify() the topology
+                # makes (fault_relationship_updated, fault_added, ...)
+                fault_topology.attach(self._on_fault_topology_changed)
+            except Exception:
+                pass
+
+    # Topology events that change what actually feeds the interpolator (as
+    # opposed to just which side of an already-solved fault gets cropped
+    # away) and therefore need Initialize Model to be re-run before Solve
+    # Model can pick them up.
+    _TOPOLOGY_EVENTS_REQUIRING_REINIT = {
+        'faulted_relationship_added',
+        'fault_added',
+        'fault_removed',
+        'stratigraphy_fault_relationship_added',
+        'stratigraphy_fault_relationship_updated',
+        'stratigraphy_fault_relationship_removed',
+        'fault_topology_reset',
+    }
+
+    def _on_fault_topology_changed(self, _observable, event, *args, **kwargs):
+        """React to a fault topology edit made via the Fault Adjacency tab.
+
+        ABUTTING relationships are just a region crop applied to an
+        already-solved fault (see `apply_fault_abutting_relationships`), so
+        those are always reconciled immediately here -- cheap, idempotent,
+        and doesn't touch the model's build status, matching the fact that
+        clipping doesn't change the solved surfaces.
+
+        FAULTED relationships (which add a fault as an interpolation
+        dependency of another), fault-stratigraphy relationships, and faults
+        being structurally added/removed are different: those genuinely
+        change what feeds the interpolator, and are only applied while
+        constructing fault features in `update_fault_features` -- part of
+        Initialize Model, not Solve Model. For those we flag `_topology_dirty`
+        (surfaced through `model_state`) and mark any already-built
+        fault/unit named in the event as not built, so its tick turns red
+        immediately rather than staying (wrongly) green until the user
+        notices Solve Model didn't actually pick up the change.
+        """
+        payload = args[0] if args and isinstance(args[0], dict) else kwargs
+
+        try:
+            self.apply_fault_abutting_relationships()
+        except Exception:
+            pass
+
+        new_relationship = payload.get('new_relationship_type')
+        requires_reinit = (
+            event in self._TOPOLOGY_EVENTS_REQUIRING_REINIT
+            or new_relationship is FaultRelationshipType.FAULTED
+        )
+        if requires_reinit:
+            self._topology_dirty = True
+            names = {
+                payload.get(key)
+                for key in ('fault', 'related_fault', 'abutting_fault', 'faulted_fault', 'unit')
+                if payload.get(key)
+            }
+            for name in names:
+                feature = self.model.get_feature_by_name(name)
+                builder = getattr(feature, 'builder', None) if feature is not None else None
+                if builder is not None:
+                    try:
+                        builder.set_not_up_to_date(self)
+                    except Exception:
+                        pass
+
+        self._emit('model_updated')
 
     def update_bounding_box(self, bounding_box: BoundingBox):
         """Update the bounding box of the geological model.
@@ -514,32 +599,63 @@ class GeologicalModelManager(Observable):
                     cpw=PlgSettingsStructure.interpolator_cpw,
                     regularisation=PlgSettingsStructure.interpolator_regularisation,
                 )
+        self.apply_fault_abutting_relationships()
+
+    def apply_fault_abutting_relationships(self):
+        """Re-apply fault-fault ABUTTING relationships as region crops on the
+        already-built fault surfaces, for every pair currently in the topology.
+
+        `FaultSegment.add_abutting_fault` just adds a Positive/NegativeRegion
+        to the fault's coordinate-0 feature (see LoopStructural's
+        `_fault_segment.py`) -- it's a post-hoc crop of an already-solved
+        fault, not something that feeds into the interpolation. So unlike
+        FAULTED relationships (which add a fault as an interpolation
+        dependency of another) this is cheap and safe to call any time the
+        fault topology changes, without needing Initialize Model or Solve
+        Model, and without invalidating the model's build status.
+
+        Idempotent: skips pairs already cropped correctly (tracked via each
+        fault's `.abut` dict), and undoes a previously-applied crop for any
+        pair that's no longer marked ABUTTING -- so this alone keeps abutting
+        relationships in sync with the topology table, however it changed.
+        """
+        if self.fault_topology is None:
+            return
         for f in self.fault_topology.faults:
+            fault_feature = self.model.get_feature_by_name(f)
+            if fault_feature is None or not hasattr(fault_feature, 'abut'):
+                continue
+            coord0 = fault_feature.__getitem__(0)
             for f2 in self.fault_topology.faults:
-
-                if f != f2:
-                    relationship = self.fault_topology.get_fault_relationship(f, f2)
-
-                    if relationship is FaultRelationshipType.ABUTTING:
-                        # Determine which side of f2 to keep ourselves, ignoring any
-                        # regions already applied to f2 (e.g. from an earlier abutting
-                        # relationship in the fault network). LoopStructural's own
-                        # auto-detection inside add_abutting_fault evaluates f2 with
-                        # its existing regions applied, so if f's trace falls where f2
-                        # has already been cropped away, it gets an all-NaN value,
-                        # nanmedian(...) > 0 silently becomes False, and the wrong side
-                        # is kept -- which can crop the fault away entirely.
-                        pts = (
-                            self.model[f]
-                            .__getitem__(0)
-                            .builder.data[["X", "Y", "Z"]]
-                            .to_numpy()
-                        )
-                        abut_value = np.nanmedian(
-                            self.model[f2].evaluate_value(pts, ignore_regions=True)
-                        )
-                        positive = bool(abut_value > 0)
-                        self.model[f].add_abutting_fault(self.model[f2], positive=positive)
+                if f == f2:
+                    continue
+                relationship = self.fault_topology.get_fault_relationship(f, f2)
+                existing_region = fault_feature.abut.get(f2)
+                if relationship is FaultRelationshipType.ABUTTING:
+                    if existing_region is not None:
+                        continue  # already cropped against f2
+                    f2_feature = self.model.get_feature_by_name(f2)
+                    if f2_feature is None:
+                        continue
+                    # Determine which side of f2 to keep ourselves, ignoring any
+                    # regions already applied to f2 (e.g. from an earlier abutting
+                    # relationship in the fault network). LoopStructural's own
+                    # auto-detection inside add_abutting_fault evaluates f2 with
+                    # its existing regions applied, so if f's trace falls where f2
+                    # has already been cropped away, it gets an all-NaN value,
+                    # nanmedian(...) > 0 silently becomes False, and the wrong side
+                    # is kept -- which can crop the fault away entirely.
+                    pts = coord0.builder.data[["X", "Y", "Z"]].to_numpy()
+                    abut_value = np.nanmedian(f2_feature.evaluate_value(pts, ignore_regions=True))
+                    positive = bool(abut_value > 0)
+                    fault_feature.add_abutting_fault(f2_feature, positive=positive)
+                elif existing_region is not None:
+                    # relationship changed away from ABUTTING: undo the crop
+                    try:
+                        coord0.regions.remove(existing_region)
+                    except ValueError:
+                        pass
+                    fault_feature.abut.pop(f2, None)
 
     def is_feature_built(self, feature, _seen: Optional[set] = None) -> Optional[bool]:
         """Best-effort check of whether `feature` has been solved (interpolated).
@@ -598,12 +714,17 @@ class GeologicalModelManager(Observable):
     def model_state(self) -> str:
         """Coarse summary of the model's build state, for display in the GUI.
 
-        Returns 'empty' (no features yet), 'initialized' (features exist but at
-        least one hasn't been solved) or 'solved' (every feature is up to date).
+        Returns 'empty' (no features yet), 'stale' (fault topology changed
+        since the last Initialize Model -- Solve Model alone can't apply
+        that, see `_on_fault_topology_changed`), 'initialized' (features
+        exist but at least one hasn't been solved) or 'solved' (everything is
+        up to date).
         """
         features = [f for f in self.features() if not f.name.startswith('__')]
         if not features:
             return 'empty'
+        if getattr(self, '_topology_dirty', False):
+            return 'stale'
         if all(self.is_feature_built(f) for f in features):
             return 'solved'
         return 'initialized'
@@ -673,6 +794,9 @@ class GeologicalModelManager(Observable):
             # Update the model with stratigraphy
             self.update_fault_features()
             self.update_foliation_features()
+            # fault topology (abutting/faulted/stratigraphy relationships) was
+            # just re-applied above, so any pending topology edit is now current
+            self._topology_dirty = False
         finally:
             self._progress_callback = None
         if dbg is not None:

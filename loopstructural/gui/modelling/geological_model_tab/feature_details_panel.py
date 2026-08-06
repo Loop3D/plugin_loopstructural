@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -162,6 +163,15 @@ class BaseFeatureDetailsPanel(QWidget):
         )
         table_layout = QVBoxLayout()
         table_layout.addWidget(self.layer_table)
+        self.view_constraint_data_button = QPushButton("View Data Used by Interpolator")
+        self.view_constraint_data_button.setToolTip(
+            "Add the raw point/orientation data currently used by this feature's "
+            "interpolator as a temporary QGIS layer. Useful when the data came "
+            "from the automated data-processing workflow, which populates the "
+            "interpolator directly and never appears in the table above."
+        )
+        self.view_constraint_data_button.clicked.connect(self._show_constraint_data_on_map)
+        table_layout.addWidget(self.view_constraint_data_button)
         table_group_box.setLayout(table_layout)
         # Form layout for better organization
         form_layout = QFormLayout()
@@ -589,6 +599,139 @@ class BaseFeatureDetailsPanel(QWidget):
             prov.addFeatures(feats)
             mem_layer.updateExtents()
             QgsProject.instance().addMapLayer(mem_layer)
+
+    def _collect_builder_dataframes(self):
+        """Collect the raw constraint dataframe(s) actually being used by this
+        feature's interpolator.
+
+        This reads straight from `feature.builder.data`, so it reflects the
+        data regardless of how it got there -- either picked layer-by-layer
+        through the "Data Layers" table above (backed by
+        `data_manager.feature_data`), or ingested in bulk by the automated
+        data-processing workflow (map2loop tools), which writes directly into
+        the builder and never touches `data_manager.feature_data`, leaving
+        that table empty even though the interpolator has data.
+        """
+        builder = getattr(self.feature, 'builder', None)
+        if builder is None:
+            return []
+        # Structural frames (faults, folded frames) wrap three per-coordinate
+        # builders, each with its own `.data`; the frame builder's own
+        # `.data` attribute is just a `[[], [], []]` placeholder.
+        sub_builders = getattr(builder, 'builders', None)
+        if sub_builders:
+            frames = []
+            for i, sub in enumerate(sub_builders):
+                data = getattr(sub, 'data', None)
+                if data is not None and hasattr(data, 'empty') and not data.empty:
+                    data = data.copy()
+                    if 'coord' not in data.columns:
+                        data['coord'] = i
+                    frames.append(data)
+            return frames
+        data = getattr(builder, 'data', None)
+        if data is not None and hasattr(data, 'empty') and not data.empty:
+            return [data.copy()]
+        return []
+
+    def _show_constraint_data_on_map(self):
+        """Add the interpolator's raw constraint data as a temporary (memory)
+        QGIS point layer, so the user can visually check what's actually
+        being fitted -- particularly useful when the data came from the
+        automated data-processing workflow and so isn't listed in the "Data
+        Layers" table above. The layer is a plain memory layer, not linked
+        back to any source layer or object.
+        """
+        try:
+            from qgis.core import QgsFeature, QgsField, QgsPoint, QgsProject, QgsVectorLayer
+
+            from loopstructural.gui.compatibility import QVariantCompat
+        except Exception:
+            logger.info('Not running inside QGIS, cannot show constraint data')
+            return
+
+        frames = self._collect_builder_dataframes()
+        if not frames:
+            QMessageBox.information(
+                self, "No data", "No interpolator constraint data found for this feature."
+            )
+            return
+
+        import numpy as np
+        import pandas as pd
+
+        combined = pd.concat(frames, ignore_index=True)
+        combined = combined.dropna(axis=1, how='all')
+        if combined.empty or not {'X', 'Y'}.issubset(combined.columns):
+            QMessageBox.information(
+                self, "No data", "No interpolator constraint data found for this feature."
+            )
+            return
+
+        # derive strike/dip from normal vectors where available, for readability
+        if {'nx', 'ny', 'nz'}.issubset(combined.columns):
+            try:
+                mask = combined[['nx', 'ny', 'nz']].notna().all(axis=1)
+                if mask.any():
+                    sd = normal_vector_to_strike_and_dip(
+                        combined.loc[mask, ['nx', 'ny', 'nz']].to_numpy(float)
+                    )
+                    combined.loc[mask, 'strike'] = sd[:, 0]
+                    combined.loc[mask, 'dip'] = sd[:, 1]
+            except Exception:
+                logger.debug('Could not derive strike/dip from normal vectors', exc_info=True)
+
+        crs = self.data_manager.get_model_crs() if self.data_manager else None
+        layer_uri = 'PointZ'
+        if crs is not None and crs.isValid():
+            layer_uri = f"PointZ?crs={crs.authid()}"
+        mem_layer = QgsVectorLayer(layer_uri, f"{self.feature.name} constraint data", 'memory')
+        prov = mem_layer.dataProvider()
+
+        attr_cols = [c for c in combined.columns if c not in ('X', 'Y', 'Z')]
+        qfields = []
+        for c in attr_cols:
+            sample = combined[c].dropna()
+            qtype = QVariantCompat.String
+            if not sample.empty:
+                v = sample.iloc[0]
+                if isinstance(v, (bool, np.bool_)):
+                    qtype = QVariantCompat.Bool
+                elif isinstance(v, (int, np.integer)):
+                    qtype = QVariantCompat.Int
+                elif isinstance(v, (float, np.floating)):
+                    qtype = QVariantCompat.Double
+            prov.addAttributes([QgsField(str(c), qtype)])
+            qfields.append(c)
+        mem_layer.updateFields()
+
+        feats = []
+        for _, row in combined.iterrows():
+            x_val, y_val = row.get('X'), row.get('Y')
+            if x_val is None or y_val is None or pd.isna(x_val) or pd.isna(y_val):
+                continue
+            try:
+                x, y = float(x_val), float(y_val)
+                z_val = row.get('Z')
+                z = 0.0 if z_val is None or pd.isna(z_val) else float(z_val)
+            except (TypeError, ValueError):
+                continue
+            f = QgsFeature()
+            try:
+                f.setAttributes([row.get(c) for c in qfields])
+            except Exception:
+                pass
+            f.setGeometry(QgsPoint(x, y, z))
+            feats.append(f)
+
+        if not feats:
+            QMessageBox.information(
+                self, "No data", "No interpolator constraint data found for this feature."
+            )
+            return
+        prov.addFeatures(feats)
+        mem_layer.updateExtents()
+        QgsProject.instance().addMapLayer(mem_layer)
 
     def schedule_rebuild(self, delay_ms: int = 500):
         """Schedule a debounced rebuild of the current feature.

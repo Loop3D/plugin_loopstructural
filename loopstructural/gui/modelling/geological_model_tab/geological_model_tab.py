@@ -65,7 +65,14 @@ _MODEL_STATE_LABELS = {
     'empty': "Model status: not initialized",
     'initialized': "Model status: initialized (not solved)",
     'solved': "Model status: solved",
+    'stale': "Model status: fault topology changed — re-run Initialize Model",
 }
+
+# Solve Model only rebuilds interpolators for features that already exist; it
+# can't apply a fault topology edit (that requires re-running Initialize
+# Model, see GeologicalModelManager._on_fault_topology_changed), so it stays
+# disabled outside these two states.
+_SOLVABLE_STATES = {'initialized', 'solved'}
 
 
 class GeologicalModelTab(QWidget):
@@ -259,8 +266,9 @@ class GeologicalModelTab(QWidget):
 
     def solve_model(self):
         # Build/interpolate every feature already added to the model. Only
-        # meaningful once Initialize Model has created some features.
-        if not self.model_manager or self.model_manager.model_state == 'empty':
+        # meaningful once Initialize Model has created some features, and not
+        # while a fault topology edit is pending re-Initialize.
+        if not self.model_manager or self.model_manager.model_state not in _SOLVABLE_STATES:
             return
         self._run_model_task(
             lambda progress_callback: self.model_manager.update_all_features(
@@ -357,7 +365,7 @@ class GeologicalModelTab(QWidget):
 
     def _finish_task(self):
         self.initializeModelButton.setEnabled(True)
-        self.solveModelButton.setEnabled(self.model_manager.model_state != 'empty')
+        self.solveModelButton.setEnabled(self.model_manager.model_state in _SOLVABLE_STATES)
         try:
             self._task_progress_dialog.close()
         except Exception:
@@ -394,7 +402,7 @@ class GeologicalModelTab(QWidget):
     def _refresh_model_status(self):
         state = self.model_manager.model_state if self.model_manager is not None else 'empty'
         self.modelStatusLabel.setText(_MODEL_STATE_LABELS.get(state, "Model status: unknown"))
-        self.solveModelButton.setEnabled(state != 'empty')
+        self.solveModelButton.setEnabled(state in _SOLVABLE_STATES)
 
     def on_feature_selected(self, item):
         feature_name = item.text(0)
