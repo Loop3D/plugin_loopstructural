@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 from LoopStructural.datatypes import BoundingBox
@@ -738,6 +739,58 @@ class ModellingDataManager:
             self._model_manager.set_dem_function(self.dem_function)
 
         self.logger(message="Application state reset.", log_level=3)
+
+    def save_state(self, filepath):
+        """Save the full application state to disk.
+
+        Writes the data manager's configuration (bounding box, layer/field
+        selections, stratigraphic column, DEM/CRS settings, ...) as JSON to
+        `filepath`, and the built geological model to a sibling
+        ``<filepath>.model`` file (pickled via dill, see
+        ``LoopStructural.GeologicalModel.to_file``).
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Destination path for the JSON state file.
+        """
+        path = Path(filepath)
+        state = {'data_manager': self.to_dict()}
+
+        if self._model_manager is not None:
+            model_path = path.parent / f"{path.name}.model"
+            self._model_manager.save_model(str(model_path))
+            state['model_file'] = model_path.name
+
+        with open(path, 'w') as f:
+            json.dump(state, f, indent=2)
+        self.logger(message=f"Saved application state to '{path}'.", log_level=3)
+
+    def load_state(self, filepath):
+        """Load a previously saved application state from disk.
+
+        Restores the data manager's configuration and, if present, the
+        sibling ``<filepath>.model`` file saved alongside it by
+        `save_state`.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the JSON state file previously written by `save_state`.
+        """
+        path = Path(filepath)
+        with open(path, 'r') as f:
+            state = json.load(f)
+
+        if 'data_manager' in state:
+            self.update_from_dict(state['data_manager'])
+
+        model_filename = state.get('model_file')
+        if model_filename and self._model_manager is not None:
+            model_path = path.parent / model_filename
+            self._model_manager.load_model(str(model_path))
+
+        self.logger(message=f"Loaded application state from '{path}'.", log_level=3)
 
     def _get_model_crs_authid(self):
         """Get the model CRS authid string for serialization.

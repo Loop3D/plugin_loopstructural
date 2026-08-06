@@ -149,6 +149,33 @@ class GeologicalModelManager(Observable):
         self._emit('model_updated')
         self._emit('model_update_finished')
 
+    def save_model(self, filepath):
+        """Save the wrapped geological model to `filepath`.
+
+        Parameters
+        ----------
+        filepath : str
+            Destination path for the pickled (dill) model file.
+        """
+        self.model.to_file(filepath)
+
+    def load_model(self, filepath):
+        """Load a geological model previously saved with `save_model` and
+        adopt it as the manager's active model, notifying observers so the
+        UI refreshes to show the loaded model.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to a model file previously written by `save_model`.
+        """
+        self._emit('model_update_started')
+        model = GeologicalModel.from_file(filepath)
+        if model is not None:
+            self.model = model
+        self._emit('model_updated')
+        self._emit('model_update_finished')
+
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Set the stratigraphic column for the geological model manager."""
         self.stratigraphic_column = stratigraphic_column
