@@ -99,8 +99,18 @@ class LoopstructuralPlugin:
 
         handler = PlgLoggerHandler(plg_logger_class=PlgLogger, push=True)
         handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
+        handler.setLevel(logging.WARNING)
 
-        LoopStructural.setLogging(level="warning", handler=handler)
+        # LoopStructural 1.7 replaced global handler rewiring with add_sink():
+        # LoopStructural.setLogging() only rewires loggers that already exist
+        # at call time, so LoopStructural.getLogger() calls made later (e.g.
+        # lazily-imported GUI modules) never picked up our handler. add_sink()
+        # registers the sink so every logger created afterwards forwards to it too.
+        def _forward_to_handler(record):
+            if record.levelno >= handler.level:
+                handler.emit(record)
+
+        LoopStructural.add_sink(_forward_to_handler)
         setLogging_m2l(level="warning", handler=handler)
 
     def initGui(self):
