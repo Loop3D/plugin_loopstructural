@@ -1,11 +1,12 @@
 # compat.py
 from qgis.PyQt.QtCore import QVariant
 
-if hasattr(QVariant, "Int"):
-    # QGIS 3 / PyQt5: QVariant still exposes the legacy .Type enum members.
-    # (QMetaType is importable under PyQt5 too, so we can't use that import
-    # to detect QGIS 4 - checking for the attribute QGIS 4 actually removed
-    # is the only reliable signal.)
+if hasattr(QVariant, "Type"):
+    # QGIS 3 / PyQt5: QVariant still exposes the legacy .Type enum.
+    # (QMetaType is importable under PyQt5 too, and PyQt6's QVariant still
+    # keeps scalar constants like QVariant.Int for convenience, so neither
+    # of those can be used to detect QGIS 4 - .Type is the attribute QGIS 4
+    # actually removed, so it's the only reliable signal.)
     QVariantCompat = QVariant
 else:
     # QGIS 4 / PyQt6: QVariant.Type was removed; use QMetaType instead.
