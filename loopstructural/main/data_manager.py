@@ -685,6 +685,60 @@ class ModellingDataManager:
         self._fault_traces = None
         self._structural_orientations = None
 
+    def reset(self):
+        """Reset the entire application state.
+
+        Clears all loaded layers/fields, the stratigraphic column, the fault
+        topology, the DEM/elevation and CRS settings, and the geological
+        model itself, restoring the plugin to its initial empty state. All
+        connected UI widgets are notified via their existing callbacks so
+        they refresh to reflect the cleared state.
+        """
+        self.logger(message="Resetting application state...", log_level=3)
+
+        # Clear the stratigraphic column and fault topology in place (rather
+        # than replacing them) since other widgets hold direct observer
+        # attachments to these specific objects.
+        self.clear_stratigraphic_column()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
+
+        self._fault_topology.faults = []
+        self._fault_topology.adjacency = {}
+        self._fault_topology.stratigraphy_fault_relationships = {}
+        self._fault_topology.notify('fault_topology_reset')
+
+        # Clear loaded layer/field selections and notify listening widgets.
+        self.set_basal_contacts(None, unitname_field=None, use_z_coordinate=False)
+        self._unique_basal_units = []
+        self.set_fault_trace_layer(
+            None,
+            fault_name_field=None,
+            fault_dip_field=None,
+            fault_displacement_field=None,
+            use_z_coordinate=False,
+        )
+        self.set_structural_orientations(None)
+
+        self.fault_adjacency = None
+        self.fault_stratigraphy_adjacency = None
+        self.feature_data = defaultdict(dict)
+        self.widget_settings = {}
+
+        self.set_dem_layer(None)
+        self.use_dem = True
+        self.elevation = np.nan
+
+        self.set_bounding_box(**default_bounding_box, mark_set=False)
+        self.set_model_crs(None, use_project_crs=True)
+
+        if self._model_manager is not None:
+            self._model_manager.reset()
+            self._model_manager.update_bounding_box(self._bounding_box)
+            self._model_manager.set_dem_function(self.dem_function)
+
+        self.logger(message="Application state reset.", log_level=3)
+
     def _get_model_crs_authid(self):
         """Get the model CRS authid string for serialization.
         

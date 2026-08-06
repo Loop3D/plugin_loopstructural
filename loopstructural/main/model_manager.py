@@ -132,6 +132,23 @@ class GeologicalModelManager(Observable):
             # be tolerant of observer errors
             pass
 
+    def reset(self):
+        """Reset the geological model manager to its initial, empty state.
+
+        Discards the wrapped LoopStructural model along with any ingested
+        fault/stratigraphy data, and restores the default DEM function. The
+        `stratigraphic_column` and `fault_topology` references are left
+        untouched since the data manager clears those objects in place.
+        """
+        self._emit('model_update_started')
+        self.model = GeologicalModel([0, 0, 0], [1, 1, 1])
+        self.groups = []
+        self.faults = defaultdict(dict)
+        self.stratigraphy = defaultdict(dict)
+        self.dem_function = lambda x, y: 0
+        self._emit('model_updated')
+        self._emit('model_update_finished')
+
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Set the stratigraphic column for the geological model manager."""
         self.stratigraphic_column = stratigraphic_column
