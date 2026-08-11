@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import numpy as np
 
 # Add plotting imports for scalar histogram
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -17,6 +16,8 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .mesh_scalar_utils import apply_colormap_lut, get_scalar_values, render_histogram
 
 
 class ObjectPropertiesWidget(QWidget):
@@ -674,44 +675,11 @@ class ObjectPropertiesWidget(QWidget):
             pass
 
     def _get_scalar_values(self, scalar_name: str):
-        if not scalar_name or scalar_name == "<none>" or self.current_mesh is None:
-            return None
-        try:
-            if scalar_name.startswith('cell:'):
-                name = scalar_name.split(':', 1)[1]
-                cdata = getattr(self.current_mesh, 'cell_data', None) or {}
-                vals = cdata.get(name, None)
-            else:
-                name = scalar_name
-                pdata = getattr(self.current_mesh, 'point_data', None) or {}
-                vals = pdata.get(name, None)
-            if vals is None:
-                return None
-            arr = np.asarray(vals)
-            if arr.size == 0:
-                return None
-            return arr
-        except Exception:
-            return None
+        return get_scalar_values(self.current_mesh, scalar_name)
 
     def _update_histogram(self, values):
         try:
-            self.hist_ax.clear()
-            if values is None:
-                self.hist_ax.text(
-                    0.5,
-                    0.5,
-                    'No scalar selected',
-                    ha='center',
-                    va='center',
-                    transform=self.hist_ax.transAxes,
-                )
-                self.hist_ax.set_xticks([])
-                self.hist_ax.set_yticks([])
-            else:
-                self.hist_ax.hist(values.flatten(), bins=40, color='C0', alpha=0.8)
-                self.hist_ax.set_xlabel('Value')
-                self.hist_ax.set_ylabel('Count')
+            render_histogram(self.hist_ax, values)
             self.hist_canvas.draw_idle()
         except Exception:
             pass
@@ -801,68 +769,7 @@ class ObjectPropertiesWidget(QWidget):
                 pass
 
             # build and assign LUT from matplotlib cmap
-            try:
-                if cmap:
-                    vtkLookupTable = None
-                    try:
-                        from vtk import vtkLookupTable as _vtkLookupTable  # type: ignore
-
-                        vtkLookupTable = _vtkLookupTable
-                    except Exception:
-                        try:
-                            from vtkmodules.vtkCommonCore import (
-                                vtkLookupTable as _vtkLookupTable,  # type: ignore
-                            )
-
-                            vtkLookupTable = _vtkLookupTable
-                        except Exception:
-                            vtkLookupTable = None
-                    if vtkLookupTable is not None:
-                        lut = vtkLookupTable()
-                        lut.SetNumberOfTableValues(256)
-                        lut.Build()
-                        try:
-                            import matplotlib.cm as mcm
-
-                            cm = mcm.get_cmap(cmap)
-                            for i in range(256):
-                                r, g, b, a = cm(i / 255.0)
-                                try:
-                                    lut.SetTableValue(i, float(r), float(g), float(b), float(a))
-                                except Exception:
-                                    try:
-                                        lut.SetTableValue(i, r, g, b, a)
-                                    except Exception:
-                                        pass
-                        except Exception:
-                            pass
-
-                        # set LUT range if we know clim
-                        try:
-                            if clim is not None and len(clim) == 2:
-                                try:
-                                    lut.SetRange(float(clim[0]), float(clim[1]))
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-
-                        # assign to mapper
-                        try:
-                            if hasattr(mapper, 'SetLookupTable'):
-                                try:
-                                    mapper.SetLookupTable(lut)
-                                except Exception:
-                                    pass
-                            if hasattr(mapper, 'SetUseLookupTableScalarRange'):
-                                try:
-                                    mapper.SetUseLookupTableScalarRange(True)
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            apply_colormap_lut(mapper, cmap, clim)
 
             # persist kwargs
             try:
