@@ -47,10 +47,37 @@ class _EmbeddedWidgetDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
+        # Widgets whose run method starts a background task (see
+        # loopstructural.gui.background_task) can't return a synchronous
+        # True/False, so they signal completion instead -- see
+        # _run_and_accept. Widgets that still run synchronously don't
+        # define these, so this is a no-op for them.
+        task_succeeded = getattr(self.widget, 'task_succeeded', None)
+        if task_succeeded is not None:
+            task_succeeded.connect(self.accept)
+        task_failed = getattr(self.widget, 'task_failed', None)
+        if task_failed is not None:
+            task_failed.connect(self._on_widget_task_failed)
+
     def _run_and_accept(self):
-        """Run the tool and accept the dialog if it succeeded."""
-        if getattr(self.widget, self.run_method_name)():
+        """Run the tool and accept the dialog if it succeeded.
+
+        A widget still running its tool synchronously returns True/False
+        directly, exactly as before. A widget that's been moved onto a
+        background QThread instead returns None once validation passes and
+        the task has been started -- the dialog stays open (with its
+        buttons disabled so the user can't close it out from under a
+        still-running worker thread) until the widget's `task_succeeded`/
+        `task_failed` signal fires (connected in `setup_ui`).
+        """
+        result = getattr(self.widget, self.run_method_name)()
+        if result is True:
             self.accept()
+        elif result is None and hasattr(self.widget, 'task_succeeded'):
+            self.button_box.setEnabled(False)
+
+    def _on_widget_task_failed(self):
+        self.button_box.setEnabled(True)
 
 
 class SamplerDialog(_EmbeddedWidgetDialog):

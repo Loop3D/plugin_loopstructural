@@ -4,8 +4,10 @@ import os
 
 from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsWkbTypes
 from qgis.PyQt import uic
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -16,6 +18,15 @@ class SamplerWidget(QWidget):
     This widget provides a GUI interface for the map2loop sampler algorithms
     (Decimator and Spacing).
     """
+
+    # Emitted instead of _run_sampler's old synchronous True/False return,
+    # since the actual sampling now runs on a background thread (see
+    # _run_sampler). The embedding dialog (map2loop_tools/dialogs.py)
+    # connects task_succeeded to its own accept() so it closes itself once
+    # the background run actually finishes, and task_failed to re-enable
+    # its buttons if the run errors out.
+    task_succeeded = pyqtSignal()
+    task_failed = pyqtSignal()
 
     def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sampler widget.
@@ -208,20 +219,17 @@ class SamplerWidget(QWidget):
             return
 
     def _run_sampler(self):
-        """Run the sampler algorithm using the map2loop API."""
+        """Validate inputs and start the sampler algorithm on a background thread.
 
-        from qgis.core import (
-            QgsCoordinateReferenceSystem,
-            QgsFeature,
-            QgsField,
-            QgsFields,
-            QgsGeometry,
-            QgsPointXY,
-            QgsVectorLayer,
-        )
-
-        from loopstructural.gui.compatibility import QVariantCompat
-
+        The actual map2loop call (`sample_contacts`) can take a while on a
+        large dataset, so it runs on a background QThread (see
+        loopstructural.gui.background_task) rather than blocking the QGIS
+        UI thread. Returns False immediately if synchronous input
+        validation fails (same as before -- the embedding dialog stays
+        open). Once validation passes, returns None: the embedding dialog
+        waits for the task_succeeded/task_failed signals instead of a
+        synchronous return (see map2loop_tools/dialogs.py).
+        """
         from ...main.m2l_api import sample_contacts
 
         self._log_params("sampler_widget_run")
@@ -243,130 +251,179 @@ class SamplerWidget(QWidget):
                 QMessageBox.warning(self, "Missing Input", "DTM layer is required for Decimator.")
                 return False
 
-        # Run the sampler API
-        try:
-            kwargs = {
-                'spatial_data': self.spatialDataLayerComboBox.currentLayer(),
-                'sampler_type': sampler_type,
-                'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
-            }
+        # Capture everything the finished-handler will need up front: the
+        # widget is disabled for the duration of the run (below) so these
+        # can't change out from under it, but reading combo-box state is
+        # only safe from the GUI thread in the first place.
+        self._sampler_run_type = sampler_type
+        self._sampler_run_layer = self.spatialDataLayerComboBox.currentLayer()
 
-            if sampler_type == "Decimator":
-                kwargs['decimation'] = self.decimationSpinBox.value()
+        kwargs = {
+            'spatial_data': self._sampler_run_layer,
+            'sampler_type': sampler_type,
+        }
+        if sampler_type == "Decimator":
+            kwargs['decimation'] = self.decimationSpinBox.value()
+            kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+            kwargs['geology'] = self.geologyLayerComboBox.currentLayer()
+        else:  # Spacing
+            kwargs['spacing'] = self.spacingSpinBox.value()
+            if self.dtmLayerComboBox.currentLayer():
                 kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+            if self.geologyLayerComboBox.currentLayer():
                 kwargs['geology'] = self.geologyLayerComboBox.currentLayer()
-            else:  # Spacing
-                kwargs['spacing'] = self.spacingSpinBox.value()
-                if self.dtmLayerComboBox.currentLayer():
-                    kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
-                if self.geologyLayerComboBox.currentLayer():
-                    kwargs['geology'] = self.geologyLayerComboBox.currentLayer()
 
-            samples = sample_contacts(**kwargs)
+        def target(progress_callback):
+            return sample_contacts(updater=progress_callback, **kwargs)
 
-            if self._debug and self._debug.is_debug():
-                try:
-                    if samples is not None:
-                        csv_bytes = samples.to_csv(index=False).encode("utf-8")
-                        self._debug.save_debug_file("sampler_contacts.csv", csv_bytes)
-                except Exception as err:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Failed to save sampler debug output: {err}",
-                        log_level=2,
-                    )
+        self.setEnabled(False)
+        self._sampler_thread, self._sampler_worker, self._sampler_progress = start_background_task(
+            self,
+            target,
+            title="Sampling",
+            initial_label="Sampling contacts...",
+            on_progress=self._on_sampler_progress,
+            on_finished=self._on_sampler_finished,
+            on_error=self._on_sampler_error,
+        )
+        return None
 
-            # Convert result back to QGIS layer and add to project
-            if samples is not None and not samples.empty:
-                layer_name = f"Sampled Contacts ({sampler_type})"
+    def _on_sampler_progress(self, message):
+        try:
+            self._sampler_progress.setLabelText(message)
+        except Exception:
+            pass
 
-                fields = QgsFields()
+    def _on_sampler_finished(self, samples):
+        """Build the sampled-contacts layer from the background run's result.
+
+        Runs on the GUI thread (Qt marshals `finished` here since it's
+        connected to this bound method) -- safe to touch QGIS/Qt objects.
+        """
+        finish_background_task(self._sampler_thread, self._sampler_worker, self._sampler_progress)
+        self.setEnabled(True)
+
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsFeature,
+            QgsField,
+            QgsFields,
+            QgsGeometry,
+            QgsPointXY,
+            QgsVectorLayer,
+        )
+
+        from loopstructural.gui.compatibility import QVariantCompat
+
+        sampler_type = self._sampler_run_type
+        spatial_layer = self._sampler_run_layer
+
+        if self._debug and self._debug.is_debug():
+            try:
+                if samples is not None:
+                    csv_bytes = samples.to_csv(index=False).encode("utf-8")
+                    self._debug.save_debug_file("sampler_contacts.csv", csv_bytes)
+            except Exception as err:
+                self._debug.plugin.log(
+                    message=f"[map2loop] Failed to save sampler debug output: {err}",
+                    log_level=2,
+                )
+
+        # Convert result back to QGIS layer and add to project
+        if samples is not None and not samples.empty:
+            layer_name = f"Sampled Contacts ({sampler_type})"
+
+            fields = QgsFields()
+            for column_name in samples.columns:
+                if column_name == 'geometry':
+                    continue
+                dtype = samples[column_name].dtype
+                dtype_str = str(dtype)
+
+                if dtype_str in ['float16', 'float32', 'float64']:
+                    field_type = QVariantCompat.Double
+                elif dtype_str in ['int8', 'int16', 'int32', 'int64']:
+                    field_type = QVariantCompat.Int
+                else:
+                    field_type = QVariantCompat.String
+
+                fields.append(QgsField(column_name, field_type))
+
+            crs = None
+            if hasattr(spatial_layer, 'crs') and spatial_layer.crs() is not None:
+                crs = QgsCoordinateReferenceSystem.fromWkt(spatial_layer.crs().toWkt())
+            # Create layer
+            geom_type = "PointZ" if 'Z' in samples.columns else "Point"
+            layer = QgsVectorLayer(
+                f"{geom_type}?crs={crs.authid() if crs else 'EPSG:4326'}", layer_name, "memory"
+            )
+            provider = layer.dataProvider()
+            provider.addAttributes(fields)
+            layer.updateFields()
+
+            # Add features
+            for _index, row in samples.iterrows():
+                feature = QgsFeature(fields)
+
+                # Add geometry
+                if 'Z' in samples.columns and __import__('pandas').notna(row.get('Z')):
+                    wkt = f"POINT Z ({row['X']} {row['Y']} {row['Z']})"
+                    feature.setGeometry(QgsGeometry.fromWkt(wkt))
+                else:
+                    feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(row['X'], row['Y'])))
+
+                # Add attributes
+                attributes = []
                 for column_name in samples.columns:
                     if column_name == 'geometry':
                         continue
+                    value = row.get(column_name)
                     dtype = samples[column_name].dtype
-                    dtype_str = str(dtype)
+                    pd = __import__('pandas')
 
-                    if dtype_str in ['float16', 'float32', 'float64']:
-                        field_type = QVariantCompat.Double
-                    elif dtype_str in ['int8', 'int16', 'int32', 'int64']:
-                        field_type = QVariantCompat.Int
+                    if pd.isna(value):
+                        attributes.append(None)
+                    elif dtype in ['float16', 'float32', 'float64']:
+                        attributes.append(float(value))
+                    elif dtype in ['int8', 'int16', 'int32', 'int64']:
+                        attributes.append(int(value))
                     else:
-                        field_type = QVariantCompat.String
+                        attributes.append(str(value))
 
-                    fields.append(QgsField(column_name, field_type))
+                feature.setAttributes(attributes)
+                provider.addFeature(feature)
 
-                crs = None
-                if (
-                    hasattr(self.spatialDataLayerComboBox.currentLayer(), 'crs')
-                    and self.spatialDataLayerComboBox.currentLayer().crs() is not None
-                ):
-                    crs = QgsCoordinateReferenceSystem.fromWkt(
-                        self.spatialDataLayerComboBox.currentLayer().crs().toWkt()
-                    )
-                # Create layer
-                geom_type = "PointZ" if 'Z' in samples.columns else "Point"
-                layer = QgsVectorLayer(
-                    f"{geom_type}?crs={crs.authid() if crs else 'EPSG:4326'}", layer_name, "memory"
-                )
-                provider = layer.dataProvider()
-                provider.addAttributes(fields)
-                layer.updateFields()
+            layer.updateExtents()
+            QgsProject.instance().addMapLayer(layer)
 
-                # Add features
-                for _index, row in samples.iterrows():
-                    feature = QgsFeature(fields)
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Sampling completed! Layer '{layer_name}' added with {len(samples)} features.",
+            )
+            self.task_succeeded.emit()
+        else:
+            QMessageBox.warning(self, "Warning", "No samples were generated.")
+            self.task_failed.emit()
 
-                    # Add geometry
-                    if 'Z' in samples.columns and __import__('pandas').notna(row.get('Z')):
-                        wkt = f"POINT Z ({row['X']} {row['Y']} {row['Z']})"
-                        feature.setGeometry(QgsGeometry.fromWkt(wkt))
-                    else:
-                        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(row['X'], row['Y'])))
-
-                    # Add attributes
-                    attributes = []
-                    for column_name in samples.columns:
-                        if column_name == 'geometry':
-                            continue
-                        value = row.get(column_name)
-                        dtype = samples[column_name].dtype
-                        pd = __import__('pandas')
-
-                        if pd.isna(value):
-                            attributes.append(None)
-                        elif dtype in ['float16', 'float32', 'float64']:
-                            attributes.append(float(value))
-                        elif dtype in ['int8', 'int16', 'int32', 'int64']:
-                            attributes.append(int(value))
-                        else:
-                            attributes.append(str(value))
-
-                    feature.setAttributes(attributes)
-                    provider.addFeature(feature)
-
-                layer.updateExtents()
-                QgsProject.instance().addMapLayer(layer)
-
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    f"Sampling completed! Layer '{layer_name}' added with {len(samples)} features.",
-                )
-            else:
-                QMessageBox.warning(self, "Warning", "No samples were generated.")
-                return False
-            return True
-
-        except Exception as e:
-            if self._debug:
-                self._debug.plugin.log(
-                    message=f"[map2loop] Sampler run failed: {e}",
-                    log_level=2,
-                )
-            if PlgOptionsManager.get_debug_mode():
-                raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
-            return False
+    def _on_sampler_error(self, traceback_text):
+        finish_background_task(self._sampler_thread, self._sampler_worker, self._sampler_progress)
+        self.setEnabled(True)
+        if self._debug:
+            self._debug.plugin.log(
+                message=f"[map2loop] Sampler run failed:\n{traceback_text}",
+                log_level=2,
+            )
+        if PlgOptionsManager.get_debug_mode():
+            QMessageBox.critical(self, "Error", traceback_text)
+        else:
+            summary = (
+                traceback_text.strip().splitlines()[-1]
+                if traceback_text.strip()
+                else str(traceback_text)
+            )
+            QMessageBox.critical(self, "Error", f"An error occurred: {summary}")
+        self.task_failed.emit()
 
     def get_parameters(self):
         """Get current widget parameters.
