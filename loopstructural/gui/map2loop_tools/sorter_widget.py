@@ -4,8 +4,10 @@ import os
 
 from qgis.core import QgsMapLayerProxyModel, QgsRasterLayer
 from qgis.PyQt import uic
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.main.helpers import get_layer_names
 from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST
@@ -18,6 +20,12 @@ class SorterWidget(QWidget):
     This widget provides a GUI interface for the map2loop stratigraphic
     sorting algorithms.
     """
+
+    # See sampler_widget.SamplerWidget for why these exist: _run_sorter now
+    # starts a background task instead of returning True/False, so the
+    # embedding dialog (map2loop_tools/dialogs.py) waits for these instead.
+    task_succeeded = pyqtSignal()
+    task_failed = pyqtSignal()
 
     def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the sorter widget.
@@ -345,7 +353,14 @@ class SorterWidget(QWidget):
         # (Add more widget visibility logic here if new fields are added in map2loop)
 
     def _run_sorter(self):
-        """Run the stratigraphic sorter algorithm."""
+        """Validate inputs and start the stratigraphic sorter on a background thread.
+
+        See SamplerWidget._run_sampler for the general shape of this
+        pattern: returns False immediately on synchronous validation
+        failure (dialog stays open); once validation passes, starts the
+        actual map2loop call on a background QThread and returns None (the
+        embedding dialog waits for task_succeeded/task_failed instead).
+        """
         from ...main.m2l_api import sort_stratigraphic_column
 
         self._persist_selection()
@@ -378,72 +393,103 @@ class SorterWidget(QWidget):
                 )
                 return False
 
-        # Run the sorter API
-        try:
-            kwargs = {
-                'geology': self.geologyLayerComboBox.currentLayer(),
-                'contacts': self.contactsLayerComboBox.currentLayer(),
-                'sorting_algorithm': algorithm_name,
-                'unit_name_field': self.unitNameFieldComboBox.currentField(),
-                'updater': lambda msg: QMessageBox.information(self, "Progress", msg),
-            }
+        kwargs = {
+            'geology': self.geologyLayerComboBox.currentLayer(),
+            'contacts': self.contactsLayerComboBox.currentLayer(),
+            'sorting_algorithm': algorithm_name,
+            'unit_name_field': self.unitNameFieldComboBox.currentField(),
+        }
 
-            # Add optional fields
-            min_age_field = self.minAgeFieldComboBox.currentField()
-            if min_age_field:
-                kwargs['min_age_field'] = min_age_field
+        # Add optional fields
+        min_age_field = self.minAgeFieldComboBox.currentField()
+        if min_age_field:
+            kwargs['min_age_field'] = min_age_field
 
-            max_age_field = self.maxAgeFieldComboBox.currentField()
-            if max_age_field:
-                kwargs['max_age_field'] = max_age_field
+        max_age_field = self.maxAgeFieldComboBox.currentField()
+        if max_age_field:
+            kwargs['max_age_field'] = max_age_field
 
-            if is_observation_projections:
-                kwargs['structure'] = self.structureLayerComboBox.currentLayer()
-                kwargs['dip_field'] = self.dipFieldComboBox.currentField()
-                kwargs['dipdir_field'] = self.dipDirFieldComboBox.currentField()
-                kwargs['orientation_type'] = self.orientation_types[
-                    self.orientationTypeComboBox.currentIndex()
-                ]
-                kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+        if is_observation_projections:
+            kwargs['structure'] = self.structureLayerComboBox.currentLayer()
+            kwargs['dip_field'] = self.dipFieldComboBox.currentField()
+            kwargs['dipdir_field'] = self.dipDirFieldComboBox.currentField()
+            kwargs['orientation_type'] = self.orientation_types[
+                self.orientationTypeComboBox.currentIndex()
+            ]
+            kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
 
-            result = sort_stratigraphic_column(
+        def target(progress_callback):
+            return sort_stratigraphic_column(
                 **kwargs,
+                updater=progress_callback,
                 debug_manager=self._debug,
             )
-            if self._debug and self._debug.is_debug():
-                try:
-                    payload = "\n".join(result) if result else ""
-                    self._debug.save_debug_file("sorter_result.txt", payload.encode("utf-8"))
-                except Exception as err:
-                    self._debug.plugin.log(
-                        message=f"[map2loop] Failed to save sorter debug output: {err}",
-                        log_level=2,
-                    )
-            if result and len(result) > 0:
-                # Clear and update stratigraphic column in data_manager
-                self.data_manager.clear_stratigraphic_column()
-                for unit in result:
-                    self.data_manager.add_to_stratigraphic_column({'name': unit, 'type': 'unit'})
-                self.data_manager.stratigraphic_column_callback()
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    f"Stratigraphic column created successfully! ({len(result)} units)",
-                )
-            else:
-                QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
-            return True
 
-        except Exception as e:
-            if self._debug:
+        self.setEnabled(False)
+        self._sorter_thread, self._sorter_worker, self._sorter_progress = start_background_task(
+            self,
+            target,
+            title="Sorting",
+            initial_label="Sorting stratigraphic column...",
+            on_progress=self._on_sorter_progress,
+            on_finished=self._on_sorter_finished,
+            on_error=self._on_sorter_error,
+        )
+        return None
+
+    def _on_sorter_progress(self, message):
+        try:
+            self._sorter_progress.setLabelText(message)
+        except Exception:
+            pass
+
+    def _on_sorter_finished(self, result):
+        finish_background_task(self._sorter_thread, self._sorter_worker, self._sorter_progress)
+        self.setEnabled(True)
+
+        if self._debug and self._debug.is_debug():
+            try:
+                payload = "\n".join(result) if result else ""
+                self._debug.save_debug_file("sorter_result.txt", payload.encode("utf-8"))
+            except Exception as err:
                 self._debug.plugin.log(
-                    message=f"[map2loop] Sorter run failed: {e}",
+                    message=f"[map2loop] Failed to save sorter debug output: {err}",
                     log_level=2,
                 )
-            if PlgOptionsManager.get_debug_mode():
-                raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
-            return False
+        if result and len(result) > 0:
+            # Clear and update stratigraphic column in data_manager
+            self.data_manager.clear_stratigraphic_column()
+            for unit in result:
+                self.data_manager.add_to_stratigraphic_column({'name': unit, 'type': 'unit'})
+            self.data_manager.stratigraphic_column_callback()
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Stratigraphic column created successfully! ({len(result)} units)",
+            )
+            self.task_succeeded.emit()
+        else:
+            QMessageBox.warning(self, "Error", "Failed to create stratigraphic column.")
+            self.task_failed.emit()
+
+    def _on_sorter_error(self, traceback_text):
+        finish_background_task(self._sorter_thread, self._sorter_worker, self._sorter_progress)
+        self.setEnabled(True)
+        if self._debug:
+            self._debug.plugin.log(
+                message=f"[map2loop] Sorter run failed:\n{traceback_text}",
+                log_level=2,
+            )
+        if PlgOptionsManager.get_debug_mode():
+            QMessageBox.critical(self, "Error", traceback_text)
+        else:
+            summary = (
+                traceback_text.strip().splitlines()[-1]
+                if traceback_text.strip()
+                else str(traceback_text)
+            )
+            QMessageBox.critical(self, "Error", f"An error occurred: {summary}")
+        self.task_failed.emit()
 
     def get_parameters(self):
         """Get current widget parameters.

@@ -5,8 +5,10 @@ import os
 import pandas as pd
 from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -20,6 +22,12 @@ class ThicknessCalculatorWidget(QWidget):
     This widget provides a GUI interface for the map2loop thickness
     calculation algorithms.
     """
+
+    # See sampler_widget.SamplerWidget for why these exist: _run_calculator
+    # now starts a background task instead of returning True/False, so the
+    # embedding dialog (map2loop_tools/dialogs.py) waits for these instead.
+    task_succeeded = pyqtSignal()
+    task_failed = pyqtSignal()
 
     def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the thickness calculator widget.
@@ -314,7 +322,14 @@ class ThicknessCalculatorWidget(QWidget):
         self.data_manager.set_widget_settings('thickness_calculator_widget', settings)
 
     def _run_calculator(self):
-        """Run the thickness calculator algorithm using the map2loop API."""
+        """Validate inputs and start the thickness calculator on a background thread.
+
+        See SamplerWidget._run_sampler for the general shape of this
+        pattern: returns False immediately on synchronous validation
+        failure (dialog stays open); once validation passes, starts the
+        actual map2loop call on a background QThread and returns None (the
+        embedding dialog waits for task_succeeded/task_failed instead).
+        """
         from ...main.m2l_api import calculate_thickness
 
         self._persist_selection()
@@ -344,107 +359,145 @@ class ThicknessCalculatorWidget(QWidget):
         # Prepare parameters
         params = self.get_parameters()
 
+        def target(progress_callback):
+            return calculate_thickness(updater=progress_callback, **params)
+
+        self.setEnabled(False)
+        self._calculator_thread, self._calculator_worker, self._calculator_progress = (
+            start_background_task(
+                self,
+                target,
+                title="Calculating",
+                initial_label="Calculating thickness...",
+                on_progress=self._on_calculator_progress,
+                on_finished=self._on_calculator_finished,
+                on_error=self._on_calculator_error,
+            )
+        )
+        return None
+
+    def _on_calculator_progress(self, message):
         try:
-            result = calculate_thickness(**params)
-            if not result:
-                QMessageBox.warning(
-                    self, "No Results", "Thickness calculation returned no results."
-                )
-                return False
+            self._calculator_progress.setLabelText(message)
+        except Exception:
+            pass
 
-            # Expect result as dict with components; fall back to direct layer
-            if isinstance(result, dict):
-                thicknesses = result.get('thicknesses')
-                lines = result.get('lines')
-                location_tracking = result.get('location_tracking')
-                # If thicknesses were calculated, update the stratigraphic column units
-                try:
-                    if thicknesses is not None and getattr(self, 'data_manager', None):
-                        # Prefer median thickness if available, fallback to mean
-                        thickness_col = (
-                            'ThicknessMedian'
-                            if 'ThicknessMedian' in getattr(thicknesses, 'columns', [])
-                            else (
-                                'ThicknessMean'
-                                if 'ThicknessMean' in getattr(thicknesses, 'columns', [])
-                                else None
-                            )
+    def _on_calculator_finished(self, result):
+        finish_background_task(
+            self._calculator_thread, self._calculator_worker, self._calculator_progress
+        )
+        self.setEnabled(True)
+
+        if not result:
+            QMessageBox.warning(self, "No Results", "Thickness calculation returned no results.")
+            self.task_failed.emit()
+            return
+
+        # Expect result as dict with components; fall back to direct layer
+        if isinstance(result, dict):
+            thicknesses = result.get('thicknesses')
+            lines = result.get('lines')
+            location_tracking = result.get('location_tracking')
+            # If thicknesses were calculated, update the stratigraphic column units
+            try:
+                if thicknesses is not None and getattr(self, 'data_manager', None):
+                    # Prefer median thickness if available, fallback to mean
+                    thickness_col = (
+                        'ThicknessMedian'
+                        if 'ThicknessMedian' in getattr(thicknesses, 'columns', [])
+                        else (
+                            'ThicknessMean'
+                            if 'ThicknessMean' in getattr(thicknesses, 'columns', [])
+                            else None
                         )
-                        if thickness_col is not None:
-                            for _, row in thicknesses.iterrows():
-                                unit_name = row.get('name') or row.get('UNITNAME')
-                                if not unit_name:
-                                    continue
+                    )
+                    if thickness_col is not None:
+                        for _, row in thicknesses.iterrows():
+                            unit_name = row.get('name') or row.get('UNITNAME')
+                            if not unit_name:
+                                continue
+                            try:
+                                value = row.get(thickness_col)
+                            except Exception:
+                                value = None
+                            # Skip invalid values (e.g. -1 means not calculated)
+                            try:
+                                is_invalid = pd.isna(value) or float(value) == -1
+                            except Exception:
+                                is_invalid = value is None
+                            if is_invalid:
+                                continue
+                            # Find unit in stratigraphic column and update thickness
+                            try:
+                                strat_col = self.data_manager.get_stratigraphic_column()
+                                unit = strat_col.get_unit_by_name(unit_name)
+                                if unit is not None:
+                                    unit.thickness = float(value)
+                            except Exception as err:
+                                # Log but don't fail the widget
                                 try:
-                                    value = row.get(thickness_col)
+                                    if getattr(self, '_debug', None):
+                                        self._debug.plugin.log(
+                                            message=f"Failed to update stratigraphic unit thickness for {unit_name}: {err}",
+                                            log_level=2,
+                                        )
                                 except Exception:
-                                    value = None
-                                # Skip invalid values (e.g. -1 means not calculated)
-                                try:
-                                    is_invalid = pd.isna(value) or float(value) == -1
-                                except Exception:
-                                    is_invalid = value is None
-                                if is_invalid:
-                                    continue
-                                # Find unit in stratigraphic column and update thickness
-                                try:
-                                    strat_col = self.data_manager.get_stratigraphic_column()
-                                    unit = strat_col.get_unit_by_name(unit_name)
-                                    if unit is not None:
-                                        unit.thickness = float(value)
-                                except Exception as err:
-                                    # Log but don't fail the widget
-                                    try:
-                                        if getattr(self, '_debug', None):
-                                            self._debug.plugin.log(
-                                                message=f"Failed to update stratigraphic unit thickness for {unit_name}: {err}",
-                                                log_level=2,
-                                            )
-                                    except Exception:
-                                        pass
-                        # Notify any stratigraphic column callbacks
-                        try:
-                            if getattr(self.data_manager, 'stratigraphic_column_callback', None):
-                                self.data_manager.stratigraphic_column_callback()
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                # if thicknesses is not None:
-                #     addGeoDataFrameToproject(thicknesses, "Thickness Results")
-                if lines is not None:
-                    addGeoDataFrameToproject(lines, "Thickness Lines")
-                if location_tracking is not None:
-                    addGeoDataFrameToproject(location_tracking, "Thickness Locations")
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    "Thickness calculation completed successfully and added to project.",
-                )
-                return True
+                                    pass
+                    # Notify any stratigraphic column callbacks
+                    try:
+                        if getattr(self.data_manager, 'stratigraphic_column_callback', None):
+                            self.data_manager.stratigraphic_column_callback()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            # if thicknesses is not None:
+            #     addGeoDataFrameToproject(thicknesses, "Thickness Results")
+            if lines is not None:
+                addGeoDataFrameToproject(lines, "Thickness Lines")
+            if location_tracking is not None:
+                addGeoDataFrameToproject(location_tracking, "Thickness Locations")
+            QMessageBox.information(
+                self,
+                "Success",
+                "Thickness calculation completed successfully and added to project.",
+            )
+            self.task_succeeded.emit()
+            return
 
-            if hasattr(result, 'geometry'):
-                addGeoDataFrameToproject(result, "Thickness Results")
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    "Thickness calculation completed successfully and added to project.",
-                )
-                return True
+        if hasattr(result, 'geometry'):
+            addGeoDataFrameToproject(result, "Thickness Results")
+            QMessageBox.information(
+                self,
+                "Success",
+                "Thickness calculation completed successfully and added to project.",
+            )
+            self.task_succeeded.emit()
+            return
 
-            QMessageBox.information(self, "Success", f"Thickness calculation completed: {result}")
-            return True
+        QMessageBox.information(self, "Success", f"Thickness calculation completed: {result}")
+        self.task_succeeded.emit()
 
-        except Exception as e:
-            if self._debug:
-                self._debug.plugin.log(
-                    message=f"[map2loop] Thickness calculation failed: {e}",
-                    log_level=2,
-                )
-            if PlgOptionsManager.get_debug_mode():
-                raise e
-            QMessageBox.critical(self, "Error", f"An error occurred: {e!s}")
-            return False
+    def _on_calculator_error(self, traceback_text):
+        finish_background_task(
+            self._calculator_thread, self._calculator_worker, self._calculator_progress
+        )
+        self.setEnabled(True)
+        if self._debug:
+            self._debug.plugin.log(
+                message=f"[map2loop] Thickness calculation failed:\n{traceback_text}",
+                log_level=2,
+            )
+        if PlgOptionsManager.get_debug_mode():
+            QMessageBox.critical(self, "Error", traceback_text)
+        else:
+            summary = (
+                traceback_text.strip().splitlines()[-1]
+                if traceback_text.strip()
+                else str(traceback_text)
+            )
+            QMessageBox.critical(self, "Error", f"An error occurred: {summary}")
+        self.task_failed.emit()
 
     def get_parameters(self):
         """Get current widget parameters.
@@ -468,7 +521,6 @@ class ThicknessCalculatorWidget(QWidget):
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
             'basal_contacts_unit_name': self.basalUnitNameFieldComboBox.currentField(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
-            'updater': (lambda msg: QMessageBox.information(self, "Progress", msg)),
             'stratigraphic_order': (
                 self.data_manager.get_stratigraphic_unit_names()
                 if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')

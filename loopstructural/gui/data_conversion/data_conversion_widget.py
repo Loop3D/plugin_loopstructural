@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from LoopDataConverter import Datatype, InputData, LoopConverter, SurveyName
 from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorLayer
 from qgis.gui import QgsMapLayerComboBox
-from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDialog,
@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
 from ...main.helpers import ColumnMatcher
 from ...main.vectorLayerWrapper import QgsLayerFromDataFrame, QgsLayerFromGeoDataFrame
@@ -179,6 +180,13 @@ def _normalise_converters(converters: Optional[Iterable[Any]]) -> List[Converter
 
 class AutomaticConversionWidget(QWidget):
     """Widget showing the automatic conversion workflow."""
+
+    # See sampler_widget.SamplerWidget for why these exist:
+    # _handle_run_conversion now starts a background task instead of
+    # returning True/False, so AutomaticConversionDialog waits for these
+    # instead.
+    task_succeeded = pyqtSignal()
+    task_failed = pyqtSignal()
 
     SUPPORTED_DATA_TYPES: Tuple[str, ...] = ("GEOLOGY", "STRUCTURE", "FAULT", "FOLD")
     OUTPUT_DATA_TYPES: Tuple[str, ...] = (
@@ -463,7 +471,16 @@ class AutomaticConversionWidget(QWidget):
                     data_sources[data_type] = path
         return data_sources
 
-    def _handle_run_conversion(self) -> bool:
+    def _handle_run_conversion(self):
+        """Validate inputs and start the conversion on a background thread.
+
+        See SamplerWidget._run_sampler for the general shape of this
+        pattern: returns False immediately on synchronous validation
+        failure (dialog stays open); once validation passes, starts the
+        actual LoopDataConverter run on a background QThread and returns
+        None (AutomaticConversionDialog waits for
+        task_succeeded/task_failed instead).
+        """
         converter_option = self.current_converter()
         if converter_option is None:
             self._update_status("Please select a converter before running.", error=True)
@@ -474,12 +491,46 @@ class AutomaticConversionWidget(QWidget):
             self._update_status("Select at least one data source layer before running.", error=True)
             return False
 
-        loop_converter: Any = None
-        result: Any = None
-        added_layers = 0
+        survey = self._normalise_survey_name(converter_option.identifier)
+
+        def target(progress_callback):
+            # run_conversion/_run_loop_conversion don't report progress --
+            # there's no updater hook in LoopDataConverter -- so
+            # progress_callback is unused; the dialog just shows a static
+            # "Converting..." label for the duration.
+            return self.run_conversion(survey, sources)
+
+        self.setEnabled(False)
+        self._conversion_thread, self._conversion_worker, self._conversion_progress = (
+            start_background_task(
+                self,
+                target,
+                title="Converting",
+                initial_label="Converting data...",
+                on_progress=self._on_conversion_progress,
+                on_finished=self._on_conversion_finished,
+                on_error=self._on_conversion_error,
+            )
+        )
+        return None
+
+    def _on_conversion_progress(self, message):
         try:
-            survey = self._normalise_survey_name(converter_option.identifier)
-            loop_converter, result = self.run_conversion(survey, sources)
+            self._conversion_progress.setLabelText(message)
+        except Exception:
+            pass
+
+    def _on_conversion_finished(self, payload):
+        loop_converter, result = payload
+        finish_background_task(
+            self._conversion_thread, self._conversion_worker, self._conversion_progress
+        )
+        self.setEnabled(True)
+
+        # Building/adding QGIS layers touches the live project, so it has
+        # to happen here on the GUI thread rather than in `target`.
+        try:
+            added_layers = 0
             layers = self._build_layers_from_converter(loop_converter)
             if not layers:
                 layers = self._materialise_layers_from_result(result)
@@ -487,7 +538,8 @@ class AutomaticConversionWidget(QWidget):
                 added_layers = self._add_layers_to_project_group(layers)
         except Exception as exc:  # pragma: no cover - UI feedback
             self._update_status(f"Conversion failed: {exc}", error=True)
-            return False
+            self.task_failed.emit()
+            return
 
         if added_layers:
             message = f"Conversion completed: {added_layers} layer(s) added to '{self.OUTPUT_GROUP_NAME}'."
@@ -496,7 +548,20 @@ class AutomaticConversionWidget(QWidget):
         else:
             message = "Conversion completed successfully."
         self._update_status(message)
-        return True
+        self.task_succeeded.emit()
+
+    def _on_conversion_error(self, traceback_text):
+        finish_background_task(
+            self._conversion_thread, self._conversion_worker, self._conversion_progress
+        )
+        self.setEnabled(True)
+        summary = (
+            traceback_text.strip().splitlines()[-1]
+            if traceback_text.strip()
+            else str(traceback_text)
+        )
+        self._update_status(f"Conversion failed: {summary}", error=True)
+        self.task_failed.emit()
 
     def _update_status(self, message: str, *, error: bool = False) -> None:
         color = "#c00000" if error else "#006400"
@@ -766,6 +831,8 @@ class AutomaticConversionDialog(QDialog):
         self.widget = AutomaticConversionWidget(self, converters=converters, project=self.project)
         layout.addWidget(self.widget)
         self.widget.run_button.hide()
+        self.widget.task_succeeded.connect(self.accept)
+        self.widget.task_failed.connect(self._on_widget_task_failed)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
         self.button_box.accepted.connect(self._run_and_accept)
@@ -773,8 +840,18 @@ class AutomaticConversionDialog(QDialog):
         layout.addWidget(self.button_box)
 
     def _run_and_accept(self) -> None:
-        if self.widget._handle_run_conversion():
-            self.accept()
+        """Run the conversion and accept the dialog if it succeeded.
+
+        _handle_run_conversion now starts a background task and returns
+        None rather than a synchronous bool (see its docstring) -- this
+        dialog stays open, buttons disabled, until the widget's
+        task_succeeded/task_failed signal fires.
+        """
+        if self.widget._handle_run_conversion() is None:
+            self.button_box.setEnabled(False)
+
+    def _on_widget_task_failed(self) -> None:
+        self.button_box.setEnabled(True)
 
     def set_converters(self, converters: Iterable[Any]) -> None:
         """Update the converter options displayed in the dialog."""

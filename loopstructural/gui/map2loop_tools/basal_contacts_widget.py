@@ -4,11 +4,13 @@ import os
 
 from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorFileWriter
 from qgis.PyQt import uic
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
 from ...main.vectorLayerWrapper import addGeoDataFrameToproject
+from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
 
 
@@ -18,6 +20,12 @@ class BasalContactsWidget(QWidget):
     This widget provides a GUI interface for extracting basal contacts
     from geology layers.
     """
+
+    # See sampler_widget.SamplerWidget for why these exist: _run_extractor
+    # now starts a background task instead of returning True/False, so the
+    # embedding dialog (map2loop_tools/dialogs.py) waits for these instead.
+    task_succeeded = pyqtSignal()
+    task_failed = pyqtSignal()
 
     def __init__(self, parent=None, data_manager=None, debug_manager=None):
         """Initialize the basal contacts widget.
@@ -199,7 +207,14 @@ class BasalContactsWidget(QWidget):
                 self.unitNameFieldComboBox.setField(unit_match)
 
     def _run_extractor(self):
-        """Run the basal contacts extraction algorithm."""
+        """Validate inputs and start basal contacts extraction on a background thread.
+
+        See SamplerWidget._run_sampler for the general shape of this
+        pattern: returns False immediately on synchronous validation
+        failure (dialog stays open); once validation passes, starts the
+        actual map2loop call on a background QThread and returns None (the
+        embedding dialog waits for task_succeeded/task_failed instead).
+        """
         self._log_params("basal_contacts_widget_run")
 
         self._persist_selection()
@@ -208,34 +223,87 @@ class BasalContactsWidget(QWidget):
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
             return False
 
+        target = self._make_extract_contacts_target()
+
+        self.setEnabled(False)
+        self._extractor_thread, self._extractor_worker, self._extractor_progress = (
+            start_background_task(
+                self,
+                target,
+                title="Extracting",
+                initial_label="Extracting basal contacts...",
+                on_progress=self._on_extractor_progress,
+                on_finished=self._on_extractor_finished,
+                on_error=self._on_extractor_error,
+            )
+        )
+        return None
+
+    def _on_extractor_progress(self, message):
         try:
-            result, contact_type = self._extract_contacts()
-            if result:
+            self._extractor_progress.setLabelText(message)
+        except Exception:
+            pass
+
+    def _on_extractor_finished(self, payload):
+        result, all_contacts = payload
+        finish_background_task(
+            self._extractor_thread, self._extractor_worker, self._extractor_progress
+        )
+        self.setEnabled(True)
+
+        self.data_manager.logger(f'All contacts extracted: {all_contacts}')
+        contact_type = "basal contacts"
+        if result:
+            if all_contacts and result['all_contacts'].empty is False:
+                addGeoDataFrameToproject(result['all_contacts'], "All contacts")
+                contact_type = "all contacts and basal contacts"
+            elif not all_contacts and result['basal_contacts'].empty is False:
+                addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
+            else:
                 QMessageBox.information(
                     self,
-                    "Success",
-                    f"Successfully extracted {contact_type}!",
+                    "No Contacts Found",
+                    "No contacts were found with the given parameters.",
                 )
-                if self._debug and self._debug.is_debug():
-                    try:
-                        self._debug.save_debug_file(
-                            "basal_contacts_result.txt", str(result).encode("utf-8")
-                        )
-                    except Exception as err:
-                        self._debug.plugin.log(
-                            message=f"[map2loop] Failed to save basal contacts debug output: {err}",
-                            log_level=2,
-                        )
-                return True
-        except Exception as err:
-            if self._debug:
-                self._debug.plugin.log(
-                    message=f"[map2loop] Basal contacts extraction failed: {err}",
-                    log_level=2,
-                )
-                raise err
-            QMessageBox.critical(self, "Error", f"An error occurred: {err}")
-        return False
+            QMessageBox.information(
+                self,
+                "Success",
+                f"Successfully extracted {contact_type}!",
+            )
+            if self._debug and self._debug.is_debug():
+                try:
+                    self._debug.save_debug_file(
+                        "basal_contacts_result.txt", str(result).encode("utf-8")
+                    )
+                except Exception as err:
+                    self._debug.plugin.log(
+                        message=f"[map2loop] Failed to save basal contacts debug output: {err}",
+                        log_level=2,
+                    )
+            self.task_succeeded.emit()
+        else:
+            self.task_failed.emit()
+
+    def _on_extractor_error(self, traceback_text):
+        finish_background_task(
+            self._extractor_thread, self._extractor_worker, self._extractor_progress
+        )
+        self.setEnabled(True)
+        if self._debug:
+            self._debug.plugin.log(
+                message=f"[map2loop] Basal contacts extraction failed:\n{traceback_text}",
+                log_level=2,
+            )
+            QMessageBox.critical(self, "Error", traceback_text)
+        else:
+            summary = (
+                traceback_text.strip().splitlines()[-1]
+                if traceback_text.strip()
+                else str(traceback_text)
+            )
+            QMessageBox.critical(self, "Error", f"An error occurred: {summary}")
+        self.task_failed.emit()
 
     def get_parameters(self):
         """Get current widget parameters.
@@ -276,9 +344,19 @@ class BasalContactsWidget(QWidget):
         if 'all_contacts' in params:
             self.allContactsCheckBox.setChecked(params['all_contacts'])
 
-    def _extract_contacts(self):
-        """Execute basal contacts extraction."""
-        # Parse ignore units
+    def _make_extract_contacts_target(self):
+        """Capture widget/data_manager state synchronously and return a
+        `target(progress_callback)` closure suitable for a background thread.
+
+        Everything read here comes from Qt widgets or shared manager state,
+        so it has to happen on the GUI thread before the background run
+        starts (the widget is then disabled for the duration, so nothing
+        here can go stale underneath the running task). The closure itself
+        only touches `geology.getFeatures()` (safe off the GUI thread --
+        read-only provider access, same as any QgsTask) and
+        `extract_basal_contacts()`; anything that touches the project or
+        shows UI happens afterwards, in `_on_extractor_finished`.
+        """
         ignore_units = []
         if self.ignoreUnitsLineEdit.text().strip():
             ignore_units = [
@@ -290,60 +368,50 @@ class BasalContactsWidget(QWidget):
         stratigraphic_order = (
             self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
         )
-
-        # Check if user wants all contacts or just basal contacts
         all_contacts = self.allContactsCheckBox.isChecked()
-        if all_contacts:
 
-            def _is_null_like(v):
-                # Python None
-                if v is None:
-                    return True
-                # PyQGIS QVariant null check
-                if hasattr(v, "isNull") and callable(v.isNull) and v.isNull():
-                    return True
-                # Empty strings or literal "NULL" (case-insensitive)
-                if isinstance(v, str):
-                    s = v.strip()
-                    if s == "" or s.upper() == "NULL":
+        def target(progress_callback):
+            nonlocal stratigraphic_order
+
+            if all_contacts:
+
+                def _is_null_like(v):
+                    # Python None
+                    if v is None:
                         return True
-                return False
+                    # PyQGIS QVariant null check
+                    if hasattr(v, "isNull") and callable(v.isNull) and v.isNull():
+                        return True
+                    # Empty strings or literal "NULL" (case-insensitive)
+                    if isinstance(v, str):
+                        s = v.strip()
+                        if s == "" or s.upper() == "NULL":
+                            return True
+                    return False
 
-            values = []
-            for feat in geology.getFeatures():
-                try:
-                    val = feat[unit_name_field]
-                except Exception:
-                    val = None
-                if _is_null_like(val):
-                    continue
-                if val not in values:
-                    values.append(val)
-            stratigraphic_order = values
-            self.data_manager.logger(f"Extracting all contacts for units: {stratigraphic_order}")
+                values = []
+                for feat in geology.getFeatures():
+                    try:
+                        val = feat[unit_name_field]
+                    except Exception:
+                        val = None
+                    if _is_null_like(val):
+                        continue
+                    if val not in values:
+                        values.append(val)
+                stratigraphic_order = values
+                progress_callback(f"Extracting all contacts for units: {stratigraphic_order}")
 
-        result = extract_basal_contacts(
-            geology=geology,
-            stratigraphic_order=stratigraphic_order,
-            faults=faults,
-            ignore_units=ignore_units,
-            unit_name_field=unit_name_field,
-            all_contacts=all_contacts,
-            updater=lambda message: QMessageBox.information(self, "Extraction Progress", message),
-            debug_manager=self._debug,
-        )
-        self.data_manager.logger(f'All contacts extracted: {all_contacts}')
-        contact_type = "basal contacts"
-        if result:
-            if all_contacts and result['all_contacts'].empty is False:
-                addGeoDataFrameToproject(result['all_contacts'], "All contacts")
-                contact_type = "all contacts and basal contacts"
-            elif not all_contacts and result['basal_contacts'].empty is False:
-                addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
-            else:
-                QMessageBox.information(
-                    self,
-                    "No Contacts Found",
-                    "No contacts were found with the given parameters.",
-                )
-        return result, contact_type
+            result = extract_basal_contacts(
+                geology=geology,
+                stratigraphic_order=stratigraphic_order,
+                faults=faults,
+                ignore_units=ignore_units,
+                unit_name_field=unit_name_field,
+                all_contacts=all_contacts,
+                updater=progress_callback,
+                debug_manager=self._debug,
+            )
+            return result, all_contacts
+
+        return target
