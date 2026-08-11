@@ -208,25 +208,25 @@ class ModellingDataManager:
 
     def set_model_crs(self, crs, use_project_crs=False):
         """Set the model CRS.
-        
+
         Parameters
         ----------
         crs : QgsCoordinateReferenceSystem or None
-            The CRS to use for the model. If None and use_project_crs is True, 
+            The CRS to use for the model. If None and use_project_crs is True,
             will use the project CRS.
         use_project_crs : bool
             If True, use the project CRS instead of a custom CRS.
-        
+
         Returns
         -------
         tuple
             (success: bool, message: str)
         """
         self._use_project_crs = use_project_crs
-        
+
         if use_project_crs:
             crs = self.project.crs()
-        
+
         # Validate CRS
         if crs is None or not crs.isValid():
             self._model_crs = None
@@ -235,7 +235,7 @@ class ModellingDataManager:
             if self.model_crs_callback:
                 self.model_crs_callback(self._model_crs, self._use_project_crs)
             return False, msg
-        
+
         # Check if CRS is projected (not geographic)
         if crs.isGeographic():
             self._model_crs = None
@@ -244,12 +244,14 @@ class ModellingDataManager:
                 crs_desc = crs.description() or crs.authid() or "Unknown"
             except Exception:
                 crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
-            msg = f"Model CRS must be projected (in meters), not geographic. Selected CRS: {crs_desc}"
+            msg = (
+                f"Model CRS must be projected (in meters), not geographic. Selected CRS: {crs_desc}"
+            )
             self.logger(message=msg, log_level=2)
             if self.model_crs_callback:
                 self.model_crs_callback(self._model_crs, self._use_project_crs)
             return False, msg
-        
+
         self._model_crs = crs
         # Safely get CRS description
         try:
@@ -260,15 +262,15 @@ class ModellingDataManager:
             crs_id = crs.authid() if hasattr(crs, 'authid') else "Unknown"
         msg = f"Model CRS set to: {crs_desc} ({crs_id})"
         self.logger(message=msg, log_level=3)
-        
+
         if self.model_crs_callback:
             self.model_crs_callback(self._model_crs, self._use_project_crs)
-        
+
         return True, msg
 
     def get_model_crs(self):
         """Get the model CRS.
-        
+
         Returns
         -------
         QgsCoordinateReferenceSystem or None
@@ -277,10 +279,10 @@ class ModellingDataManager:
         if self._use_project_crs:
             return self.project.crs()
         return self._model_crs
-    
+
     def is_model_crs_valid(self):
         """Check if the model CRS is valid and projected.
-        
+
         Returns
         -------
         bool
@@ -292,7 +294,7 @@ class ModellingDataManager:
         if crs.isGeographic():
             return False
         return True
-    
+
     def set_model_crs_callback(self, callback):
         """Set the callback for when the model CRS is updated."""
         self.model_crs_callback = callback
@@ -450,7 +452,9 @@ class ModellingDataManager:
 
         unit_names = self.get_stratigraphic_unit_names()
         if not unit_names:
-            self.logger(message="Stratigraphic column has no units, cannot apply stratigraphic age.")
+            self.logger(
+                message="Stratigraphic column has no units, cannot apply stratigraphic age."
+            )
             return False
 
         age_field_name = "strat_order"
@@ -634,7 +638,9 @@ class ModellingDataManager:
             if self._structural_orientations is not None:
                 print("Updating structural orientations...")
                 self._model_manager.update_structural_data(
-                    qgsLayerToGeoDataFrame(self._structural_orientations['layer'], target_crs=model_crs),
+                    qgsLayerToGeoDataFrame(
+                        self._structural_orientations['layer'], target_crs=model_crs
+                    ),
                     strike_field=self._structural_orientations['strike_field'],
                     dip_field=self._structural_orientations['dip_field'],
                     unit_name_field=self._structural_orientations['unitname_field'],
@@ -879,7 +885,7 @@ class ModellingDataManager:
 
     def _get_model_crs_authid(self):
         """Get the model CRS authid string for serialization.
-        
+
         Returns
         -------
         str or None
@@ -972,7 +978,7 @@ class ModellingDataManager:
             self.stratigraphic_column_callback()
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']
-        
+
         # Load model CRS settings
         if 'use_project_crs' in data:
             self._use_project_crs = data['use_project_crs']
@@ -1056,13 +1062,13 @@ class ModellingDataManager:
             self.widget_settings = data['widget_settings']
         else:
             self.widget_settings = {}
-        
+
         # Load model CRS settings
         if 'use_project_crs' in data:
             self._use_project_crs = data['use_project_crs']
         else:
             self._use_project_crs = True
-            
+
         if 'model_crs' in data and data['model_crs'] is not None:
             crs = QgsCoordinateReferenceSystem(data['model_crs'])
             if crs.isValid():

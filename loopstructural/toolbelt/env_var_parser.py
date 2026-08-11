@@ -20,9 +20,7 @@ class EnvVarParser:
         """
         value = os.getenv(name)
         if value is None:
-            return (
-                default  # Return the default value if the environment variable is not
-            )
+            return default  # Return the default value if the environment variable is not
 
         # Otherwise, treat it as a single value
         return EnvVarParser._convert_single(value, type(default), default)

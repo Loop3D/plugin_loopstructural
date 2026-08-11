@@ -7,12 +7,8 @@ import pandas as pd
 #  map2loop sorters
 # ────────────────────────────────────────────────
 from map2loop.sorter import (
-    SorterAgeBased,
-    SorterAlpha,
-    SorterMaximiseContacts,
     SorterObservationProjections,
     SorterUseHint,  # kept for backwards compatibility
-    SorterUseNetworkX,
 )
 from osgeo import gdal
 from qgis.core import (
@@ -37,16 +33,22 @@ from qgis.core import (
 
 from loopstructural.gui.compatibility import QVariantCompat
 
+from ...main.m2l_api import SORTER_LIST as _BASE_SORTER_LIST
 from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame, qvariantToFloat
 
-# a lookup so we don’t need a giant if/else block
+# Built from the shared SORTER_LIST in main.m2l_api (the source of truth for
+# sorter names/classes, also used by the Sorter GUI dialog) so the two can't
+# drift apart. "Hint (deprecated)" is layered in here, in its historical
+# position, only because this enum's saved index is referenced by existing
+# QGIS processing models -- removing/reordering it would silently repoint
+# those models at the wrong sorter.
 SORTER_LIST = {
-    "Age‐based": SorterAgeBased,
-    "NetworkX topological": SorterUseNetworkX,
+    "Age based": _BASE_SORTER_LIST["Age based"],
+    "NetworkX topological": _BASE_SORTER_LIST["NetworkX topological"],
     "Hint (deprecated)": SorterUseHint,
-    "Adjacency α": SorterAlpha,
-    "Maximise contacts": SorterMaximiseContacts,
-    "Observation projections": SorterObservationProjections,
+    "Adjacency α": _BASE_SORTER_LIST["Adjacency α"],
+    "Maximise contacts": _BASE_SORTER_LIST["Maximise contacts"],
+    "Observation projections": _BASE_SORTER_LIST["Observation projections"],
 }
 
 
@@ -136,7 +138,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 self.SORTING_ALGORITHM,
                 "Sorting strategy",
                 options=list(SORTER_LIST.keys()),
-                defaultValue="Observation projections",  # Age-based is safest default
+                defaultValue="Observation projections",
             )
         )
 
@@ -337,7 +339,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
         sink_fields.append(QgsField("order", QVariantCompat.Int))
         sink_fields.append(QgsField("unit_name", QVariantCompat.String))
 
-        (sink, dest_id) = self.parameterAsSink(
+        sink, dest_id = self.parameterAsSink(
             parameters,
             self.OUTPUT,
             context,

@@ -1,9 +1,17 @@
 import unittest
 from pathlib import Path
-from qgis.core import QgsVectorLayer, QgsProcessingContext, QgsProcessingFeedback, QgsMessageLog, Qgis, QgsApplication
+from qgis.core import (
+    QgsVectorLayer,
+    QgsProcessingContext,
+    QgsProcessingFeedback,
+    QgsMessageLog,
+    Qgis,
+    QgsApplication,
+)
 from qgis.testing import start_app
 from loopstructural.processing.algorithms.sampler import SamplerAlgorithm
 from loopstructural.processing.provider import Map2LoopProvider
+
 
 class TestSamplerSpacing(unittest.TestCase):
 
@@ -29,7 +37,9 @@ class TestSamplerSpacing(unittest.TestCase):
         self.assertTrue(geology_layer.isValid(), "geology layer should be valid")
         self.assertGreater(geology_layer.featureCount(), 0, "geology layer should have features")
 
-        QgsMessageLog.logMessage(f"geology layer: {geology_layer.featureCount()} features", "TestSampler", Qgis.Critical)
+        QgsMessageLog.logMessage(
+            f"geology layer: {geology_layer.featureCount()} features", "TestSampler", Qgis.Critical
+        )
         QgsMessageLog.logMessage("spatial data-  geology layer", "TestSampler", Qgis.Critical)
         QgsMessageLog.logMessage("sampler type: Spacing", "TestSampler", Qgis.Critical)
         QgsMessageLog.logMessage("spacing: 50", "TestSampler", Qgis.Critical)
@@ -44,14 +54,16 @@ class TestSamplerSpacing(unittest.TestCase):
             'SAMPLER_TYPE': 1,
             'DECIMATION': 1,
             'SPACING': 50.0,
-            'SAMPLED_CONTACTS': 'memory:sampled_points'
+            'SAMPLED_CONTACTS': 'memory:sampled_points',
         }
 
         context = QgsProcessingContext()
         feedback = QgsProcessingFeedback()
 
         try:
-            QgsMessageLog.logMessage("Starting spacing sampler algorithm...", "TestSampler", Qgis.Critical)
+            QgsMessageLog.logMessage(
+                "Starting spacing sampler algorithm...", "TestSampler", Qgis.Critical
+            )
 
             result = algorithm.processAlgorithm(parameters, context, feedback)
 
@@ -60,13 +72,22 @@ class TestSamplerSpacing(unittest.TestCase):
             self.assertIsNotNone(result, "result should not be None")
             self.assertIn('SAMPLED_CONTACTS', result, "Result should contain SAMPLED_CONTACTS key")
 
-            QgsMessageLog.logMessage("Spacing sampler test completed successfully!", "TestSampler", Qgis.Critical)
+            QgsMessageLog.logMessage(
+                "Spacing sampler test completed successfully!", "TestSampler", Qgis.Critical
+            )
 
         except Exception as e:
-            QgsMessageLog.logMessage(f"Spacing sampler test error: {str(e)}", "TestSampler", Qgis.Critical)
-            QgsMessageLog.logMessage(f"Error type: {type(e).__name__}", "TestSampler", Qgis.Critical)
+            QgsMessageLog.logMessage(
+                f"Spacing sampler test error: {str(e)}", "TestSampler", Qgis.Critical
+            )
+            QgsMessageLog.logMessage(
+                f"Error type: {type(e).__name__}", "TestSampler", Qgis.Critical
+            )
             import traceback
-            QgsMessageLog.logMessage(f"Full traceback:\n{traceback.format_exc()}", "TestSampler", Qgis.Critical)
+
+            QgsMessageLog.logMessage(
+                f"Full traceback:\n{traceback.format_exc()}", "TestSampler", Qgis.Critical
+            )
             raise
 
         finally:
@@ -79,6 +100,7 @@ class TestSamplerSpacing(unittest.TestCase):
             registry.removeProvider(cls.provider)
         except Exception:
             pass
+
 
 if __name__ == '__main__':
     unittest.main()

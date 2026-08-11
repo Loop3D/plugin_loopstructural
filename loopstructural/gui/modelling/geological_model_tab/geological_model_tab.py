@@ -16,8 +16,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-# Import the AddFaultDialog
-from .add_fault_dialog import AddFaultDialog
 from .add_foliation_dialog import AddFoliationDialog
 from .add_unconformity_dialog import AddUnconformityDialog
 from .feature_details_panel import (
@@ -189,25 +187,23 @@ class GeologicalModelTab(QWidget):
 
     def show_add_feature_menu(self, *args):
         menu = QMenu(self)
-        add_fault = menu.addAction("Add Fault")
+        add_fault = menu.addAction("Add Fault (not yet implemented)")
+        # Unlike Add Foliation/Add Unconformity, there's no model_manager entry
+        # point yet for a parametric (strike/dip/centre) fault -- faults are
+        # currently only created from trace data via update_fault_points. Keep
+        # the menu entry visible (so it's discoverable) but disabled, rather
+        # than silently accepting input and doing nothing with it.
+        add_fault.setEnabled(False)
+        add_fault.setToolTip("Adding a fault from parameters isn't implemented yet.")
         add_foliaton = menu.addAction("Add Foliation")
         add_unconformity = menu.addAction("Add Unconformity")
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec_(buttonPosition)
 
-        if action == add_fault:
-            self.open_add_fault_dialog()
-        elif action == add_foliaton:
+        if action == add_foliaton:
             self.open_add_foliation_dialog()
         elif action == add_unconformity:
             self.open_add_unconformity_dialog()
-
-    def open_add_fault_dialog(self):
-        dialog = AddFaultDialog(self)
-        if dialog.exec_() == dialog.Accepted:
-            fault_data = dialog.get_fault_data()
-            # TODO: Add logic to use fault_data to add the fault to the model
-            print("Fault data:", fault_data)
 
     def open_add_foliation_dialog(self):
         dialog = AddFoliationDialog(

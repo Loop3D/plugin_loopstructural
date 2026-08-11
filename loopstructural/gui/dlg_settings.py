@@ -96,7 +96,9 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         settings.interpolator_cpw = self.cpw_spin_box.value()
         settings.interpolator_regularisation = self.regularisation_spin_box.value()
         settings.version = __version__
-        debug_dir_text = (self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else "") or ""
+        debug_dir_text = (
+            self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else ""
+        ) or ""
         self.plg_settings.set_debug_directory(debug_dir_text)
         settings.debug_directory = debug_dir_text
 
@@ -139,7 +141,9 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         """Open a directory selector for debug directory."""
         from qgis.PyQt.QtWidgets import QFileDialog
 
-        start_dir = (self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else "") or ""
+        start_dir = (
+            self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else ""
+        ) or ""
         chosen = QFileDialog.getExistingDirectory(self, "Select Debug Files Directory", start_dir)
         if chosen and hasattr(self, "le_debug_directory"):
             self.le_debug_directory.setText(chosen)

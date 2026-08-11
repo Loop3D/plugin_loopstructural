@@ -1,15 +1,15 @@
 import pickle
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 def export_debug_package(
     debug_manager,
     m2l_object,
     runner_script_name: str = "run_debug_model.py",
-    params: Dict[str, Any] = {},
+    params: Optional[Dict[str, Any]] = None,
 ):
-
+    params = params or {}
     exported: Dict[str, str] = {}
     if not debug_manager or not getattr(debug_manager, "is_debug", lambda: False)():
         return exported

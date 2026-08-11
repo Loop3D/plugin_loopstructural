@@ -31,6 +31,7 @@ def callableToLayer(callable, layer, dtm, name: str):
     if name not in [field.name() for field in layer.fields()]:
         layer.dataProvider().addAttributes([QgsField(name, QVariantCompat.Double)])
         layer.updateFields()
+    field_idx = layer.fields().indexFromName(name)
 
     for feature in layer.getFeatures():
         geom = feature.geometry()
@@ -38,7 +39,6 @@ def callableToLayer(callable, layer, dtm, name: str):
         if geom.isMultipart():
             if geom.type() == QgsWkbTypes.PointGeometry:
                 points = geom.asMultiPoint()
-                # points = geom.asMultiPolyline()[0]
         else:
             if geom.type() == QgsWkbTypes.PointGeometry:
                 points = [geom.asPoint()]
@@ -49,13 +49,15 @@ def callableToLayer(callable, layer, dtm, name: str):
             z = 0
 
             if dtm is not None:
-                # Replace with your coordinates
-
                 # Extract the value at the point
                 z_value = dtm.dataProvider().identify(p, QgsRaster.IdentifyFormatValue)
                 if z_value.isValid():
                     z = z_value.results()[1]
             value = callable(np.array([[x, y, z]]))
-            feature[name] = value
-        layer.commitChanges()
-        layer.updateFields()
+            # feature[name] = value only mutates the local QgsFeature copy
+            # returned by getFeatures() -- it doesn't persist to the layer.
+            # changeAttributeValue is what actually registers the edit.
+            layer.changeAttributeValue(feature.id(), field_idx, value)
+
+    layer.commitChanges()
+    layer.updateFields()

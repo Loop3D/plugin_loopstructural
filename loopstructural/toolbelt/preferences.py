@@ -116,7 +116,7 @@ class PlgOptionsManager:
         if not hasattr(PlgSettingsStructure, key):
             log_hdlr.PlgLogger.log(
                 message="Bad settings key. Must be one of: {}".format(
-                    ",".join(PlgSettingsStructure._fields)
+                    ",".join(f.name for f in fields(PlgSettingsStructure))
                 ),
                 log_level=1,
             )
@@ -178,7 +178,7 @@ class PlgOptionsManager:
         if not hasattr(PlgSettingsStructure, key):
             log_hdlr.PlgLogger.log(
                 message="Bad settings key. Must be one of: {}".format(
-                    ",".join(PlgSettingsStructure._fields)
+                    ",".join(f.name for f in fields(PlgSettingsStructure))
                 ),
                 log_level=2,
             )

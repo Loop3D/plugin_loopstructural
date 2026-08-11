@@ -1,9 +1,18 @@
 import unittest
 from pathlib import Path
-from qgis.core import QgsVectorLayer, QgsRasterLayer, QgsProcessingContext, QgsProcessingFeedback, QgsMessageLog, Qgis,QgsApplication
+from qgis.core import (
+    QgsVectorLayer,
+    QgsRasterLayer,
+    QgsProcessingContext,
+    QgsProcessingFeedback,
+    QgsMessageLog,
+    Qgis,
+    QgsApplication,
+)
 from qgis.testing import start_app
 from loopstructural.processing.algorithms.sampler import SamplerAlgorithm
 from loopstructural.processing.provider import Map2LoopProvider
+
 
 class TestSamplerDecimator(unittest.TestCase):
 
@@ -36,15 +45,33 @@ class TestSamplerDecimator(unittest.TestCase):
         self.assertTrue(structure_layer.isValid(), "structure layer should be valid")
         self.assertTrue(dtm_layer.isValid(), "dtm layer should be valid")
         self.assertGreater(geology_layer.featureCount(), 0, "geology layer should have features")
-        self.assertGreater(structure_layer.featureCount(), 0, "structure layer should have features")
+        self.assertGreater(
+            structure_layer.featureCount(), 0, "structure layer should have features"
+        )
 
-        QgsMessageLog.logMessage(f"geology layer valid: {geology_layer.isValid()}", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"structure layer valid: {structure_layer.isValid()}", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"dtm layer valid: {dtm_layer.isValid()}", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"dtm source: {dtm_layer.source()}", "TestDecimator", Qgis.Critical)
+        QgsMessageLog.logMessage(
+            f"geology layer valid: {geology_layer.isValid()}", "TestDecimator", Qgis.Critical
+        )
+        QgsMessageLog.logMessage(
+            f"structure layer valid: {structure_layer.isValid()}", "TestDecimator", Qgis.Critical
+        )
+        QgsMessageLog.logMessage(
+            f"dtm layer valid: {dtm_layer.isValid()}", "TestDecimator", Qgis.Critical
+        )
+        QgsMessageLog.logMessage(
+            f"dtm source: {dtm_layer.source()}", "TestDecimator", Qgis.Critical
+        )
 
-        QgsMessageLog.logMessage(f"geology layer: {geology_layer.featureCount()} features", "TestDecimator", Qgis.Critical)
-        QgsMessageLog.logMessage(f"structure layer: {structure_layer.featureCount()} features", "TestDecimator", Qgis.Critical)
+        QgsMessageLog.logMessage(
+            f"geology layer: {geology_layer.featureCount()} features",
+            "TestDecimator",
+            Qgis.Critical,
+        )
+        QgsMessageLog.logMessage(
+            f"structure layer: {structure_layer.featureCount()} features",
+            "TestDecimator",
+            Qgis.Critical,
+        )
         QgsMessageLog.logMessage("spatial data- structure layer", "TestDecimator", Qgis.Critical)
         QgsMessageLog.logMessage("sampler type: Decimator", "TestDecimator", Qgis.Critical)
         QgsMessageLog.logMessage("decimation: 1", "TestDecimator", Qgis.Critical)
@@ -60,15 +87,16 @@ class TestSamplerDecimator(unittest.TestCase):
             'SAMPLER_TYPE': 0,
             'DECIMATION': 1,
             'SPACING': 200.0,
-            'SAMPLED_CONTACTS': 'memory:decimated_points'
+            'SAMPLED_CONTACTS': 'memory:decimated_points',
         }
 
         context = QgsProcessingContext()
         feedback = QgsProcessingFeedback()
 
-
         try:
-            QgsMessageLog.logMessage("Starting decimator sampler algorithm...", "TestDecimator", Qgis.Critical)
+            QgsMessageLog.logMessage(
+                "Starting decimator sampler algorithm...", "TestDecimator", Qgis.Critical
+            )
 
             result = algorithm.processAlgorithm(parameters, context, feedback)
 
@@ -77,14 +105,23 @@ class TestSamplerDecimator(unittest.TestCase):
             self.assertIsNotNone(result, "result should not be None")
             self.assertIn('SAMPLED_CONTACTS', result, "Result should contain SAMPLED_CONTACTS key")
 
-            QgsMessageLog.logMessage("Decimator sampler test completed successfully!", "TestDecimator", Qgis.Critical)
+            QgsMessageLog.logMessage(
+                "Decimator sampler test completed successfully!", "TestDecimator", Qgis.Critical
+            )
 
         except Exception as e:
-            QgsMessageLog.logMessage(f"Decimator sampler test error: {str(e)}", "TestDecimator", Qgis.Critical)
-            QgsMessageLog.logMessage(f"Error type: {type(e).__name__}", "TestDecimator", Qgis.Critical)
+            QgsMessageLog.logMessage(
+                f"Decimator sampler test error: {str(e)}", "TestDecimator", Qgis.Critical
+            )
+            QgsMessageLog.logMessage(
+                f"Error type: {type(e).__name__}", "TestDecimator", Qgis.Critical
+            )
 
             import traceback
-            QgsMessageLog.logMessage(f"Full traceback:\n{traceback.format_exc()}", "TestDecimator", Qgis.Critical)
+
+            QgsMessageLog.logMessage(
+                f"Full traceback:\n{traceback.format_exc()}", "TestDecimator", Qgis.Critical
+            )
             raise
 
         finally:
@@ -97,6 +134,7 @@ class TestSamplerDecimator(unittest.TestCase):
             registry.removeProvider(cls.provider)
         except Exception:
             pass
+
 
 if __name__ == '__main__':
     unittest.main()

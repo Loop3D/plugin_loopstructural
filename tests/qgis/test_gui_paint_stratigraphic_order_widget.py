@@ -1,4 +1,3 @@
-
 import pytest
 from qgis.core import QgsFeature, QgsField, QgsFields, QgsVectorLayer
 from qgis.testing import start_app

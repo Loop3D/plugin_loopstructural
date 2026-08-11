@@ -50,18 +50,13 @@ def get_relative_paths(filepaths_list: list[Path]) -> list[str]:
     :return: List of relative paths to the i18n directory
     :rtype: list[str]
     """
-    return [
-        path.relpath(filepath, i18n_path).replace("\\", "/")
-        for filepath in filepaths_list
-    ]
+    return [path.relpath(filepath, i18n_path).replace("\\", "/") for filepath in filepaths_list]
 
 
 # -- Run
 
 # Get the list of all files in directory tree at given path
-python_files = [
-    f for f in sorted(Path(src_path).rglob("*.py")) if not f.name.startswith("__")
-]
+python_files = [f for f in sorted(Path(src_path).rglob("*.py")) if not f.name.startswith("__")]
 ui_files = sorted(Path(src_path).rglob("*.ui"))
 ts_files = sorted(Path(src_path).rglob("*.ts"))
 
@@ -69,13 +64,9 @@ ts_files = sorted(Path(src_path).rglob("*.ts"))
 # Generate the translation profile
 forms = "FORMS =" + " \\\n".join([f"\t{f}" for f in get_relative_paths(ui_files)])
 
-sources = "SOURCES =" + " \\\n".join(
-    [f"\t{f}" for f in get_relative_paths(python_files)]
-)
+sources = "SOURCES =" + " \\\n".join([f"\t{f}" for f in get_relative_paths(python_files)])
 
-translations = "TRANSLATIONS =" + " \\\n".join(
-    [f"\t{f}" for f in get_relative_paths(ts_files)]
-)
+translations = "TRANSLATIONS =" + " \\\n".join([f"\t{f}" for f in get_relative_paths(ts_files)])
 
 # write to output file
 with output_file.open("w", encoding="UTF-8") as f:

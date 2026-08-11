@@ -1,4 +1,3 @@
-
 import pyqtgraph as pg
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -17,7 +16,6 @@ class SPlotDialog(QDialog):
         self.setMinimumWidth(300)
         feature = self.model_manager.model.get_feature_by_name(self.feature_name)
         layout = QVBoxLayout()
-
 
         fold_frame = feature.fold.fold_limb_rotation.fold_frame_coordinate
         rotation = feature.fold.fold_limb_rotation.rotation_angle
