@@ -7,6 +7,7 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from ...main.m2l_api import paint_stratigraphic_order
+from ..compatibility import configure_layer_combo
 
 
 class PaintStratigraphicOrderWidget(QWidget):
@@ -37,12 +38,8 @@ class PaintStratigraphicOrderWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically
-        try:
-            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            # stratigraphic column layer removed from UI
-        except Exception:
-            # If QGIS isn't available, skip filter setup
-            pass
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        # stratigraphic column layer removed from UI
 
         # Initialize paint modes
         self.paint_modes = ["Stratigraphic Order (0=youngest)", "Cumulative Thickness"]

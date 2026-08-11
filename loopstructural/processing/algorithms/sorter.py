@@ -10,7 +10,6 @@ from map2loop.sorter import (
     SorterObservationProjections,
     SorterUseHint,  # kept for backwards compatibility
 )
-from osgeo import gdal
 from qgis.core import (
     QgsFeature,
     QgsFeatureSink,
@@ -34,7 +33,11 @@ from qgis.core import (
 from loopstructural.gui.compatibility import QVariantCompat
 
 from ...main.m2l_api import SORTER_LIST as _BASE_SORTER_LIST
-from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame, qvariantToFloat
+from ...main.vectorLayerWrapper import (
+    qgsLayerToGeoDataFrame,
+    qgsRasterToGdalDataset,
+    qvariantToFloat,
+)
 
 # Built from the shared SORTER_LIST in main.m2l_api (the source of truth for
 # sorter names/classes, also used by the Sorter GUI dialog) so the two can't
@@ -301,7 +304,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 )
 
             structure_gdf = qgsLayerToGeoDataFrame(structure) if structure else None
-            dtm_gdal = gdal.Open(dtm.source()) if dtm is not None and dtm.isValid() else None
+            dtm_gdal = qgsRasterToGdalDataset(dtm)
 
             unit_name_field = (
                 parameters.get('UNIT_NAME_FIELD', 'UNITNAME') if parameters else 'UNITNAME'

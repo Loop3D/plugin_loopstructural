@@ -12,6 +12,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from loopstructural.gui.compatibility import configure_layer_combo
+
 
 class LayerSelectionTable(QWidget):
     """
@@ -401,8 +403,8 @@ class LayerSelectionDialog(QDialog):
         layout.addWidget(layer_label)
 
         self.layer_combo = QgsMapLayerComboBox()
-        self.layer_combo.setFilters(
-            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
+        configure_layer_combo(
+            self.layer_combo, QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
         )
         layout.addWidget(self.layer_combo)
 

@@ -14,7 +14,6 @@ from typing import Any, Optional
 
 import pandas as pd
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
-from osgeo import gdal
 
 # QGIS imports
 from qgis.core import (
@@ -40,7 +39,7 @@ from qgis.core import (
 from loopstructural.gui.compatibility import QVariantCompat
 
 # Internal imports
-from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+from ...main.vectorLayerWrapper import qgsLayerToGeoDataFrame, qgsRasterToGdalDataset
 
 
 class SamplerAlgorithm(QgsProcessingAlgorithm):
@@ -164,7 +163,7 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
         # Convert geology layers to GeoDataFrames
         geology = qgsLayerToGeoDataFrame(geology)
         spatial_data_gdf = qgsLayerToGeoDataFrame(spatial_data)
-        dtm_gdal = gdal.Open(dtm.source()) if dtm is not None and dtm.isValid() else None
+        dtm_gdal = qgsRasterToGdalDataset(dtm)
 
         if sampler_type == "Decimator":
             feedback.pushInfo("Sampling...")

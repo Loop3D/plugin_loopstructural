@@ -14,6 +14,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
 from loopstructural.main.helpers import ColumnMatcher, get_layer_names
 
@@ -77,8 +78,9 @@ class StratColumnWidget(QWidget):
         # Layer/field pickers for pushing colours back onto a map layer
         layerRow = QHBoxLayout()
         self.unitsLayerComboBox = QgsMapLayerComboBox()
-        self.unitsLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-        self.unitsLayerComboBox.setAllowEmptyLayer(True)
+        configure_layer_combo(
+            self.unitsLayerComboBox, QgsMapLayerProxyModel.PolygonLayer, allow_empty=True
+        )
         self.unitsLayerComboBox.setCurrentIndex(-1)
         self.unitsLayerFieldComboBox = QgsFieldComboBox()
         self.unitsLayerComboBox.layerChanged.connect(self._on_units_layer_changed)

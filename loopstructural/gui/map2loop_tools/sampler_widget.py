@@ -2,10 +2,11 @@
 
 import os
 
-from qgis.core import QgsProject, QgsWkbTypes
+from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsWkbTypes
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 
@@ -35,20 +36,14 @@ class SamplerWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid QgsMapLayerProxyModel in .ui)
-        try:
-            from qgis.core import QgsMapLayerProxyModel
-
-            # DTM should show raster layers, geology polygons
-            self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
-            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.spatialDataLayerComboBox.setFilters(
-                QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
-            )
-
-            # spatialData can be any type, leave default
-        except Exception:
-            # If QGIS isn't available, skip filter setup
-            pass
+        # DTM should show raster layers, geology polygons
+        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(
+            self.spatialDataLayerComboBox,
+            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer,
+        )
+        # spatialData can be any type, leave default
 
         # Initialize sampler types
         self.sampler_types = ["Decimator", "Spacing"]

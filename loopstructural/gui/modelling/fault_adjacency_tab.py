@@ -7,19 +7,17 @@ from qgis.PyQt.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
-    QWidget,
 )
 
+from loopstructural.gui.modelling.base_tab import BaseTab
 
-class FaultAdjacencyTab(QWidget):
+
+class FaultAdjacencyTab(BaseTab):
     def __init__(self, parent=None, data_manager=None):
-        super().__init__(parent)
-        self.data_manager = data_manager
-        self.setLayout(QVBoxLayout())
+        super().__init__(parent, data_manager)
 
         # Initialize the UI components for fault adjacency
         self.init_ui()
-        # self.data_manager.set
 
     def init_ui(self):
         """Initialize the user interface components for fault adjacency."""

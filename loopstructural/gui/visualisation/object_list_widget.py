@@ -450,6 +450,8 @@ class ObjectListWidget(QWidget):
         try:
             from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
             from qgis.gui import QgsMapLayerComboBox
+
+            from loopstructural.gui.compatibility import configure_layer_combo
         except Exception as e:
             print("QGIS GUI components are not available:", e)
             return
@@ -472,7 +474,7 @@ class ObjectListWidget(QWidget):
         layout.addWidget(QLabel("Select point layer:"))
         layer_combo = QgsMapLayerComboBox(dialog)
         # Restrict to point layers only
-        layer_combo.setFilters(QgsMapLayerProxyModel.PointLayer)
+        configure_layer_combo(layer_combo, QgsMapLayerProxyModel.PointLayer)
         layout.addWidget(layer_combo)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)

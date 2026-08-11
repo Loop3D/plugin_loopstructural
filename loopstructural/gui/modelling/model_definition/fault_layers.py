@@ -4,6 +4,7 @@ from qgis.core import QgsFieldProxyModel, QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QWidget
 
+from ...compatibility import configure_layer_combo
 from ....main.helpers import ColumnMatcher, get_layer_names
 
 
@@ -13,10 +14,11 @@ class FaultLayersWidget(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "fault_layers.ui")
         uic.loadUi(ui_path, self)
-        self.faultTraceLayer.setFilters(
-            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
+        configure_layer_combo(
+            self.faultTraceLayer,
+            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer,
+            allow_empty=True,
         )
-        self.faultTraceLayer.setAllowEmptyLayer(True)
         self.faultDipField.setFilters(QgsFieldProxyModel.Numeric)
         # fault displacement field can only be double or int
         self.faultDisplacementField.setFilters(QgsFieldProxyModel.Numeric)

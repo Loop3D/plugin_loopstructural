@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 from map2loop.contact_extractor import ContactExtractor
 from map2loop.sampler import SamplerDecimator, SamplerSpacing
@@ -9,11 +11,12 @@ from map2loop.sorter import (
     SorterUseNetworkX,
 )
 from map2loop.thickness_calculator import AlongSection, InterpolatedStructure, StructuralPoint
-from osgeo import gdal
 from qgis.core import QgsVectorLayer
 
-from ..main.vectorLayerWrapper import qgsLayerToGeoDataFrame
+from ..main.vectorLayerWrapper import qgsLayerToGeoDataFrame, qgsRasterToGdalDataset
 from .debug.export import export_debug_package
+
+logger = logging.getLogger(__name__)
 
 # Mapping of sorter names to sorter classes
 SORTER_LIST = {
@@ -110,19 +113,19 @@ def extract_basal_contacts(
                 params={'stratigraphic_order': stratigraphic_order},
             )
 
-    except Exception as e:
-        print("Failed to save sampler debug info")
-        print(e)
+    except Exception:
+        logger.exception("Failed to save basal-contacts debug info")
 
     try:
-        print('before all')
         all_contacts_result = contact_extractor.extract_all_contacts()
-        print('after all')
         basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
-        print('after basal')
-        print(all_contacts_result.shape, basal_contacts.shape)
-    except Exception as e:
-        print(f"Error during contact extraction: {e}")
+        logger.debug(
+            "Extracted contacts: all=%s basal=%s",
+            all_contacts_result.shape,
+            basal_contacts.shape,
+        )
+    except Exception:
+        logger.exception("Error during contact extraction")
         basal_contacts = pd.DataFrame()
         all_contacts_result = pd.DataFrame()
 
@@ -268,7 +271,7 @@ def sort_stratigraphic_column(
 
     # Only pass required arguments to the sorter
     sorter_args = {k: v for k, v in all_args.items() if k in required_args}
-    print(f'Calling sorter with args: {sorter_args.keys()}')
+    logger.debug('Calling sorter with args: %s', list(sorter_args.keys()))
     sorter = sorter_cls(**sorter_args)
     # If debugging, pickle sorter and write a small runner script
     try:
@@ -281,9 +284,8 @@ def sort_stratigraphic_column(
                 runner_script_name="run_sort_stratigraphic_column.py",
             )
 
-    except Exception as e:
-        print("Failed to save sampler debug info")
-        print(e)
+    except Exception:
+        logger.exception("Failed to save sorter debug info")
 
     order = sorter.sort(units_df)
     if updater:
@@ -336,7 +338,7 @@ def sample_contacts(
     dtm_gdal = None
     if dtm is not None:
         if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
-            dtm_gdal = gdal.Open(dtm.source())
+            dtm_gdal = qgsRasterToGdalDataset(dtm)
         else:
             dtm_gdal = dtm
 
@@ -382,9 +384,8 @@ def sample_contacts(
                 runner_script_name='run_sample_contacts.py',
             )
 
-    except Exception as e:
-        print("Failed to save sampler debug info")
-        print(e)
+    except Exception:
+        logger.exception("Failed to save sampler debug info")
 
     return samples
 
@@ -507,7 +508,7 @@ def calculate_thickness(
     dtm_gdal = None
     if dtm is not None:
         if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
-            dtm_gdal = gdal.Open(dtm.source())
+            dtm_gdal = qgsRasterToGdalDataset(dtm)
         else:
             dtm_gdal = dtm
 
@@ -561,9 +562,9 @@ def calculate_thickness(
                 },
             )
 
-    except Exception as e:
-        print("Failed to save sampler debug info")
-        raise e
+    except Exception:
+        logger.exception("Failed to save thickness-calculator debug info")
+        raise
 
     thickness = calculator.compute(
         units,

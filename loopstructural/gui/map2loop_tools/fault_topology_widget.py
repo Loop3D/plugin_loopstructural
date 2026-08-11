@@ -7,6 +7,8 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
+from ..compatibility import configure_layer_combo
+
 
 class FaultTopologyWidget(QDialog):
     """Widget for calculating fault topology from a fault layer."""
@@ -18,8 +20,7 @@ class FaultTopologyWidget(QDialog):
         ui_path = os.path.join(os.path.dirname(__file__), "fault_topology_widget.ui")
         uic.loadUi(ui_path, self)
         # Set filter for fault layer selection
-
-        self.faultLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.faultLayerComboBox, QgsMapLayerProxyModel.LineLayer)
         self.faultLayerComboBox.layerChanged.connect(self._on_fault_layer_changed)
         # react to field changes so we can update the modelling widget via the data manager
         try:

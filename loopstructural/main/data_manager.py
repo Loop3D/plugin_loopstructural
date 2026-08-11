@@ -627,7 +627,7 @@ class ModellingDataManager:
 
     def update_stratigraphy(self):
         """Update the foliation features in the model manager."""
-        print("Updating stratigraphy...")
+        self.logger(message="Updating stratigraphy...", log_level=4)
         if self._model_manager is not None:
             model_crs = self.get_model_crs()
             if self._basal_contacts is not None:
@@ -636,7 +636,7 @@ class ModellingDataManager:
                     unit_name_field=self._basal_contacts['unitname_field'],
                 )
             if self._structural_orientations is not None:
-                print("Updating structural orientations...")
+                self.logger(message="Updating structural orientations...", log_level=4)
                 self._model_manager.update_structural_data(
                     qgsLayerToGeoDataFrame(
                         self._structural_orientations['layer'], target_crs=model_crs
@@ -658,12 +658,12 @@ class ModellingDataManager:
         """Update the faults in the model manager."""
         unique_faults = self.get_unique_faults()
         for f in unique_faults:
-            print(f"Adding fault {f} to fault topology")
+            self.logger(message=f"Adding fault {f} to fault topology", log_level=4)
             if f not in self._fault_topology.faults:
                 self._fault_topology.add_fault(f)
         faults_to_remove = list(set(self._fault_topology.faults) - set(unique_faults))
         for fault in faults_to_remove:
-            print(f"Removing fault {fault} from fault topology")
+            self.logger(message=f"Removing fault {fault} from fault topology", log_level=4)
             self._fault_topology.remove_fault(fault)
         self.fault_adjacency = np.zeros((len(unique_faults), len(unique_faults)), dtype=int)
         if self._model_manager is not None:

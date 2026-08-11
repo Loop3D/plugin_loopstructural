@@ -5,6 +5,7 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QWidget
 
+from ...compatibility import configure_layer_combo
 from ....main.helpers import ColumnMatcher, get_layer_names
 
 
@@ -16,13 +17,13 @@ class StratigraphicLayersWidget(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "stratigraphic_layers.ui")
         uic.loadUi(ui_path, self)
-        self.basalContactsLayer.setFilters(
-            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
+        configure_layer_combo(
+            self.basalContactsLayer,
+            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer,
+            allow_empty=True,
         )
-        self.basalContactsLayer.setAllowEmptyLayer(True)
         # Structural data can only be points
-        self.structuralDataLayer.setFilters(QgsMapLayerProxyModel.PointLayer)
-        self.basalContactsLayer.setAllowEmptyLayer(True)
+        configure_layer_combo(self.structuralDataLayer, QgsMapLayerProxyModel.PointLayer)
         self.basalContactsLayer.layerChanged.connect(self.onBasalContactsChanged)
         self.structuralDataLayer.layerChanged.connect(self.onStructuralDataLayerChanged)
         self.unitNameField.fieldChanged.connect(self.onUnitFieldChanged)

@@ -46,6 +46,21 @@ jobs:
       - name: Run Unit tests
         run: pytest -p no:qgis tests/unit/
 
+      - name: Coverage summary
+        if: always()
+        run: python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-unit
+          path: |
+            coverage.xml
+            htmlcov/
+            junit/test-results.xml
+          if-no-files-found: warn
+
   test-qgis:
     runs-on: ubuntu-latest
 
@@ -90,3 +105,18 @@ jobs:
         run: |
           Xvfb :1 &
           python3 -m pytest tests/qgis/
+
+      - name: Coverage summary
+        if: always()
+        run: python3 -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-qgis
+          path: |
+            coverage.xml
+            htmlcov/
+            junit/test-results.xml
+          if-no-files-found: warn

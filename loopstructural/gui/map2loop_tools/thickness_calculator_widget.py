@@ -7,6 +7,7 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ...main.helpers import ColumnMatcher, get_layer_names
@@ -39,13 +40,12 @@ class ThicknessCalculatorWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid enum values in .ui)
-
-        self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
-        self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-        self.basalContactsComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-        self.sampledContactsComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
-        self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
-        self.crossSectionLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(self.basalContactsComboBox, QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.sampledContactsComboBox, QgsMapLayerProxyModel.PointLayer)
+        configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.PointLayer)
+        configure_layer_combo(self.crossSectionLayerComboBox, QgsMapLayerProxyModel.LineLayer)
 
         # Initialize calculator types
         self.calculator_types = ["InterpolatedStructure", "StructuralPoint", "AlongSection"]

@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ..compatibility import configure_layer_combo
 from ...main.helpers import ColumnMatcher
 from ...main.vectorLayerWrapper import QgsLayerFromDataFrame, QgsLayerFromGeoDataFrame
 
@@ -306,8 +307,9 @@ class AutomaticConversionWidget(QWidget):
                     # Some QGIS/Qt environments may not support setProject or may raise here;
                     # failure to bind the project is non-fatal, so we intentionally ignore
                     pass
-            combo.setFilters(self._layer_filter_for_data_type(data_type))
-            combo.setAllowEmptyLayer(True)
+            configure_layer_combo(
+                combo, self._layer_filter_for_data_type(data_type), allow_empty=True
+            )
             combo.setObjectName(f"automaticSource_{self._format_identifier_label(data_type)}")
             self.sources_layout.addRow(self._format_identifier_label(data_type), combo)
             self.layer_selectors[data_type] = combo

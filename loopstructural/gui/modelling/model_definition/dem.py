@@ -4,6 +4,7 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QWidget
 
+from ...compatibility import configure_layer_combo
 from ....main.helpers import ColumnMatcher, get_layer_names
 
 
@@ -13,7 +14,7 @@ class DEMWidget(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "dem.ui")
         uic.loadUi(ui_path, self)
-        self.demLayerQgsMapLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        configure_layer_combo(self.demLayerQgsMapLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
         self.useDEMCheckBox.stateChanged.connect(self.onUseDEMClicked)
         self.elevationQgsDoubleSpinBox.valueChanged.connect(self.onElevationChanged)
         self.onElevationChanged()

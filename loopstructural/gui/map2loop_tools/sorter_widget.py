@@ -6,6 +6,7 @@ from qgis.core import QgsMapLayerProxyModel, QgsRasterLayer
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.main.helpers import get_layer_names
 from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST
 from loopstructural.toolbelt.preferences import PlgOptionsManager
@@ -39,11 +40,10 @@ class SorterWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid QGIS enums in UI)
-
-        self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-        self.contactsLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-        self.structureLayerComboBox.setFilters(QgsMapLayerProxyModel.PointLayer)
-        self.dtmLayerComboBox.setFilters(QgsMapLayerProxyModel.RasterLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(self.contactsLayerComboBox, QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.PointLayer)
+        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
 
         # Initialize sorting algorithms
         self.sorting_algorithms = list(SORTER_LIST.keys())

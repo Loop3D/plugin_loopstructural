@@ -1,3 +1,5 @@
+import logging
+
 from qgis.core import (
     QgsFeature,
     QgsField,
@@ -9,12 +11,14 @@ from qgis.core import (
 
 from loopstructural.gui.compatibility import QVariantCompat
 
+logger = logging.getLogger(__name__)
+
 
 def line_to_point(input_layer_path, output_layer_path):
     # Load the input line layer
     line_layer = QgsVectorLayer(input_layer_path, "line_layer", "ogr")
     if not line_layer.isValid():
-        print("Layer failed to load!")
+        logger.error("Layer failed to load: %s", input_layer_path)
         return
 
     # Create an empty point layer

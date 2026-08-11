@@ -2,13 +2,14 @@
 
 import os
 
-from qgis.core import QgsProject, QgsVectorFileWriter
+from qgis.core import QgsMapLayerProxyModel, QgsProject, QgsVectorFileWriter
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
 from ...main.vectorLayerWrapper import addGeoDataFrameToproject
+from ..compatibility import configure_layer_combo
 
 
 class BasalContactsWidget(QWidget):
@@ -39,23 +40,12 @@ class BasalContactsWidget(QWidget):
         # Move layer filter setup out of the .ui (QgsMapLayerProxyModel values in .ui
         # can cause import errors outside QGIS). Set filters programmatically
         # and preserve the allowEmptyLayer setting for the faults combobox.
-        try:
-            from qgis.core import QgsMapLayerProxyModel
-
-            # geology layer should only show polygon layers
-            self.geologyLayerComboBox.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-
-            # faults should show line layers and allow empty selection (as set in .ui)
-            self.faultsLayerComboBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-            try:
-                # QgsMapLayerComboBox has setAllowEmptyLayer method in newer QGIS versions
-                self.faultsLayerComboBox.setAllowEmptyLayer(True)
-            except Exception:
-                # Older QGIS bindings may use allowEmptyLayer property; ignore if unavailable
-                pass
-        except Exception:
-            # If QGIS isn't available (e.g. editing the UI outside QGIS), skip setting filters
-            pass
+        # geology layer should only show polygon layers
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        # faults should show line layers and allow empty selection (as set in .ui)
+        configure_layer_combo(
+            self.faultsLayerComboBox, QgsMapLayerProxyModel.LineLayer, allow_empty=True
+        )
 
         # Connect signals
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)

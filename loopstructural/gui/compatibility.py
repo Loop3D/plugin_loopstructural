@@ -1,6 +1,23 @@
 # compat.py
 from qgis.PyQt.QtCore import QVariant
 
+
+def configure_layer_combo(combo, filters, allow_empty=None):
+    """Apply a QgsMapLayerProxyModel filter to a QgsMapLayerComboBox.
+
+    Centralises a `setFilters`/`setAllowEmptyLayer` pairing that was
+    previously duplicated -- and inconsistently wrapped in try/except --
+    across a dozen widgets. `allow_empty`, if given, also calls
+    `setAllowEmptyLayer`.
+    """
+    try:
+        combo.setFilters(filters)
+        if allow_empty is not None:
+            combo.setAllowEmptyLayer(allow_empty)
+    except Exception:
+        pass
+
+
 if hasattr(QVariant, "Type"):
     # QGIS 3 / PyQt5: QVariant still exposes the legacy .Type enum.
     # (QMetaType is importable under PyQt5 too, and PyQt6's QVariant still
