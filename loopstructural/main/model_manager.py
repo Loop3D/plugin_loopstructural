@@ -181,6 +181,10 @@ class GeologicalModelManager(Observable):
         model = GeologicalModel.from_file(filepath)
         if model is not None:
             self.model = model
+            # The loaded model is a standalone snapshot; there's no pending
+            # topology edit against it yet, so don't carry over a stale flag
+            # from whatever model was previously loaded.
+            self._topology_dirty = False
         self._emit('model_updated')
         self._emit('model_update_finished')
 
