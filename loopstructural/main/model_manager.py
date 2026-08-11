@@ -11,7 +11,7 @@ interaction with the LoopStructural model from the GUI code.
 
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import Callable, Optional, Union
+from typing import Callable, Dict, Optional, Union
 
 import geopandas as gpd
 import numpy as np
@@ -26,6 +26,7 @@ from LoopStructural.utils.observer import Observable
 from LoopStructural import GeologicalModel
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
+from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
 
 
@@ -95,10 +96,9 @@ class GeologicalModelManager(Observable):
         super().__init__()
 
         self.model = GeologicalModel([0, 0, 0], [1, 1, 1])
-        self.stratigraphy = {}
         self.groups = []
-        self.faults = defaultdict(dict)
-        self.stratigraphy = defaultdict(dict)
+        self.faults: Dict[str, FaultEntry] = defaultdict(dict)
+        self.stratigraphy: Dict[str, StratigraphyEntry] = defaultdict(dict)
         self.stratigraphic_column = None
         self.fault_topology = None
         # Observers managed by Observable base class
@@ -929,6 +929,22 @@ class GeologicalModelManager(Observable):
             LoopStructural `GeologicalModel`.
         """
         return self.model.features
+
+    def get_stratigraphy_entry(self, unit_name: str) -> Optional[StratigraphyEntry]:
+        """Return the raw contact/orientation data ingested for `unit_name`, if any.
+
+        Accessor for `self.stratigraphy`, so callers outside this class (e.g.
+        the data manager, syncing what's shown in the "Data Layers" table)
+        don't need to know it's a plain dict keyed by unit name.
+        """
+        return self.stratigraphy.get(unit_name)
+
+    def get_fault_entry(self, fault_name: str) -> Optional[FaultEntry]:
+        """Return the raw trace data ingested for `fault_name`, if any.
+
+        Accessor for `self.faults`, mirroring `get_stratigraphy_entry`.
+        """
+        return self.faults.get(fault_name)
 
     def add_foliation(
         self,

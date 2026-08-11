@@ -1,6 +1,7 @@
 import json
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from LoopStructural.datatypes import BoundingBox
@@ -21,6 +22,7 @@ from qgis.PyQt.QtGui import QColor
 
 from LoopStructural import FaultTopology, StratigraphicColumn
 
+from .data_types import BasalContactsConfig, FaultTracesConfig, StructuralOrientationsConfig
 from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
@@ -79,9 +81,9 @@ class ModellingDataManager:
         )
         self._bounding_box_set = False
 
-        self._basal_contacts = None
-        self._fault_traces = None
-        self._structural_orientations = None
+        self._basal_contacts: Optional[BasalContactsConfig] = None
+        self._fault_traces: Optional[FaultTracesConfig] = None
+        self._structural_orientations: Optional[StructuralOrientationsConfig] = None
         self._unique_basal_units = []
         self.map_canvas = mapCanvas
         self.logger = logger
@@ -550,7 +552,7 @@ class ModellingDataManager:
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
-    def get_basal_contacts(self):
+    def get_basal_contacts(self) -> Optional[BasalContactsConfig]:
         """Get the basal contacts."""
         return self._basal_contacts
 
@@ -589,7 +591,7 @@ class ModellingDataManager:
         if self.fault_traces_callback:
             self.fault_traces_callback(**self._fault_traces)
 
-    def get_fault_traces(self):
+    def get_fault_traces(self) -> Optional[FaultTracesConfig]:
         """Get the fault traces."""
         return self._fault_traces
 
@@ -614,7 +616,7 @@ class ModellingDataManager:
             self.structural_orientations_callback(**self._structural_orientations)
         self.update_stratigraphy()
 
-    def get_structural_orientations(self):
+    def get_structural_orientations(self) -> Optional[StructuralOrientationsConfig]:
         """Get the structural orientations."""
         return self._structural_orientations
 
@@ -714,7 +716,7 @@ class ModellingDataManager:
         if self._stratigraphic_column is not None:
             for group in self._stratigraphic_column.get_groups():
                 for unit in group.units:
-                    unit_data = self._model_manager.stratigraphy.get(unit.name)
+                    unit_data = self._model_manager.get_stratigraphy_entry(unit.name)
                     if not unit_data:
                         continue
                     contact = unit_data.get('contact')
