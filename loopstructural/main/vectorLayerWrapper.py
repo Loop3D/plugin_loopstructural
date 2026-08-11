@@ -49,12 +49,12 @@ def qgsRasterToGdalDataset(rlayer: QgsRasterLayer):
     try:
         candidates.append(rlayer.source())
     except Exception:
-        pass
+        logger.debug("Could not read rlayer.source()", exc_info=True)
     try:
         if rlayer.dataProvider():
             candidates.append(rlayer.dataProvider().dataSourceUri())
     except Exception:
-        pass
+        logger.debug("Could not read rlayer.dataProvider().dataSourceUri()", exc_info=True)
 
     tried = set()
     for uri in candidates:
@@ -112,6 +112,7 @@ def _get_crs_id(crs):
         try:
             return crs.authid() or "Unknown"
         except Exception:
+            logger.debug("Could not read crs.authid()", exc_info=True)
             return "Unknown"
     return "Unknown"
 
@@ -235,6 +236,8 @@ def qgsLayerToDataFrame(src, dtm=None) -> Optional[pd.DataFrame]:
             to_dtm = QgsCoordinateTransform(src_crs, dtm.crs(), QgsProject.instance())
 
     # --- Helper: sample Z from DTM (returns float or -9999) ---
+    # Called once per vertex, so deliberately not logged on failure (unlike
+    # the rest of this module) -- on a large layer that would flood the log.
     def sample_dtm_xy(x, y):
         if dtm is None:
             return 0.0
@@ -417,7 +420,7 @@ def GeoDataFrameToQgsLayer(
                 try:
                     has_z = has_z or bool(getattr(geom, "has_z", False))
                 except Exception:
-                    pass
+                    logger.debug("Error checking geometry Z value", exc_info=True)
                 if base:
                     break
 
@@ -445,12 +448,13 @@ def GeoDataFrameToQgsLayer(
         try:
             crs = QgsCoordinateReferenceSystem.fromWkt(geodataframe.crs.to_wkt())
         except Exception:
+            logger.debug("Error building CRS from WKT, falling back to EPSG", exc_info=True)
             try:
                 epsg = geodataframe.crs.to_epsg()
                 if epsg:
                     crs = QgsCoordinateReferenceSystem.fromEpsgId(int(epsg))
             except Exception:
-                pass
+                logger.exception("Error building CRS from EPSG")
 
     # --- build QGIS fields from pandas dtypes
     fields = QgsFields()
@@ -567,7 +571,7 @@ def _qvariant_type_from_dtype(dtype) -> QVariantCompat.Type:
             # store as string "HH:MM:SS" fallback
             return QVariantCompat.String
     except Exception:
-        pass
+        logger.debug("Error checking pandas datetime dtype for %r", dtype, exc_info=True)
     # default to string
     return QVariantCompat.String
 
@@ -597,14 +601,14 @@ def _geometry_from_value(value):
             try:
                 data = method()
             except Exception:
+                logger.debug("%s() raised in _geometry_from_value", attr, exc_info=True)
                 data = None
             if data:
                 try:
                     data = bytes(data)
                 except Exception:
                     # Best-effort conversion to bytes; if this fails, leave data as-is
-
-                    pass
+                    logger.debug("Could not coerce %s() result to bytes", attr, exc_info=True)
                 try:
                     return QgsGeometry.fromWkb(data)
                 except Exception:
@@ -621,13 +625,15 @@ def _geometry_from_value(value):
         try:
             return QgsGeometry.fromWkb(bytes(wkb_data))
         except Exception:
-            pass
+            logger.debug("QgsGeometry.fromWkb(value.wkb) failed", exc_info=True)
     wkt_data = getattr(value, "wkt", None)
     if wkt_data:
         try:
             return QgsGeometry.fromWkt(str(wkt_data))
         except Exception:
-            pass
+            # last fallback attempted -- the caller gets None and the row's
+            # geometry is dropped.
+            logger.debug("QgsGeometry.fromWkt(value.wkt) failed", exc_info=True)
     return None
 
 
@@ -653,6 +659,7 @@ def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
             try:
                 text = method()
             except Exception:
+                logger.debug("%s() raised in _crs_from_geodataframe_crs", attr, exc_info=True)
                 text = None
             if text:
                 break
@@ -660,13 +667,14 @@ def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
         try:
             return QgsCoordinateReferenceSystem.fromWkt(text)
         except Exception:
+            logger.debug("QgsCoordinateReferenceSystem.fromWkt(text) failed", exc_info=True)
             temp = QgsCoordinateReferenceSystem()
             if hasattr(temp, "createFromWkt"):
                 try:
                     if temp.createFromWkt(text):
                         return temp
                 except Exception:
-                    pass
+                    logger.debug("temp.createFromWkt(text) failed", exc_info=True)
     try:
         epsg = crs_info.to_epsg()
         if epsg:
@@ -679,7 +687,8 @@ def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
             if temp.isValid():
                 return temp
         except Exception:
-            pass
+            # last fallback attempted -- the caller gets an invalid/empty CRS.
+            logger.debug("QgsCoordinateReferenceSystem(crs_info) failed", exc_info=True)
     return crs
 
 
@@ -1054,6 +1063,7 @@ def qvariantToFloat(f, field_name):
     try:
         return float(val)
     except Exception:
+        logger.debug("Could not convert %r to float in qvariantToFloat", val, exc_info=True)
         return None
 
 
