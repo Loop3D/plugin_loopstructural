@@ -554,9 +554,69 @@ class GeologicalModelManager(Observable):
             except Exception:
                 pass
 
+    def _fault_build_order(self):
+        """Order fault names so a fault that cuts another (FAULTED
+        relationship) is built before the fault it affects.
+
+        `create_and_add_fault`'s `faults=` argument needs already-built
+        `FaultSegment` objects for the cutting faults, so the fault doing
+        the cutting must exist in the model before the fault it cuts is
+        built. Falls back to declaration order when there's no topology,
+        or for whatever's left of a circular FAULTED chain.
+        """
+        names = list(self.faults.keys())
+        if self.fault_topology is None or len(names) <= 1:
+            return names
+
+        dependencies = {
+            f: {
+                other
+                for other in names
+                if other != f
+                and self.fault_topology.get_fault_relationship(f, other)
+                is FaultRelationshipType.FAULTED
+            }
+            for f in names
+        }
+        ordered = []
+        remaining = names
+        while remaining:
+            remaining_set = set(remaining)
+            ready = [f for f in remaining if not (dependencies[f] & remaining_set)]
+            if not ready:
+                # circular FAULTED relationships: build whatever's left in
+                # declaration order rather than looping forever
+                ready = list(remaining)
+            ordered.extend(ready)
+            remaining = [f for f in remaining if f not in ready]
+        return ordered
+
+    def _cutting_faults_for(self, fault_name):
+        """Return the already-built FaultSegment features that `fault_name`
+        is cut/offset by, per FAULTED relationships in `fault_topology`.
+
+        These get passed as `faults=` to `create_and_add_fault` so the
+        cross-cutting relationship is actually fed to the interpolator --
+        LoopStructural applies no faults at all if `faults=` is omitted
+        (unlike foliations, which default to picking up every built fault).
+        """
+        if self.fault_topology is None:
+            return []
+        cutting_faults = []
+        for other in self.fault_topology.faults:
+            if other == fault_name:
+                continue
+            relationship = self.fault_topology.get_fault_relationship(fault_name, other)
+            if relationship is FaultRelationshipType.FAULTED:
+                feature = self.model.get_feature_by_name(other)
+                if feature is not None:
+                    cutting_faults.append(feature)
+        return cutting_faults
+
     def update_fault_features(self):
         """Update the fault features in the geological model."""
-        for fault_name, fault_data in self.faults.items():
+        for fault_name in self._fault_build_order():
+            fault_data = self.faults[fault_name]
             self._report_progress(f"Building fault '{fault_name}'")
             if qgisAttributeIsNone(fault_name):
                 # check if the attribute is none, if its none we want so skip as it could be an
@@ -598,6 +658,7 @@ class GeologicalModelManager(Observable):
                     fault_dip=dip,
                     fault_pitch=pitch,
                     data=data,
+                    faults=self._cutting_faults_for(fault_name),
                     nelements=PlgSettingsStructure.interpolator_nelements,
                     npw=PlgSettingsStructure.interpolator_npw,
                     cpw=PlgSettingsStructure.interpolator_cpw,
