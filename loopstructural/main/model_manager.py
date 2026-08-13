@@ -30,6 +30,16 @@ from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
 
 
+class ModelSolveCancelled(Exception):
+    """Raised inside `update_model`/`update_all_features` when the caller has
+    requested cancellation via `GeologicalModelManager.request_cancel()`.
+
+    Raised between fault/feature builds (see `_report_progress`), not during
+    one -- a build already running cannot be interrupted, so cancellation
+    takes effect at the next checkpoint rather than immediately.
+    """
+
+
 class AllSampler:
     """This is a simple sampler that just returns all the points, or all of the vertices
     of a line. It will also copy the elevation from the DEM or the elevation set in the data manager.
@@ -114,6 +124,19 @@ class GeologicalModelManager(Observable):
         # parameter tweak, `update_all_features`/Solve Model can't pick them
         # up -- see `set_fault_topology`.
         self._topology_dirty = False
+        # Set by request_cancel() and checked in _report_progress; lets a
+        # running Initialize/Solve be stopped between fault/feature builds.
+        self._cancel_requested = False
+
+    def request_cancel(self):
+        """Ask a running `update_model`/`update_all_features` call to stop.
+
+        Takes effect the next time a fault/feature build finishes and
+        `_report_progress` is called for the following one -- it raises
+        `ModelSolveCancelled` there rather than interrupting whatever build
+        is currently in progress.
+        """
+        self._cancel_requested = True
 
     @contextmanager
     def suspend_notifications(self):
@@ -553,6 +576,10 @@ class GeologicalModelManager(Observable):
                 callback(message, current, total)
             except Exception:
                 pass
+
+        if getattr(self, '_cancel_requested', False):
+            self._cancel_requested = False
+            raise ModelSolveCancelled(f"Cancelled before: {message}")
 
     def _fault_build_order(self):
         """Order fault names so a fault that cuts another (FAULTED

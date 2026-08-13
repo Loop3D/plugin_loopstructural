@@ -16,6 +16,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ....main.model_manager import ModelSolveCancelled
 from .add_foliation_dialog import AddFoliationDialog
 from .add_unconformity_dialog import AddUnconformityDialog
 from .feature_details_panel import (
@@ -293,8 +294,8 @@ class GeologicalModelTab(QWidget):
         progress = QProgressDialog(initial_label, "Cancel", 0, 0, self)
         progress.setWindowModality(Qt.NonModal)
         progress.setWindowTitle(title)
-        progress.setCancelButton(None)
         progress.setMinimumDuration(0)
+        progress.canceled.connect(self._on_task_cancel_requested)
         progress.show()
 
         self.initializeModelButton.setEnabled(False)
@@ -314,11 +315,34 @@ class GeologicalModelTab(QWidget):
         worker.progress.connect(self._on_task_progress)
         worker.finished.connect(self._on_task_finished)
         worker.error.connect(self._on_task_error)
+        worker.cancelled.connect(self._on_task_cancelled)
         thread.finished.connect(thread.deleteLater)
 
         self._model_update_thread = thread
         self._model_update_worker = worker
         thread.start()
+
+    def _on_task_cancel_requested(self):
+        """Handle the progress dialog's Cancel button.
+
+        Clicking Cancel asks the model manager to stop at the next
+        fault/feature build boundary (see `ModelManager.request_cancel`) --
+        the build already running when Cancel is clicked can't be
+        interrupted, so there can be a short delay before the worker
+        actually stops. `QProgressDialog.cancel()` hides the dialog before
+        emitting `canceled`, so it's re-shown here (without a Cancel button,
+        since a second click has nothing new to do) to keep the user informed
+        while the worker winds down.
+        """
+        if self.model_manager is not None:
+            self.model_manager.request_cancel()
+        progress = self._task_progress_dialog
+        try:
+            progress.setLabelText("Cancelling... finishing the current step")
+            progress.setCancelButton(None)
+            progress.show()
+        except Exception:
+            pass
 
     @pyqtSlot(str, int, int)
     def _on_task_progress(self, message, current, total):
@@ -348,13 +372,23 @@ class GeologicalModelTab(QWidget):
             self._finish_task()
 
     @pyqtSlot(str)
-    def _on_task_error(self, tb):
+    def _on_task_cancelled(self, message):
+        # Nothing to do here beyond letting `_on_task_finished` (emitted
+        # right after this, from the worker's `finally`) run its normal
+        # cleanup/refresh -- the feature list will reflect whatever was
+        # actually built before the cancellation took effect.
+        print(f"{self._task_title} cancelled: {message}")
+
+    @pyqtSlot(str, str)
+    def _on_task_error(self, reason, tb):
         try:
-            QMessageBox.critical(
-                self,
-                f"{self._task_title} failed",
-                f"An error occurred while updating the model:\n{tb}",
-            )
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Critical)
+            box.setWindowTitle(f"{self._task_title} failed")
+            box.setText(f"Model update stopped: {reason}")
+            box.setInformativeText("Click 'Show Details...' for the full error trace.")
+            box.setDetailedText(tb)
+            box.exec_()
         except Exception:
             pass
         self._finish_task()
@@ -362,6 +396,14 @@ class GeologicalModelTab(QWidget):
     def _finish_task(self):
         self.initializeModelButton.setEnabled(True)
         self.solveModelButton.setEnabled(self.model_manager.model_state in _SOLVABLE_STATES)
+        try:
+            # QProgressDialog.close() emits canceled() itself (same as
+            # clicking the Cancel button), so disconnect first -- otherwise
+            # closing the dialog after a normal finish/error would call
+            # request_cancel() and arm cancellation for the *next* run.
+            self._task_progress_dialog.canceled.disconnect(self._on_task_cancel_requested)
+        except Exception:
+            pass
         try:
             self._task_progress_dialog.close()
         except Exception:
@@ -528,15 +570,18 @@ class _ModelUpdateWorker(QObject):
     forwards to the `progress` signal below -- used for both "Initialize Model"
     (model_manager.update_model) and "Solve Model" (model_manager.update_all_features).
 
-    Emits finished when done and error with a string if an exception occurs.
-    Emits progress(message, current, total) as each fault/stratigraphic
+    Emits finished when done. Emits error(reason, traceback) if an unexpected
+    exception occurs, or cancelled(message) if the run stopped because
+    `ModelManager.request_cancel()` was called. Emits
+    progress(message, current, total) as each fault/stratigraphic
     group/feature is built, so the GUI can show what's currently happening.
     `progress.emit` is safe to call from this worker thread: Qt automatically
     queues the delivery to slots living on the main thread.
     """
 
     finished = pyqtSignal()
-    error = pyqtSignal(str)
+    error = pyqtSignal(str, str)
+    cancelled = pyqtSignal(str)
     progress = pyqtSignal(str, int, int)
 
     def __init__(self, target):
@@ -550,6 +595,8 @@ class _ModelUpdateWorker(QObject):
     def run(self):
         try:
             self._target(self._report_progress)
+        except ModelSolveCancelled as e:
+            self.cancelled.emit(str(e))
         except Exception as e:
             try:
                 import traceback
@@ -557,6 +604,10 @@ class _ModelUpdateWorker(QObject):
                 tb = traceback.format_exc()
             except Exception:
                 tb = str(e)
-            self.error.emit(tb)
+            # Short, human-facing headline: exception type + message (e.g.
+            # "ValueError: could not build fault 'F1': ..."), with the full
+            # traceback available separately for anyone who needs it.
+            reason = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            self.error.emit(reason, tb)
         finally:
             self.finished.emit()
