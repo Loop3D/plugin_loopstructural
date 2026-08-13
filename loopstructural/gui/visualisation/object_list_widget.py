@@ -3,6 +3,7 @@ import logging
 import pyvista as pv
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QFileDialog,
     QHBoxLayout,  # Add missing import
@@ -24,6 +25,7 @@ class ObjectListWidget(QWidget):
         self.mainLayout = QVBoxLayout(self)
         self.treeWidget = QTreeWidget(self)
         self.treeWidget.setHeaderHidden(True)  # Hide the header
+        self.treeWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.mainLayout.addWidget(self.treeWidget)
         addButton = QPushButton("Add Object", self)
         addButton.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -40,8 +42,29 @@ class ObjectListWidget(QWidget):
     def onDoubleClick(self, item, column):
         self.viewer.reset_camera()
 
+    def _selected_top_level_items(self):
+        """Return only the selected items that represent objects (top-level
+        rows with a checkbox/label widget), ignoring child rows such as
+        'Point Data'/'Cell Data' entries which have no such widget.
+        """
+        items = []
+        for item in self.treeWidget.selectedItems():
+            if item.parent() is not None:
+                continue
+            if self.treeWidget.itemWidget(item, 0) is None:
+                continue
+            items.append(item)
+        return items
+
+    def _object_label_for_item(self, item):
+        item_widget = self.treeWidget.itemWidget(item, 0)
+        if item_widget is None:
+            return None
+        label = item_widget.findChild(QLabel)
+        return label.text() if label else None
+
     def on_object_selected(self):
-        selected_items = self.treeWidget.selectedItems()
+        selected_items = self._selected_top_level_items()
         if not selected_items:
             # if nothing selected keep the previous selection.
             # Need to select a new object to change its properties
@@ -49,10 +72,9 @@ class ObjectListWidget(QWidget):
 
         # For simplicity, just handle the first selected item
         item = selected_items[0]
-        item_widget = self.treeWidget.itemWidget(item, 0)
-        object_label = item_widget.findChild(QLabel).text()
+        object_label = self._object_label_for_item(item)
 
-        if hasattr(self, 'properties_widget') and self.properties_widget:
+        if object_label and hasattr(self, 'properties_widget') and self.properties_widget:
 
             self.properties_widget.setCurrentObject(object_label)
 
@@ -236,28 +258,56 @@ class ObjectListWidget(QWidget):
         # Logic to update visibility in the list widget
 
     def contextMenuEvent(self, event):
+        selected_items = self._selected_top_level_items()
+        multiple = len(selected_items) > 1
+
         menu = QMenu(self)
 
-        zoom_action = menu.addAction("Zoom to Object")
-        export_action = menu.addAction("Export Object")
-        remove_action = menu.addAction("Remove Object")
+        zoom_action = None
+        export_action = None
+        if not multiple:
+            zoom_action = menu.addAction("Zoom to Object")
+            export_action = menu.addAction("Export Object")
+            menu.addSeparator()
+
+        show_action = menu.addAction("Show Selected")
+        hide_action = menu.addAction("Hide Selected")
+        menu.addSeparator()
+        remove_action = menu.addAction("Remove Selected" if multiple else "Remove Object")
 
         action = menu.exec_(self.mapToGlobal(event.pos()))
 
-        if action == zoom_action:
+        if action is None:
+            return
+        elif action == zoom_action:
             self.zoom_to_selected_object()
         elif action == export_action:
             self.export_selected_object()
+        elif action == show_action:
+            self.set_selected_objects_visibility(True)
+        elif action == hide_action:
+            self.set_selected_objects_visibility(False)
         elif action == remove_action:
             self.remove_selected_object()
 
+    def set_selected_objects_visibility(self, visible):
+        """Show or hide every currently-selected object by driving each
+        item's visibility checkbox (so viewer state and checkbox state stay
+        in sync)."""
+        for item in self._selected_top_level_items():
+            item_widget = self.treeWidget.itemWidget(item, 0)
+            checkbox = item_widget.findChild(QCheckBox) if item_widget else None
+            if checkbox is not None:
+                checkbox.setChecked(visible)
+
     def zoom_to_selected_object(self):
-        selected_items = self.treeWidget.selectedItems()
+        selected_items = self._selected_top_level_items()
         if not selected_items:
             return
 
-        item_widget = self.treeWidget.itemWidget(selected_items[0], 0)
-        object_label = item_widget.findChild(QLabel).text()
+        object_label = self._object_label_for_item(selected_items[0])
+        if object_label is None:
+            return
         mesh_dict = self.viewer.meshes.get(object_label, None)
         if mesh_dict is None:
             return
@@ -270,12 +320,13 @@ class ObjectListWidget(QWidget):
             logger.error(f"Failed to zoom to object {object_label}: {e}")
 
     def export_selected_object(self):
-        selected_items = self.treeWidget.selectedItems()
+        selected_items = self._selected_top_level_items()
         if not selected_items:
             return
 
-        item_widget = self.treeWidget.itemWidget(selected_items[0], 0)
-        object_label = item_widget.findChild(QLabel).text()
+        object_label = self._object_label_for_item(selected_items[0])
+        if object_label is None:
+            return
         mesh_dict = self.viewer.meshes.get(object_label, None)
         if mesh_dict is None:
             return
@@ -407,13 +458,13 @@ class ObjectListWidget(QWidget):
                 f.write(f"{x:.6f} {y:.6f} {z:.6f} {value:.6f}\n")
 
     def remove_selected_object(self):
-        selected_items = self.treeWidget.selectedItems()
+        selected_items = self._selected_top_level_items()
         if not selected_items:
             return
         for item in selected_items:
-
-            item_widget = self.treeWidget.itemWidget(item, 0)
-            object_label = item_widget.findChild(QLabel).text()
+            object_label = self._object_label_for_item(item)
+            if object_label is None:
+                continue
             # Logic for removing the object
             if self.viewer and hasattr(self.viewer, 'remove_object'):
                 self.viewer.remove_object(object_label)
@@ -583,36 +634,27 @@ class ObjectListWidget(QWidget):
         except Exception as e:
             print(f"Failed to load mesh: {e}")
 
+    def _toggle_selected_visibility(self):
+        for item in self._selected_top_level_items():
+            item_widget = self.treeWidget.itemWidget(item, 0)
+            checkbox = item_widget.findChild(QCheckBox) if item_widget else None
+            if checkbox is not None:
+                checkbox.setChecked(not checkbox.isChecked())
+
     def eventFilter(self, source, event):
         if source == self.treeWidget and event.type() == event.KeyPress:
             if event.key() == Qt.Key_Space:
-                selected_items = self.treeWidget.selectedItems()
-                for item in selected_items:
-                    item_widget = self.treeWidget.itemWidget(item, 0)
-                    if item_widget:
-                        checkbox = item_widget.findChild(QCheckBox)
-                        if checkbox:
-                            checkbox.setChecked(not checkbox.isChecked())
+                self._toggle_selected_visibility()
+                return True
+            elif event.key() == Qt.Key_Delete:
+                self.remove_selected_object()
                 return True
         return super().eventFilter(source, event)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Space:
-            selected_items = self.treeWidget.selectedItems()
-            for item in selected_items:
-                item_widget = self.treeWidget.itemWidget(item, 0)
-                if item_widget:
-                    checkbox = item_widget.findChild(QCheckBox)
-                    if checkbox:
-                        checkbox.setChecked(not checkbox.isChecked())
+            self._toggle_selected_visibility()
         elif event.key() == Qt.Key_Delete:
-            selected_items = self.treeWidget.selectedItems()
-            for item in selected_items:
-                item_widget = self.treeWidget.itemWidget(item, 0)
-                if item_widget:
-                    object_label = item_widget.findChild(QLabel).text()
-                    if self.viewer and hasattr(self.viewer, 'remove_object'):
-                        self.viewer.remove_object(object_label)
-                    self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(item))
+            self.remove_selected_object()
         else:
             super().keyPressEvent(event)
