@@ -180,7 +180,6 @@ class LoopstructuralPlugin:
         )
 
         self.toolbar.addAction(self.action_modelling)
-        self.toolbar.addAction(self.action_data_conversion)
         self.toolbar.addAction(self.action_fault_topology)
         # -- Menu
         self.iface.addPluginToMenu(__title__, self.action_settings)
