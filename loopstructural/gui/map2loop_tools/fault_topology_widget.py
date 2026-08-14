@@ -1,6 +1,7 @@
 """Widget for calculating fault topology from a fault layer."""
 
 import os
+from contextlib import nullcontext
 
 import geopandas as gpd
 from qgis.core import QgsMapLayerProxyModel
@@ -141,82 +142,95 @@ class FaultTopologyWidget(QDialog):
                 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
 
                 ft = self.data_manager._fault_topology
-
-                # Remove existing fault-fault relationships (notify observers)
-                for f1, f2 in list(ft.adjacency.keys()):
-                    try:
-                        ft.update_fault_relationship(f1, f2, FaultRelationshipType.NONE)
-                    except Exception:
-                        pass
-
-                # Remove existing stratigraphy relationships
-                for unit, fault in list(ft.stratigraphy_fault_relationships.keys()):
-                    try:
-                        ft.update_fault_stratigraphy_relationship(unit, fault, False)
-                    except Exception:
-                        pass
-
-                # Determine faults from topology output
-                new_faults = set()
-                if df is not None and not df.empty:
-                    # Prefer standard column names
-                    if 'Fault1' in df.columns and 'Fault2' in df.columns:
-                        for _, row in df.iterrows():
-                            print(f"Found fault pair: {row['Fault1']} - {row['Fault2']}")
-                            new_faults.add(str(row['Fault1']))
-                            new_faults.add(str(row['Fault2']))
-                    else:
-                        # Fallback: take first two columns
-                        cols = list(df.columns)
-                        if len(cols) >= 2:
-                            for _, row in df.iterrows():
-                                new_faults.add(str(row[cols[0]]))
-                                new_faults.add(str(row[cols[1]]))
-
-                # Add new faults
-                for f in sorted(new_faults):
-                    if f not in ft.faults:
+                model_manager = getattr(self.data_manager, '_model_manager', None)
+                # Repopulating the whole topology fires one notification per
+                # add_fault/remove_fault/update_fault_relationship call below.
+                # Each notification normally triggers a full O(faults^2)
+                # rescan in the model manager (see
+                # `batch_fault_topology_updates`), so for a map2loop run with
+                # many faults that's a lot of redundant, slow work before the
+                # dialog even closes. Batch it into a single rescan.
+                batch_cm = (
+                    model_manager.batch_fault_topology_updates()
+                    if model_manager is not None
+                    else nullcontext()
+                )
+                with batch_cm:
+                    # Remove existing fault-fault relationships (notify observers)
+                    for f1, f2 in list(ft.adjacency.keys()):
                         try:
-                            ft.add_fault(f)
+                            ft.update_fault_relationship(f1, f2, FaultRelationshipType.NONE)
                         except Exception:
                             pass
 
-                # Remove faults not in new set
-                for existing in list(ft.faults):
-                    if existing not in new_faults:
+                    # Remove existing stratigraphy relationships
+                    for unit, fault in list(ft.stratigraphy_fault_relationships.keys()):
                         try:
-                            ft.remove_fault(existing)
+                            ft.update_fault_stratigraphy_relationship(unit, fault, False)
                         except Exception:
                             pass
 
-                # Add relationships from df (mark as FAULTED)
-                if df is not None and not df.empty:
-                    for _, row in df.iterrows():
-                        try:
-                            if 'Fault1' in row.index and 'Fault2' in row.index:
-                                f1 = str(row['Fault1'])
-                                f2 = str(row['Fault2'])
-                            else:
-                                f1 = str(row.iloc[0])
-                                f2 = str(row.iloc[1])
-                            ft.update_fault_relationship(f1, f2, FaultRelationshipType.FAULTED)
-                        except Exception:
-                            pass
+                    # Determine faults from the fault layer itself (all IDs present),
+                    # not just the ones map2loop found a relationship for. A fault with
+                    # no detected topological relationship is still a real fault and
+                    # must not be dropped from the fault topology.
+                    new_faults = set(str(v) for v in gdf['ID'].unique())
 
-                # Update unit-fault relationships if available from topology
-                try:
-                    uf = topology.unit_fault_relationships
-                    if uf is not None and not uf.empty:
-                        for _, r in uf.iterrows():
+                    # Add new faults; never remove existing ones here, so faults
+                    # without a detected relationship (or ones the user added
+                    # manually) are preserved and only updated, not deleted.
+                    for f in sorted(new_faults):
+                        if f not in ft.faults:
                             try:
-                                unit = r.get('Unit', r.iloc[0])
-                                fault = r.get('Fault', r.iloc[1])
-                                ft.update_fault_stratigraphy_relationship(unit, str(fault), True)
+                                ft.add_fault(f)
                             except Exception:
                                 pass
-                except Exception:
-                    # unit-fault relationships not available
-                    pass
+
+                    # Add relationships from df. map2loop detects these pairs purely
+                    # from spatial proximity/intersection of fault traces (see
+                    # Topology._calculate_fault_fault_relationships), the same signal
+                    # LoopStructural's own map2loop processor (GeologicalModel.from_processor)
+                    # resolves to a splay or an ABUTTING relationship -- never a FAULTED
+                    # (interpolation-chaining) one. Mark these ABUTTING here too: it's the
+                    # cheap, post-hoc region crop, and matches what this data actually
+                    # represents (near/intersecting faults, not a deliberate cross-cutting
+                    # order). Leave FAULTED for the user to set explicitly in the Fault
+                    # Adjacency tab when they really do want one fault's interpolation to
+                    # depend on another -- auto-marking every detected pair FAULTED made
+                    # every fault chain-build against every nearby fault, which is
+                    # combinatorially expensive and freezes Initialize Model on models
+                    # with more than a handful of faults.
+                    if df is not None and not df.empty:
+                        for _, row in df.iterrows():
+                            try:
+                                if 'Fault1' in row.index and 'Fault2' in row.index:
+                                    f1 = str(row['Fault1'])
+                                    f2 = str(row['Fault2'])
+                                else:
+                                    f1 = str(row.iloc[0])
+                                    f2 = str(row.iloc[1])
+                                ft.update_fault_relationship(
+                                    f1, f2, FaultRelationshipType.ABUTTING
+                                )
+                            except Exception:
+                                pass
+
+                    # Update unit-fault relationships if available from topology
+                    try:
+                        uf = topology.unit_fault_relationships
+                        if uf is not None and not uf.empty:
+                            for _, r in uf.iterrows():
+                                try:
+                                    unit = r.get('Unit', r.iloc[0])
+                                    fault = r.get('Fault', r.iloc[1])
+                                    ft.update_fault_stratigraphy_relationship(
+                                        unit, str(fault), True
+                                    )
+                                except Exception:
+                                    pass
+                    except Exception:
+                        # unit-fault relationships not available
+                        pass
 
             except Exception:
                 # If anything fails here, still continue to show success of topology run

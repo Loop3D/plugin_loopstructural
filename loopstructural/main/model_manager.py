@@ -298,6 +298,41 @@ class GeologicalModelManager(Observable):
 
         self._emit('model_updated')
 
+    @contextmanager
+    def batch_fault_topology_updates(self):
+        """Suspend the per-edit `_on_fault_topology_changed` reconciliation
+        while making many fault topology edits at once (e.g. repopulating
+        the topology from a map2loop auto-detect run), then reconcile once.
+
+        Each individual `fault_topology` edit (add_fault, remove_fault,
+        update_fault_relationship, ...) normally triggers
+        `_on_fault_topology_changed` synchronously, which does a full
+        O(faults^2) rescan in `apply_fault_abutting_relationships`. A bulk
+        import of dozens of faults and relationships turns into dozens of
+        redundant full rescans -- slow enough to look like a hang even
+        though every individual relationship is cheap (ABUTTING) rather
+        than interpolator-chained (FAULTED). Detach the observer for the
+        duration of the batch and reconcile exactly once at the end.
+        """
+        if self.fault_topology is None:
+            yield
+            return
+        self.fault_topology.detach(self._on_fault_topology_changed)
+        try:
+            yield
+        finally:
+            self.fault_topology.attach(self._on_fault_topology_changed)
+            try:
+                self.apply_fault_abutting_relationships()
+            except Exception:
+                pass
+            # A batch of this kind always adds/removes faults or changes
+            # relationships, which -- like any single FAULTED/structural
+            # edit -- needs Initialize Model re-run before Solve Model
+            # picks it up; see `_TOPOLOGY_EVENTS_REQUIRING_REINIT`.
+            self._topology_dirty = True
+            self._emit('model_updated')
+
     def update_bounding_box(self, bounding_box: BoundingBox):
         """Update the bounding box of the geological model.
 
