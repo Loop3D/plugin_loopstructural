@@ -369,6 +369,9 @@ class BasalContactsWidget(QWidget):
             self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
         )
         all_contacts = self.allContactsCheckBox.isChecked()
+        target_crs = self.data_manager.get_model_crs() if self.data_manager else None
+        if target_crs is None or not target_crs.isValid():
+            target_crs = geology.crs() if geology else None
 
         def target(progress_callback):
             nonlocal stratigraphic_order
@@ -411,6 +414,7 @@ class BasalContactsWidget(QWidget):
                 all_contacts=all_contacts,
                 updater=progress_callback,
                 debug_manager=self._debug,
+                target_crs=target_crs,
             )
             return result, all_contacts
 

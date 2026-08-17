@@ -163,6 +163,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
             unit_name_field=unit_name_field,
             all_contacts=True,
             updater=feedback.pushInfo,
+            target_crs=geology.crs() if geology else None,
         )
         basal_contacts = result['basal_contacts']
         all_contacts = result['all_contacts']

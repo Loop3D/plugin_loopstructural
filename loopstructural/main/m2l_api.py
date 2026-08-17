@@ -44,6 +44,7 @@ def extract_basal_contacts(
     all_contacts=False,
     updater=None,
     debug_manager=None,
+    target_crs=None,
 ):
     """Extract basal contacts from geological data.
 
@@ -63,13 +64,18 @@ def extract_basal_contacts(
         Whether to return all contacts in addition to basal contacts, by default False.
     updater : callable, optional
         Callback function for progress updates, by default None.
+    target_crs : QgsCoordinateReferenceSystem, optional
+        CRS to reproject both geology and faults into before extraction, so
+        the two layers line up spatially. If None, geology and faults keep
+        their own source CRS, which silently produces wrong (often empty)
+        results whenever the two layers were digitised in different CRSs.
 
     Returns
     -------
     dict
         Dictionary containing 'basal_contacts' GeoDataFrame and optionally 'all_contacts' GeoDataFrame.
     """
-    geology = qgsLayerToGeoDataFrame(geology)
+    geology = qgsLayerToGeoDataFrame(geology, target_crs=target_crs)
     if unit_name_field and unit_name_field in geology.columns:
         mask = ~geology[unit_name_field].astype(str).str.strip().isin(ignore_units or [])
         geology = geology[mask].reset_index(drop=True)
@@ -79,7 +85,7 @@ def extract_basal_contacts(
         if updater:
             updater(f"no unit name field found: {unit_name_field}")
 
-    faults = qgsLayerToGeoDataFrame(faults) if faults else None
+    faults = qgsLayerToGeoDataFrame(faults, target_crs=target_crs) if faults else None
     if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology.columns:
         geology = geology.rename(columns={unit_name_field: 'UNITNAME'})
     # Log parameters via DebugManager if provided
