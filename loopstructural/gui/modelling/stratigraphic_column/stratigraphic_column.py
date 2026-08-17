@@ -57,6 +57,11 @@ class StratColumnWidget(QWidget):
         self._drag_target_row = None
         self._drop_indicator_row = None
 
+        # Cache of exact unit-name values found in the selected units layer's
+        # field, refreshed by _revalidate_unit_names(). None means no
+        # layer/field is selected, so the name-match warning is skipped.
+        self._known_unit_names = None
+
         # Main list widget
         self.unitList = QListWidget()
         self.unitList.setDragDropMode(QAbstractItemView.InternalMove)
@@ -89,7 +94,7 @@ class StratColumnWidget(QWidget):
         self.unitsLayerComboBox.setCurrentIndex(-1)
         self.unitsLayerFieldComboBox = QgsFieldComboBox()
         self.unitsLayerComboBox.layerChanged.connect(self._on_units_layer_changed)
-        self.unitsLayerFieldComboBox.fieldChanged.connect(self._persist_units_layer_selection)
+        self.unitsLayerFieldComboBox.fieldChanged.connect(self._on_units_field_changed)
         layerRow.addWidget(self.unitsLayerComboBox)
         layerRow.addWidget(self.unitsLayerFieldComboBox)
         layout.addLayout(layerRow)
@@ -125,6 +130,7 @@ class StratColumnWidget(QWidget):
 
         self._guess_units_layer()
         self._restore_units_layer_selection()
+        self._known_unit_names = self._get_known_unit_names()
 
         clearButton = QPushButton("Clear Stratigraphic Column")
         clearButton.clicked.connect(self.clearColumn)
@@ -263,6 +269,11 @@ class StratColumnWidget(QWidget):
             },
         )
 
+    def _on_units_field_changed(self, _field_name):
+        """Persist and re-validate when the unit-name field selection changes."""
+        self._persist_units_layer_selection()
+        self._revalidate_unit_names()
+
     def _on_units_layer_changed(self, layer):
         """Update the field combo box when the units layer changes."""
         self.unitsLayerFieldComboBox.setLayer(layer)
@@ -272,6 +283,36 @@ class StratColumnWidget(QWidget):
             if unit_match := matcher.find_match('UNITNAME'):
                 self.unitsLayerFieldComboBox.setField(unit_match)
         self._persist_units_layer_selection()
+        self._revalidate_unit_names()
+
+    def _get_known_unit_names(self):
+        """Return the set of exact unit-name values in the selected geology layer/field.
+
+        Returns None if no units layer or unit-name field is selected, which
+        means the name-match warning on each unit row should be skipped.
+        """
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+        if layer is None or not field_name:
+            return None
+        if layer.fields().indexFromName(field_name) < 0:
+            return None
+        names = set()
+        for feature in layer.getFeatures():
+            value = feature[field_name]
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                names.add(text)
+        return names
+
+    def _revalidate_unit_names(self):
+        """Refresh the known-names cache and re-check every unit row against it."""
+        self._known_unit_names = self._get_known_unit_names()
+        for widget, _ in self._widget_cache.values():
+            if hasattr(widget, 'set_known_unit_names'):
+                widget.set_known_unit_names(self._known_unit_names)
 
     def apply_colours_to_layer(self):
         """Push the stratigraphic column's colours onto the selected units layer."""
@@ -381,6 +422,7 @@ class StratColumnWidget(QWidget):
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unit_widget)
         unit_widget.setData(unit_data)  # Set data for the unit widget
+        unit_widget.set_known_unit_names(self._known_unit_names)
 
         # Cache the widget for efficient updates
         self._widget_cache[unit_data['uuid']] = (unit_widget, item)

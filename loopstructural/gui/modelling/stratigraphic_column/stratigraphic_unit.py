@@ -33,6 +33,10 @@ class StratigraphicUnitWidget(QWidget):
         # Convert colour using helper method
         self.colour = self._convert_colour(colour)
         self.thickness = thickness  # Optional thickness attribute
+        # Known unit names from a geology layer's unit-name field, used to warn
+        # when this name has no exact match (see set_known_unit_names). None
+        # means no layer/field has been selected, so the check is skipped.
+        self._known_unit_names = None
         # Connect buttons
         self.buttonDelete.clicked.connect(self.request_delete)
         self.buttonColour.clicked.connect(self.onColourSelectClicked)
@@ -164,6 +168,18 @@ class StratigraphicUnitWidget(QWidget):
 
         self.deleteRequested.emit(self)
 
+    def set_known_unit_names(self, names: Optional[set]):
+        """Set the unit names found in the selected geology layer's unit-name field.
+
+        Parameters
+        ----------
+        names : set of str, or None
+            Exact unit-name values present in the geology layer. None means no
+            geology layer/field is selected, so the name-match warning is skipped.
+        """
+        self._known_unit_names = names
+        self.validateFields()
+
     def validateFields(self):
         """Validate the widget fields and update UI hints."""
         # Reset all styles first
@@ -178,6 +194,13 @@ class StratigraphicUnitWidget(QWidget):
         elif hasattr(self, 'thickness') and not self.thickness > 0:
             self.spinBoxThickness.setStyleSheet("border: 2px solid red;")
             self.spinBoxThickness.setToolTip("Thickness must be greater than zero.")
+        elif self._known_unit_names is not None and self.name not in self._known_unit_names:
+            self.lineEditName.setStyleSheet("border: 2px solid #e6a817;")
+            self.lineEditName.setToolTip(
+                "No exact match for this name was found in the selected geology layer's "
+                "unit-name field. Basal contact extraction requires an exact match "
+                "(check spelling, case, and accents)."
+            )
 
     def setData(self, data: Optional[dict] = None):
         """Set the data for the stratigraphic unit widget.
