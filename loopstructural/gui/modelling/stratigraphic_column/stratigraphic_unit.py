@@ -3,8 +3,10 @@ from typing import Optional
 
 import numpy as np
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QPoint, Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QWidget
+
+from loopstructural.gui.compatibility import event_global_pos
 
 
 class StratigraphicUnitWidget(QWidget):
@@ -12,6 +14,9 @@ class StratigraphicUnitWidget(QWidget):
     thicknessChanged = pyqtSignal(float)  # Signal for thickness changes
     colourChanged = pyqtSignal(str)  # Signal for colour changes
     nameChanged = pyqtSignal(str)  # Signal for name changes
+    dragHandlePressed = pyqtSignal()  # Drag handle mouse-down
+    dragHandleMoved = pyqtSignal(QPoint)  # Drag handle mouse-move (global pos)
+    dragHandleReleased = pyqtSignal()  # Drag handle mouse-up
 
     def __init__(
         self,
@@ -38,6 +43,28 @@ class StratigraphicUnitWidget(QWidget):
         self.spinBoxThickness.setValue(self.thickness)
         # Set color button style instead of widget background
         self._update_colour_button()
+        # The row's buttons/fields cover the whole widget, so a QListWidget's
+        # built-in drag-and-drop can never see a mouse press to start a
+        # reorder. Route presses on the dedicated grip label through here instead.
+        self._dragging_handle = False
+        self.dragHandle.setCursor(Qt.SizeVerCursor)
+        self.dragHandle.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.dragHandle:
+            event_type = event.type()
+            if event_type == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                self._dragging_handle = True
+                self.dragHandlePressed.emit()
+                return True
+            elif event_type == QEvent.MouseMove and self._dragging_handle:
+                self.dragHandleMoved.emit(event_global_pos(event))
+                return True
+            elif event_type == QEvent.MouseButtonRelease and self._dragging_handle:
+                self._dragging_handle = False
+                self.dragHandleReleased.emit()
+                return True
+        return super().eventFilter(obj, event)
 
     def _convert_colour(self, colour):
         """Convert colour from various formats to Qt-compatible hex string.

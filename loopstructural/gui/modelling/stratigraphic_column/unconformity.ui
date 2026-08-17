@@ -11,7 +11,32 @@
    </rect>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="2">
+   <item row="0" column="0">
+    <widget class="QLabel" name="dragHandle">
+     <property name="toolTip">
+      <string>Drag to reorder</string>
+     </property>
+     <property name="text">
+      <string>⠿</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>20</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>20</width>
+       <height>16777215</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="3">
     <widget class="QPushButton" name="buttonDelete">
      <property name="toolTip">
       <string>Delete this unit</string>
@@ -21,7 +46,7 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="1">
+   <item row="0" column="2">
     <widget class="QComboBox" name="comboBoxUnconformityType">
      <property name="toolTip">
       <string>Select unconformity type</string>
@@ -38,7 +63,7 @@
      </item>
     </widget>
    </item>
-   <item row="0" column="0">
+   <item row="0" column="1">
     <widget class="QLabel" name="labelName">
      <property name="text">
       <string>Type</string>

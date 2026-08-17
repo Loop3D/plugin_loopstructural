@@ -52,6 +52,11 @@ class StratColumnWidget(QWidget):
         # Flag to prevent recursive/reentrant callbacks during updates
         self._updating = False
 
+        # State tracked while a row is being dragged by its grip handle
+        self._drag_widget = None
+        self._drag_target_row = None
+        self._drop_indicator_row = None
+
         # Main list widget
         self.unitList = QListWidget()
         self.unitList.setDragDropMode(QAbstractItemView.InternalMove)
@@ -368,6 +373,9 @@ class StratColumnWidget(QWidget):
         unit_widget.colourChanged.connect(
             lambda: self.update_element(unit_widget)
         )  # Connect colour change signal
+        unit_widget.dragHandlePressed.connect(lambda: self._on_drag_start(unit_widget))
+        unit_widget.dragHandleMoved.connect(lambda pos: self._on_drag_move(unit_widget, pos))
+        unit_widget.dragHandleReleased.connect(lambda: self._on_drag_end(unit_widget))
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
         self.unitList.addItem(item)
@@ -397,6 +405,15 @@ class StratColumnWidget(QWidget):
 
         unconformity_widget = UnconformityWidget(uuid=unconformity.uuid)
         unconformity_widget.deleteRequested.connect(self.delete_unit)
+        unconformity_widget.dragHandlePressed.connect(
+            lambda: self._on_drag_start(unconformity_widget)
+        )
+        unconformity_widget.dragHandleMoved.connect(
+            lambda pos: self._on_drag_move(unconformity_widget, pos)
+        )
+        unconformity_widget.dragHandleReleased.connect(
+            lambda: self._on_drag_end(unconformity_widget)
+        )
         item = QListWidgetItem()
         item.setSizeHint(unconformity_widget.sizeHint())
         self.unitList.addItem(item)
@@ -419,6 +436,71 @@ class StratColumnWidget(QWidget):
         # Remove from cache
         if unit_widget.uuid in self._widget_cache:
             del self._widget_cache[unit_widget.uuid]
+
+    def _on_drag_start(self, widget):
+        """Begin a reorder drag started from a row's grip handle."""
+        self._drag_widget = widget
+        self._drag_target_row = None
+
+    def _on_drag_move(self, widget, global_pos):
+        """Track the row currently under the cursor and highlight it as the drop target."""
+        if self._drag_widget is not widget:
+            return
+        viewport = self.unitList.viewport()
+        local_pos = viewport.mapFromGlobal(global_pos)
+        index = self.unitList.indexAt(local_pos)
+        if index.isValid():
+            target_row = index.row()
+        elif local_pos.y() < 0:
+            target_row = 0
+        else:
+            target_row = self.unitList.count() - 1
+        self._drag_target_row = target_row
+        self._set_drop_indicator(target_row)
+
+    def _on_drag_end(self, widget):
+        """Finish a reorder drag, applying the move if the target row changed."""
+        if self._drag_widget is not widget:
+            return
+        target_row = self._drag_target_row
+        self._drag_widget = None
+        self._drag_target_row = None
+        self._set_drop_indicator(None)
+
+        if target_row is None or not self.data_manager:
+            return
+
+        ordered_uuids = [
+            self.unitList.itemWidget(self.unitList.item(i)).uuid
+            for i in range(self.unitList.count())
+        ]
+        try:
+            current_row = ordered_uuids.index(widget.uuid)
+        except ValueError:
+            return
+        if current_row == target_row:
+            return
+        ordered_uuids.pop(current_row)
+        ordered_uuids.insert(target_row, widget.uuid)
+        self.data_manager.update_stratigraphic_column_order(ordered_uuids)
+
+    def _set_drop_indicator(self, row):
+        """Highlight the row a drag would drop onto, clearing any previous highlight."""
+        if self._drop_indicator_row == row:
+            return
+        if self._drop_indicator_row is not None:
+            item = self.unitList.item(self._drop_indicator_row)
+            if item:
+                previous_widget = self.unitList.itemWidget(item)
+                if previous_widget:
+                    previous_widget.setStyleSheet("")
+        self._drop_indicator_row = row
+        if row is not None:
+            item = self.unitList.item(row)
+            if item:
+                target_widget = self.unitList.itemWidget(item)
+                if target_widget:
+                    target_widget.setStyleSheet("border-top: 3px solid #2a82da;")
 
     def update_order(self, parent, start, end, destination, row):
         """Update the data manager when the order of items changes."""

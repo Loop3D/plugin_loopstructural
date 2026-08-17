@@ -2,6 +2,17 @@
 from qgis.PyQt.QtCore import QVariant
 
 
+def event_global_pos(event):
+    """Return a QMouseEvent's global position as a QPoint on PyQt5 or PyQt6.
+
+    PyQt6 dropped QMouseEvent.globalPos() in favour of globalPosition()
+    (a QPointF); PyQt5 only has globalPos().
+    """
+    if hasattr(event, "globalPosition"):
+        return event.globalPosition().toPoint()
+    return event.globalPos()
+
+
 def configure_layer_combo(combo, filters, allow_empty=None):
     """Apply a QgsMapLayerProxyModel filter to a QgsMapLayerComboBox.
 
