@@ -636,6 +636,7 @@ class ModellingDataManager:
                 self._model_manager.update_contact_traces(
                     qgsLayerToGeoDataFrame(self._basal_contacts['layer'], target_crs=model_crs),
                     unit_name_field=self._basal_contacts['unitname_field'],
+                    use_z_coordinate=self._basal_contacts.get('use_z_coordinate', False),
                 )
             if self._structural_orientations is not None:
                 self.logger(message="Updating structural orientations...", log_level=4)
@@ -651,6 +652,7 @@ class ModellingDataManager:
                         if self._structural_orientations['orientation_type'] == "Dip Direction/Dip"
                         else False
                     ),
+                    use_z_coordinate=self._structural_orientations.get('use_z_coordinate', False),
                 )
             self._sync_processed_feature_data()
         else:
