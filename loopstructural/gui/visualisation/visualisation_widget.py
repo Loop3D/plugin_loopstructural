@@ -12,12 +12,20 @@ from .object_properties_widget import ObjectPropertiesWidget
 
 
 class VisualisationWidget(QWidget):
-    def __init__(self, parent: QWidget = None, mapCanvas=None, logger=None, model_manager=None):
+    def __init__(
+        self,
+        parent: QWidget = None,
+        mapCanvas=None,
+        logger=None,
+        data_manager=None,
+        model_manager=None,
+    ):
 
         super().__init__(parent)
         # Load the UI file for Tab 1
         self.mapCanvas = mapCanvas
         self.logger = logger
+        self.data_manager = data_manager
         self.model_manager = model_manager
 
         mainLayout = QVBoxLayout(self)
@@ -43,7 +51,11 @@ class VisualisationWidget(QWidget):
         sidebarSplitter.addWidget(self.objectList)
 
         # Create the feature list widget
-        self.featureList = FeatureListWidget(model_manager=self.model_manager, viewer=self.plotter)
+        self.featureList = FeatureListWidget(
+            model_manager=self.model_manager,
+            viewer=self.plotter,
+            data_manager=self.data_manager,
+        )
         sidebarSplitter.addWidget(self.featureList)
         splitter.addWidget(sidebarSplitter)
         splitter.addWidget(self.plotter)

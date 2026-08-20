@@ -48,7 +48,11 @@ class LoopWidget(QWidget):
         )
 
         self.visualisation_widget = VisualisationWidget(
-            self, mapCanvas=self.mapCanvas, logger=self.logger, model_manager=self.model_manager
+            self,
+            mapCanvas=self.mapCanvas,
+            logger=self.logger,
+            data_manager=self.data_manager,
+            model_manager=self.model_manager,
         )
         tabWidget.addTab(self.modelling_widget, "Modelling")
         tabWidget.addTab(self.visualisation_widget, "Visualisation")

@@ -57,6 +57,25 @@ def render_histogram(ax, values):
         ax.set_ylabel('Count')
 
 
+def stratigraphic_ids_to_rgb(ids, colours, no_data_colour=(0.6, 0.6, 0.6)):
+    """Map per-point stratigraphic unit ids to an (N, 3) uint8 RGB array.
+
+    `colours` must be indexed positionally to match
+    `GeologicalModelManager.evaluate_stratigraphy_on_points`'s id scheme (see
+    `GeologicalModelManager.get_stratigraphic_column_colours`). Points whose id
+    falls outside `colours` (e.g. -1, meaning outside every unit) get
+    `no_data_colour`.
+    """
+    from matplotlib.colors import to_rgb
+
+    ids = np.asarray(ids)
+    palette = np.array([to_rgb(c) for c in colours] + [to_rgb(no_data_colour)])
+    no_data_index = len(colours)
+    lookup = np.where((ids >= 0) & (ids < len(colours)), ids, no_data_index)
+    rgb = palette[lookup]
+    return (rgb * 255).astype(np.uint8)
+
+
 def apply_colormap_lut(mapper, cmap, clim=None):
     """Build a VTK lookup table from a matplotlib colormap name and assign
     it to `mapper`, optionally scaled to `clim` (min, max).
