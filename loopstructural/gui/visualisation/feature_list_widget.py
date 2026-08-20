@@ -14,14 +14,15 @@ from qgis.core import (
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
+    QDialog,
     QDoubleSpinBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMenu,
     QPushButton,
     QSpinBox,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -126,13 +127,24 @@ class FeatureListWidget(QWidget):
                     pass
 
     def _build_cross_section_controls(self):
-        """Build the "Cross Section" group box: a plane (origin + normal) mode
-        and a line-extrusion (pick a QGIS line layer) mode. Both are added to
-        the viewer coloured by the stratigraphic column, reusing the same
+        """Add a single "Cross Section..." button to the sidebar, which opens
+        a dialog with a plane (origin + normal) mode and a line-extrusion
+        (pick a QGIS line layer) mode as separate tabs. Both are added to the
+        viewer coloured by the stratigraphic column, reusing the same
         evaluate-points -> ids -> rgb pipeline as topography colouring.
         """
-        groupBox = QGroupBox("Cross Section", self)
-        groupLayout = QVBoxLayout(groupBox)
+        self.crossSectionButton = QPushButton("Cross Section...", self)
+        self.crossSectionButton.clicked.connect(self._show_cross_section_dialog)
+        self.mainLayout.addWidget(self.crossSectionButton)
+
+        self.crossSectionDialog = QDialog(self)
+        self.crossSectionDialog.setWindowTitle("Cross Section")
+        dialogLayout = QVBoxLayout(self.crossSectionDialog)
+        tabs = QTabWidget(self.crossSectionDialog)
+        dialogLayout.addWidget(tabs)
+
+        planeTab = QWidget(self.crossSectionDialog)
+        groupLayout = QVBoxLayout(planeTab)
 
         groupLayout.addWidget(QLabel("Plane (origin + normal)"))
         planeForm = QFormLayout()
@@ -193,8 +205,12 @@ class FeatureListWidget(QWidget):
         self.addPlaneCrossSectionButton = QPushButton("Add Plane Cross Section", self)
         self.addPlaneCrossSectionButton.clicked.connect(self.add_plane_cross_section)
         groupLayout.addWidget(self.addPlaneCrossSectionButton)
+        groupLayout.addStretch(1)
+        tabs.addTab(planeTab, "Plane")
 
-        groupLayout.addWidget(QLabel("Line (extrude a QGIS line layer vertically)"))
+        lineTab = QWidget(self.crossSectionDialog)
+        lineTabLayout = QVBoxLayout(lineTab)
+        lineTabLayout.addWidget(QLabel("Extrude a QGIS line layer vertically"))
         lineForm = QFormLayout()
 
         self.crossSectionLineLayerComboBox = QgsMapLayerComboBox(self)
@@ -210,13 +226,22 @@ class FeatureListWidget(QWidget):
         self.crossSectionLineVerticalResolutionSpinBox.setRange(2, 500)
         self.crossSectionLineVerticalResolutionSpinBox.setValue(50)
         lineForm.addRow("Vertical resolution", self.crossSectionLineVerticalResolutionSpinBox)
-        groupLayout.addLayout(lineForm)
+        lineTabLayout.addLayout(lineForm)
 
         self.addLineCrossSectionButton = QPushButton("Add Cross Section from Line", self)
         self.addLineCrossSectionButton.clicked.connect(self.add_line_cross_section)
-        groupLayout.addWidget(self.addLineCrossSectionButton)
+        lineTabLayout.addWidget(self.addLineCrossSectionButton)
+        lineTabLayout.addStretch(1)
+        tabs.addTab(lineTab, "Line")
 
-        self.mainLayout.addWidget(groupBox)
+        closeButton = QPushButton("Close", self.crossSectionDialog)
+        closeButton.clicked.connect(self.crossSectionDialog.close)
+        dialogLayout.addWidget(closeButton)
+
+    def _show_cross_section_dialog(self):
+        self.crossSectionDialog.show()
+        self.crossSectionDialog.raise_()
+        self.crossSectionDialog.activateWindow()
 
     @staticmethod
     def _hbox(*widgets):

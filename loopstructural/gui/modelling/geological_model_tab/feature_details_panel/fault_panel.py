@@ -1,5 +1,5 @@
 from LoopStructural.utils import normal_vector_to_strike_and_dip, strikedip2vector
-from qgis.PyQt.QtWidgets import QDoubleSpinBox, QFormLayout
+from qgis.PyQt.QtWidgets import QDoubleSpinBox, QFormLayout, QGroupBox
 
 from ._base import BaseFeatureDetailsPanel, retrieve_dip_value, retrieve_pitch_value
 
@@ -98,14 +98,21 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
         # self.enabled_checkbox = QCheckBox("Enabled")
         # self.enabled_checkbox.setChecked(False)
 
-        # Form layout for better organization
-        form_layout = QFormLayout()
-        form_layout.addRow("Fault displacement", self.displacement_spinbox)
-        form_layout.addRow("Major Axis Length", self.major_axis_spinbox)
-        form_layout.addRow("Minor Axis Length", self.minor_axis_spinbox)
-        form_layout.addRow("Intermediate Axis Length", self.intermediate_axis_spinbox)
-        form_layout.addRow("Fault Dip", self.dip_spinbox)
-        # form_layout.addRow("Enabled:", self.enabled_checkbox)
+        # Orientation group
+        orientation_group = QGroupBox("Orientation")
+        orientation_layout = QFormLayout()
+        orientation_layout.addRow("Fault displacement", self.displacement_spinbox)
+        orientation_layout.addRow("Fault Dip", self.dip_spinbox)
+        orientation_group.setLayout(orientation_layout)
 
-        self.layout.addLayout(form_layout)
+        # Ellipsoid size group
+        ellipsoid_group = QGroupBox("Ellipsoid Size")
+        ellipsoid_layout = QFormLayout()
+        ellipsoid_layout.addRow("Major Axis Length", self.major_axis_spinbox)
+        ellipsoid_layout.addRow("Minor Axis Length", self.minor_axis_spinbox)
+        ellipsoid_layout.addRow("Intermediate Axis Length", self.intermediate_axis_spinbox)
+        ellipsoid_group.setLayout(ellipsoid_layout)
+
+        self.layout.addWidget(orientation_group)
+        self.layout.addWidget(ellipsoid_group)
         self.setLayout(self.layout)

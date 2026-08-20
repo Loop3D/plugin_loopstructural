@@ -61,26 +61,20 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="grp_misc">
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>100</height>
-      </size>
-     </property>
+    <widget class="QGroupBox" name="grp_support">
      <property name="locale">
       <locale language="English" country="UnitedStates"/>
      </property>
      <property name="title">
-      <string>Miscellaneous</string>
+      <string>Support</string>
      </property>
      <property name="flat">
       <bool>false</bool>
      </property>
-     <layout class="QGridLayout" name="gridLayout">
-       <item row="9" column="0" colspan="2">
-        <widget class="QPushButton" name="btn_reset">
-         <property name="minimumSize">
+     <layout class="QGridLayout" name="gridLayout_support">
+      <item row="0" column="0">
+       <widget class="QPushButton" name="btn_report">
+        <property name="minimumSize">
          <size>
           <width>200</width>
           <height>25</height>
@@ -88,29 +82,7 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>16777215</width>
-          <height>30</height>
-         </size>
-        </property>
-        <property name="autoFillBackground">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Reset setttings to factory defaults</string>
-        </property>
-       </widget>
-      </item>
-       <item row="7" column="1">
-        <widget class="QLabel" name="lbl_version_saved_value">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>25</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
+          <width>500</width>
           <height>30</height>
          </size>
         </property>
@@ -118,65 +90,12 @@
          <locale language="English" country="UnitedStates"/>
         </property>
         <property name="text">
-         <string notr="true">X.X.X</string>
-        </property>
-        <property name="textInteractionFlags">
-         <set>Qt::NoTextInteraction</set>
+         <string>Report an issue</string>
         </property>
        </widget>
       </item>
-      <item row="7" column="0">
-       <widget class="QLabel" name="lbl_version_saved">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>25</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>30</height>
-         </size>
-        </property>
-        <property name="locale">
-         <locale language="English" country="UnitedStates"/>
-        </property>
-        <property name="text">
-         <string>Version used to save settings:</string>
-        </property>
-       </widget>
-      </item>
-       <item row="8" column="0">
-        <widget class="QLabel" name="lbl_debug_directory">
-         <property name="text">
-          <string>Debug directory</string>
-         </property>
-        </widget>
-       </item>
-       <item row="8" column="1">
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <item>
-          <widget class="QLineEdit" name="le_debug_directory"/>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btn_browse_debug_directory">
-           <property name="text">
-            <string>Browse...</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btn_open_debug_directory">
-           <property name="text">
-            <string>Open Folder</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item row="0" column="0">
-        <widget class="QPushButton" name="btn_help">
+      <item row="0" column="1">
+       <widget class="QPushButton" name="btn_help">
         <property name="minimumSize">
          <size>
           <width>200</width>
@@ -197,33 +116,22 @@
         </property>
        </widget>
       </item>
-      <item row="6" column="0">
-       <widget class="QLabel" name="label_4">
-        <property name="text">
-         <string>Interpolation Number of Elements</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>Contact point weight</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
-       <widget class="QDoubleSpinBox" name="cpw_spin_box"/>
-      </item>
-      <item row="6" column="1">
-       <widget class="QSpinBox" name="n_elements_spin_box"/>
-      </item>
-      <item row="3" column="1">
-       <widget class="QDoubleSpinBox" name="regularisation_spin_box"/>
-      </item>
-      <item row="5" column="1">
-       <widget class="QDoubleSpinBox" name="npw_spin_box"/>
-      </item>
-      <item row="1" column="0" colspan="2">
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grp_interface">
+     <property name="locale">
+      <locale language="English" country="UnitedStates"/>
+     </property>
+     <property name="title">
+      <string>Interface</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_interface">
+      <item row="0" column="0" colspan="2">
        <widget class="QCheckBox" name="opt_debug">
         <property name="minimumSize">
          <size>
@@ -254,7 +162,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="2">
+      <item row="1" column="0" colspan="2">
        <widget class="QCheckBox" name="opt_separate_dock_widgets">
         <property name="minimumSize">
          <size>
@@ -285,43 +193,163 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QPushButton" name="btn_report">
-        <property name="minimumSize">
-         <size>
-          <width>200</width>
-          <height>25</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>500</width>
-          <height>30</height>
-         </size>
-        </property>
-        <property name="locale">
-         <locale language="English" country="UnitedStates"/>
-        </property>
+      <item row="2" column="0">
+       <widget class="QLabel" name="lbl_debug_directory">
         <property name="text">
-         <string>Report an issue</string>
+         <string>Debug directory</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="0">
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>Orientation weight</string>
-        </property>
-       </widget>
+      <item row="2" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QLineEdit" name="le_debug_directory"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_browse_debug_directory">
+          <property name="text">
+           <string>Browse...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_open_debug_directory">
+          <property name="text">
+           <string>Open Folder</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
-      <item row="3" column="0">
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grp_solver">
+     <property name="locale">
+      <locale language="English" country="UnitedStates"/>
+     </property>
+     <property name="title">
+      <string>Solver Parameters</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_solver">
+      <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
          <string>Regularisation weight</string>
         </property>
        </widget>
       </item>
+      <item row="0" column="1">
+       <widget class="QDoubleSpinBox" name="regularisation_spin_box"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Contact point weight</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QDoubleSpinBox" name="cpw_spin_box"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Orientation weight</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="npw_spin_box"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Interpolation Number of Elements</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QSpinBox" name="n_elements_spin_box"/>
+      </item>
      </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_version">
+     <item>
+      <widget class="QLabel" name="lbl_version_saved">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="locale">
+        <locale language="English" country="UnitedStates"/>
+       </property>
+       <property name="text">
+        <string>Version used to save settings:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lbl_version_saved_value">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="locale">
+        <locale language="English" country="UnitedStates"/>
+       </property>
+       <property name="text">
+        <string notr="true">X.X.X</string>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::NoTextInteraction</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="btn_reset">
+     <property name="minimumSize">
+      <size>
+       <width>200</width>
+       <height>25</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>30</height>
+      </size>
+     </property>
+     <property name="autoFillBackground">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Reset setttings to factory defaults</string>
+     </property>
     </widget>
    </item>
    <item>

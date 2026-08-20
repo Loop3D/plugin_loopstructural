@@ -206,7 +206,7 @@
       <item>
        <widget class="QGroupBox" name="groupBox_5">
         <property name="title">
-         <string>Interogate Model</string>
+         <string>Interrogate Model</string>
         </property>
         <widget class="QWidget" name="formLayoutWidget_4">
          <property name="geometry">
@@ -217,167 +217,185 @@
            <height>271</height>
           </rect>
          </property>
-         <layout class="QFormLayout" name="formLayout">
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_14">
-            <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Extract the basal contacts by intersecting the model surfaces with the DTM. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <layout class="QVBoxLayout" name="verticalLayout_interrogate">
+          <item>
+           <widget class="QGroupBox" name="groupBox_extractOutputs">
+            <property name="title">
+             <string>Extract from Model</string>
             </property>
-            <property name="text">
-             <string>Model contacts</string>
-            </property>
+            <layout class="QFormLayout" name="formLayout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_14">
+               <property name="toolTip">
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Extract the basal contacts by intersecting the model surfaces with the DTM. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               </property>
+               <property name="text">
+                <string>Model contacts</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QPushButton" name="addModelContactsToProject">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="text">
+                <string>Add to Project</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="faultDisplacementsLabel">
+               <property name="toolTip">
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Calculate the magnitude of the fault displacements and show this on the map&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               </property>
+               <property name="text">
+                <string>Fault Displacements</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QPushButton" name="addFaultDisplacementsToProject">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="text">
+                <string>Add to Project</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="label_27">
+               <property name="text">
+                <string>Mapped Lithologies</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QPushButton" name="addMappedLithologiesToProject">
+               <property name="text">
+                <string>Add to map</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="label_28">
+               <property name="text">
+                <string>Add fault traces</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QPushButton" name="addFaultTracesToProject">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="text">
+                <string>Add to map</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
-          <item row="0" column="1">
-           <widget class="QPushButton" name="addModelContactsToProject">
-            <property name="enabled">
-             <bool>false</bool>
+          <item>
+           <widget class="QGroupBox" name="groupBox_evaluateOnLayer">
+            <property name="title">
+             <string>Evaluate on Layer</string>
             </property>
-            <property name="text">
-             <string>Add to Project</string>
-            </property>
+            <layout class="QFormLayout" name="formLayout_evaluateOnLayer">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_26">
+               <property name="toolTip">
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Evaluate the stratigraphic ID on a pointset. If the points are not in the model the unit will be -1&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               </property>
+               <property name="text">
+                <string>Evaluate Model on layer</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <layout class="QHBoxLayout" name="horizontalLayout_3">
+               <item>
+                <widget class="QgsMapLayerComboBox" name="evaluateModelOnLayerSelector"/>
+               </item>
+               <item>
+                <widget class="QPushButton" name="evaluateModelOnLayer">
+                 <property name="text">
+                  <string>Add to map</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_15">
+               <property name="toolTip">
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Evaluate the scalar value or the gradient of a geological feature on a vector pointset.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               </property>
+               <property name="text">
+                <string>Evaluate feature on layer</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <layout class="QHBoxLayout" name="horizontalLayout_4">
+               <item>
+                <layout class="QVBoxLayout" name="verticalLayout_7">
+                 <item>
+                  <widget class="QComboBox" name="evaluateFeatureFeatureSelector"/>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="evaluateFeatureGradientFlag">
+                   <property name="enabled">
+                    <bool>false</bool>
+                   </property>
+                   <property name="text">
+                    <string>Gradient</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QVBoxLayout" name="verticalLayout_3">
+                 <item>
+                  <widget class="QgsMapLayerComboBox" name="evaluateFeatureLayerSelector"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="evaluateFeatureOnLayer">
+                   <property name="text">
+                    <string>Add</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="addScalarFieldLabel">
+               <property name="text">
+                <string>Add  scalar field</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <layout class="QHBoxLayout" name="horizontalLayout_5">
+               <item>
+                <widget class="QComboBox" name="addScalarFieldComboBox"/>
+               </item>
+               <item>
+                <widget class="QPushButton" name="addScalarFieldToProject">
+                 <property name="text">
+                  <string>Add to Project</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
            </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="faultDisplacementsLabel">
-            <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Calculate the magnitude of the fault displacements and show this on the map&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-            </property>
-            <property name="text">
-             <string>Fault Displacements</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QPushButton" name="addFaultDisplacementsToProject">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Add to Project</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
-            <item>
-             <widget class="QgsMapLayerComboBox" name="evaluateModelOnLayerSelector"/>
-            </item>
-            <item>
-             <widget class="QPushButton" name="evaluateModelOnLayer">
-              <property name="text">
-               <string>Add to map</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="label_26">
-            <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Evaluate the stratigraphic ID on a pointset. If the points are not in the model the unit will be -1&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-            </property>
-            <property name="text">
-             <string>Evaluate Model on layer</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="label_27">
-            <property name="text">
-             <string>Mapped Lithologies</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="1">
-           <widget class="QPushButton" name="addMappedLithologiesToProject">
-            <property name="text">
-             <string>Add to map</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="0">
-           <widget class="QLabel" name="label_28">
-            <property name="text">
-             <string>Add fault traces</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="label_15">
-            <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Evaluate the scalar value or the gradient of a geological feature on a vector pointset.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-            </property>
-            <property name="text">
-             <string>Evaluate feature on layer</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1">
-           <layout class="QHBoxLayout" name="horizontalLayout_4">
-            <item>
-             <layout class="QVBoxLayout" name="verticalLayout_7">
-              <item>
-               <widget class="QComboBox" name="evaluateFeatureFeatureSelector"/>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="evaluateFeatureGradientFlag">
-                <property name="enabled">
-                 <bool>false</bool>
-                </property>
-                <property name="text">
-                 <string>Gradient</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <layout class="QVBoxLayout" name="verticalLayout_3">
-              <item>
-               <widget class="QgsMapLayerComboBox" name="evaluateFeatureLayerSelector"/>
-              </item>
-              <item>
-               <widget class="QPushButton" name="evaluateFeatureOnLayer">
-                <property name="text">
-                 <string>Add</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-           </layout>
-          </item>
-          <item row="5" column="1">
-           <widget class="QPushButton" name="addFaultTracesToProject">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Add to map</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="0">
-           <widget class="QLabel" name="addScalarFieldLabel">
-            <property name="text">
-             <string>Add  scalar field</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="1">
-           <layout class="QHBoxLayout" name="horizontalLayout_5">
-            <item>
-             <widget class="QComboBox" name="addScalarFieldComboBox"/>
-            </item>
-            <item>
-             <widget class="QPushButton" name="addScalarFieldToProject">
-              <property name="text">
-               <string>Add to Project</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
           </item>
          </layout>
         </widget>
