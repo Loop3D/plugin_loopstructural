@@ -80,7 +80,7 @@ class FaultAdjacencyTab(BaseTab):
             self.update_fault_adjacency_table()
             self.update_stratigraphic_units_table()
 
-    def change_button_color(self, button, row, col):
+    def change_button_color(self, button, fault1, fault2):
         """Cycle the button color and update the fault relationship."""
         current_color = button.styleSheet()
         if "red" in current_color:
@@ -94,15 +94,23 @@ class FaultAdjacencyTab(BaseTab):
             relationship = FaultRelationshipType.ABUTTING
 
         button.setStyleSheet(f"background-color: {new_color};")
-        f1 = self.data_manager._fault_topology.faults[row]
-        f2 = self.data_manager._fault_topology.faults[col]
-        self.data_manager._fault_topology.update_fault_relationship(f1, f2, relationship)
+        self.data_manager._fault_topology.update_fault_relationship(fault1, fault2, relationship)
+
+    def _displacement_fault_names(self):
+        """Fault names to show in these tables, excluding faults used as
+        stratigraphic-column domain boundaries (see `set_fault_boundary`).
+        Those are non-displacing splits, not faults that cut/abut other
+        faults or offset stratigraphic units, so FAULTED/ABUTTING and
+        fault-stratigraphy relationships don't apply to them.
+        """
+        domain_boundary_faults = self.data_manager.get_fault_boundary_fault_names()
+        return [
+            f for f in self.data_manager._fault_topology.faults if f not in domain_boundary_faults
+        ]
 
     def update_fault_adjacency_table(self):
         """Update the fault adjacency table with QPushButtons."""
-        faults = (
-            self.data_manager._fault_topology.faults
-        )  # Assuming faults is a list of fault names
+        faults = self._displacement_fault_names()
         if not faults:
             self.fault_table_group.hide()
             return
@@ -145,15 +153,15 @@ class FaultAdjacencyTab(BaseTab):
                     else:
                         button.setStyleSheet("background-color: white;")
                     button.clicked.connect(
-                        lambda _, b=button, r=row, c=col: self.change_button_color(b, r, c)
+                        lambda _, b=button, f1=faults[row], f2=faults[
+                            col
+                        ]: self.change_button_color(b, f1, f2)
                     )
                     self.table.setCellWidget(row, col, button)
 
     def update_stratigraphic_units_table(self):
         """Update the stratigraphic units table with QPushButtons."""
-        faults = (
-            self.data_manager._fault_topology.faults
-        )  # Assuming faults is a list of fault names
+        faults = self._displacement_fault_names()
         group_units_pairs = self.data_manager._stratigraphic_column.get_group_unit_pairs()
 
         if not faults or not group_units_pairs:
@@ -185,11 +193,13 @@ class FaultAdjacencyTab(BaseTab):
                     # Default to white if no relationship or not faulted
                     button.setStyleSheet("background-color: white;")
                 button.clicked.connect(
-                    lambda _, b=button, r=row, c=col: self.change_button_colour_binary(b, r, c)
+                    lambda _, b=button, u=units[row], f=faults[
+                        col
+                    ]: self.change_button_colour_binary(b, u, f)
                 )
                 self.stratigraphic_table.setCellWidget(row, col, button)
 
-    def change_button_colour_binary(self, button, row, col):
+    def change_button_colour_binary(self, button, unit_name, fault_name):
         """Cycle the button color between red, green, and black."""
 
         current_color = button.styleSheet()
@@ -199,8 +209,6 @@ class FaultAdjacencyTab(BaseTab):
         else:
             button.setStyleSheet("background-color: red;")
             flag = True
-        fault = self.data_manager._fault_topology.faults[col]
-        unit = self.data_manager._stratigraphic_column.get_group_unit_pairs()[row]
         self.data_manager._fault_topology.update_fault_stratigraphy_relationship(
-            unit[1], fault, flag
+            unit_name, fault_name, flag
         )
