@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from qgis.core import QgsApplication, QgsProject
+from qgis.gui import QgsMapToolExtent
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import QWidget
@@ -28,6 +29,10 @@ class BoundingBoxWidget(QWidget):
         self._style_tool_button(
             self.drawOnMapButton, "mActionAddBasicRectangle.svg", "Draw on Map"
         )
+        self.drawOnMapButton.setCheckable(True)
+        self.drawOnMapButton.clicked.connect(self.drawOnMap)
+        self._draw_extent_tool = None
+        self._previous_map_tool = None
 
         # Connect bounding box spinbox signals
         self.originXSpinBox.valueChanged.connect(lambda x: self.onChangeExtent({'xmin': x}))
@@ -241,6 +246,63 @@ class BoundingBoxWidget(QWidget):
             self.maxXSpinBox.setValue(extent.xMaximum())
             self.maxYSpinBox.setValue(extent.yMaximum())
             self.maxZSpinBox.setValue(1000)
+
+    def drawOnMap(self, checked):
+        """Toggle an interactive rubber-band rectangle tool on the map canvas.
+
+        While active, the button stays pressed and the user's next
+        click-drag on the canvas sets the X/Y extent (Z is left at the same
+        defaults as `useCurrentViewExtent`, since a 2D canvas drag carries no
+        Z information). Clicking the button again, pressing Escape, or
+        picking any other map tool cancels the draw.
+        """
+        canvas = self.data_manager.map_canvas
+        if canvas is None:
+            self.drawOnMapButton.setChecked(False)
+            return
+
+        if checked:
+            # `QgsMapCanvas.unsetMapTool` does not reliably restore whatever
+            # tool was active before ours (it can leave the canvas with no
+            # tool at all), so remember it ourselves and restore explicitly.
+            self._previous_map_tool = canvas.mapTool()
+            tool = QgsMapToolExtent(canvas)
+            tool.extentChanged.connect(self._on_draw_on_map_extent_changed)
+            tool.deactivated.connect(self._on_draw_on_map_tool_deactivated)
+            self._draw_extent_tool = tool
+            canvas.setMapTool(tool)
+        else:
+            self._restore_previous_map_tool()
+
+    def _on_draw_on_map_extent_changed(self, rectangle):
+        """Apply the rectangle drawn on the canvas to the X/Y extent fields."""
+        self.originXSpinBox.setValue(rectangle.xMinimum())
+        self.originYSpinBox.setValue(rectangle.yMinimum())
+        self.originZSpinBox.setValue(0)
+        self.maxXSpinBox.setValue(rectangle.xMaximum())
+        self.maxYSpinBox.setValue(rectangle.yMaximum())
+        self.maxZSpinBox.setValue(1000)
+        self._restore_previous_map_tool()
+
+    def _restore_previous_map_tool(self):
+        """Put the canvas back into whatever tool was active before the draw
+        started (falling back to just clearing our tool if there wasn't one).
+        """
+        canvas = self.data_manager.map_canvas
+        if canvas is not None:
+            if self._previous_map_tool is not None:
+                canvas.setMapTool(self._previous_map_tool)
+            elif self._draw_extent_tool is not None:
+                canvas.unsetMapTool(self._draw_extent_tool)
+        self._previous_map_tool = None
+
+    def _on_draw_on_map_tool_deactivated(self):
+        """Reset the button whenever the draw tool stops being active, be it
+        because we just finished a draw, or the user cancelled by pressing
+        Escape or switching to a different map tool mid-draw.
+        """
+        self.drawOnMapButton.setChecked(False)
+        self._draw_extent_tool = None
 
     def selectFromCurrentLayer(self):
         """Set bounding box values from the currently selected layer's 3D extent."""
