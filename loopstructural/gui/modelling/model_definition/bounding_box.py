@@ -1,7 +1,7 @@
 import os
 
 import numpy as np
-from qgis.core import QgsApplication, QgsProject
+from qgis.core import QgsApplication, QgsCoordinateTransform, QgsProject
 from qgis.gui import QgsMapToolExtent
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize
@@ -75,6 +75,28 @@ class BoundingBoxWidget(QWidget):
         button.setIconSize(QSize(22, 22))
         button.setToolTip(tooltip)
         button.setAutoRaise(True)
+
+    def _rect_to_model_crs(self, rect, source_crs):
+        """Reproject a QgsRectangle's X/Y coordinates from source_crs into
+        the model's chosen CRS (see the CRS controls above the extent
+        actions). Falls back to the original rectangle unchanged if either
+        CRS is missing/invalid, they already match, or the transform fails
+        (e.g. no known path between the two CRSs) -- Z is never touched
+        here, since horizontal reprojection says nothing about elevation.
+        """
+        model_crs = self.data_manager.get_model_crs()
+        if source_crs is None or not source_crs.isValid():
+            return rect
+        if model_crs is None or not model_crs.isValid():
+            return rect
+        if source_crs == model_crs:
+            return rect
+        try:
+            project = getattr(self.data_manager, 'project', None) or QgsProject.instance()
+            transform = QgsCoordinateTransform(source_crs, model_crs, project)
+            return transform.transformBoundingBox(rect)
+        except Exception:
+            return rect
 
     def initialize_crs_ui(self):
         """Initialize CRS controls with current settings."""
@@ -239,7 +261,8 @@ class BoundingBoxWidget(QWidget):
     def useCurrentViewExtent(self):
         """Set bounding box values from the current map canvas view extent."""
         if self.data_manager.map_canvas:
-            extent = self.data_manager.map_canvas.extent()
+            canvas = self.data_manager.map_canvas
+            extent = self._rect_to_model_crs(canvas.extent(), canvas.mapSettings().destinationCrs())
             self.originXSpinBox.setValue(extent.xMinimum())
             self.originYSpinBox.setValue(extent.yMinimum())
             self.originZSpinBox.setValue(0)
@@ -276,6 +299,9 @@ class BoundingBoxWidget(QWidget):
 
     def _on_draw_on_map_extent_changed(self, rectangle):
         """Apply the rectangle drawn on the canvas to the X/Y extent fields."""
+        canvas = self.data_manager.map_canvas
+        source_crs = canvas.mapSettings().destinationCrs() if canvas is not None else None
+        rectangle = self._rect_to_model_crs(rectangle, source_crs)
         self.originXSpinBox.setValue(rectangle.xMinimum())
         self.originYSpinBox.setValue(rectangle.yMinimum())
         self.originZSpinBox.setValue(0)
@@ -308,20 +334,21 @@ class BoundingBoxWidget(QWidget):
         """Set bounding box values from the currently selected layer's 3D extent."""
         layer = self.data_manager.map_canvas.currentLayer()
         if layer:
-            extent = layer.extent3D()
+            box3d = layer.extent3D()
+            extent = self._rect_to_model_crs(box3d.toRectangle(), layer.crs())
             self.originXSpinBox.setValue(extent.xMinimum())
             self.originYSpinBox.setValue(extent.yMinimum())
-            if np.isnan(extent.zMinimum()):
+            if np.isnan(box3d.zMinimum()):
                 self.originZSpinBox.setValue(default_bounding_box['zmin'])
             else:
-                self.originZSpinBox.setValue(extent.zMinimum())
+                self.originZSpinBox.setValue(box3d.zMinimum())
 
             self.maxXSpinBox.setValue(extent.xMaximum())
             self.maxYSpinBox.setValue(extent.yMaximum())
-            if np.isnan(extent.zMaximum()):
+            if np.isnan(box3d.zMaximum()):
                 self.maxZSpinBox.setValue(default_bounding_box['zmax'])
             else:
-                self.maxZSpinBox.setValue(extent.zMaximum())
+                self.maxZSpinBox.setValue(box3d.zMaximum())
 
     def onChangeExtent(self, value):
         self.data_manager.set_bounding_box(**value)
