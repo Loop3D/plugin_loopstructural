@@ -214,6 +214,13 @@ class GeologicalModelManager(Observable):
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Set the stratigraphic column for the geological model manager."""
         self.stratigraphic_column = stratigraphic_column
+        # A column built via `add_element` (e.g. restored from a saved
+        # project) never has each unit's min/max scalar-field range computed
+        # -- only the interactive `add_unit` path does that as a side
+        # effect. Without it every unit falls back to range (0, inf), so
+        # `evaluate_model` can't tell any unit in a group apart from any
+        # other and just picks whichever was added last.
+        self.stratigraphic_column.update_unit_values()
         # changing the stratigraphic column changes model geometry
         self._emit('stratigraphic_column_changed')
 
@@ -518,6 +525,7 @@ class GeologicalModelManager(Observable):
     def update_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Update the stratigraphic column with a new stratigraphic column"""
         self.stratigraphic_column = stratigraphic_column
+        self.stratigraphic_column.update_unit_values()
         self.update_foliation_features()
 
     # def update_stratigraphic_unit(self, unit_data):
@@ -1267,6 +1275,65 @@ class GeologicalModelManager(Observable):
         except Exception:
             # Re-raise with context preserved for the caller/UI to handle
             raise
+
+    def sample_dem_grid(self, resolution: int = 100) -> 'tuple[np.ndarray, np.ndarray, np.ndarray]':
+        """Sample the current DEM on a regular grid covering the model's XY extent.
+
+        Parameters
+        ----------
+        resolution : int, optional
+            Number of sample points along each axis, by default 100.
+
+        Returns
+        -------
+        tuple(np.ndarray, np.ndarray, np.ndarray)
+            X, Y, Z meshgrid arrays of shape (resolution, resolution). Z comes
+            from `self.dem_function` (see `set_dem_function`).
+        """
+        if self.model is None:
+            raise RuntimeError('No model available to build a topography surface')
+        bb = self.model.bounding_box
+        x = np.linspace(bb.origin[0], bb.maximum[0], resolution)
+        y = np.linspace(bb.origin[1], bb.maximum[1], resolution)
+        xx, yy = np.meshgrid(x, y)
+        zz = np.vectorize(self.dem_function)(xx, yy)
+        return xx, yy, zz
+
+    def evaluate_stratigraphy_on_points(self, points: np.ndarray) -> np.ndarray:
+        """Evaluate the stratigraphic unit id of the model at the given points.
+
+        Parameters
+        ----------
+        points : array_like
+            An (N, 3) array-like of points [x, y, z] at which to evaluate.
+
+        Returns
+        -------
+        numpy.ndarray
+            (N,) array of stratigraphic unit ids. A point outside every
+            stratigraphic unit gets id -1 (see `GeologicalModel.evaluate_model`).
+        """
+        if self.model is None:
+            raise RuntimeError('No model available for evaluation')
+        pts = np.asarray(points)
+        if pts.ndim != 2 or pts.shape[1] < 3:
+            raise ValueError('points must be an Nx3 array')
+        return np.asarray(self.model.evaluate_model(pts))
+
+    def get_stratigraphic_column_colours(self) -> list:
+        """Return unit colours ordered to line up with `evaluate_model`'s ids.
+
+        `GeologicalModel.evaluate_model` assigns each stratigraphic unit an id
+        by counting through `reversed(stratigraphic_column.get_groups())`, so
+        this walks the column the same way -- `colours[i]` is the colour of
+        whichever unit `evaluate_model` labels `i`.
+        """
+        if self.model is None or self.model.stratigraphic_column is None:
+            return []
+        colours = []
+        for group in reversed(self.model.stratigraphic_column.get_groups()):
+            colours.extend(unit.colour for unit in group.units)
+        return colours
 
     def export_feature_values_to_geodataframe(
         self,
