@@ -1,10 +1,18 @@
 import os
 
 import numpy as np
-from qgis.core import QgsApplication, QgsCoordinateTransform, QgsProject
-from qgis.gui import QgsMapToolExtent
+from qgis.core import (
+    QgsApplication,
+    QgsCoordinateTransform,
+    QgsGeometry,
+    QgsProject,
+    QgsRectangle,
+    QgsWkbTypes,
+)
+from qgis.gui import QgsMapToolExtent, QgsRubberBand
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QWidget
 
 from loopstructural.main.data_manager import default_bounding_box
@@ -33,6 +41,13 @@ class BoundingBoxWidget(QWidget):
         self.drawOnMapButton.clicked.connect(self.drawOnMap)
         self._draw_extent_tool = None
         self._previous_map_tool = None
+
+        self._style_tool_button(
+            self.showBoundingBoxButton, "mActionShowAllLayers.svg", "Show Bounding Box on Map"
+        )
+        self.showBoundingBoxButton.setCheckable(True)
+        self.showBoundingBoxButton.toggled.connect(self._on_show_bounding_box_toggled)
+        self._bounding_box_rubber_band = None
 
         # Connect bounding box spinbox signals
         self.originXSpinBox.valueChanged.connect(lambda x: self.onChangeExtent({'xmin': x}))
@@ -65,6 +80,16 @@ class BoundingBoxWidget(QWidget):
             # If the signal isn't available or connection fails, ignore to keep widget functional
             pass
 
+        # Keep the bounding box outline (when shown) aligned with the canvas
+        # if its own CRS ever changes independently of the project's.
+        try:
+            if self.data_manager.map_canvas is not None:
+                self.data_manager.map_canvas.destinationCrsChanged.connect(
+                    self._update_bounding_box_rubber_band
+                )
+        except Exception:
+            pass
+
     @staticmethod
     def _style_tool_button(button, theme_icon_name, tooltip):
         """Configure a .ui-declared QToolButton with an icon and tooltip,
@@ -76,27 +101,70 @@ class BoundingBoxWidget(QWidget):
         button.setToolTip(tooltip)
         button.setAutoRaise(True)
 
-    def _rect_to_model_crs(self, rect, source_crs):
-        """Reproject a QgsRectangle's X/Y coordinates from source_crs into
-        the model's chosen CRS (see the CRS controls above the extent
-        actions). Falls back to the original rectangle unchanged if either
+    def _transform_rect(self, rect, source_crs, dest_crs):
+        """Reproject a QgsRectangle's X/Y coordinates from source_crs to
+        dest_crs. Falls back to the original rectangle unchanged if either
         CRS is missing/invalid, they already match, or the transform fails
         (e.g. no known path between the two CRSs) -- Z is never touched
         here, since horizontal reprojection says nothing about elevation.
         """
-        model_crs = self.data_manager.get_model_crs()
         if source_crs is None or not source_crs.isValid():
             return rect
-        if model_crs is None or not model_crs.isValid():
+        if dest_crs is None or not dest_crs.isValid():
             return rect
-        if source_crs == model_crs:
+        if source_crs == dest_crs:
             return rect
         try:
             project = getattr(self.data_manager, 'project', None) or QgsProject.instance()
-            transform = QgsCoordinateTransform(source_crs, model_crs, project)
+            transform = QgsCoordinateTransform(source_crs, dest_crs, project)
             return transform.transformBoundingBox(rect)
         except Exception:
             return rect
+
+    def _rect_to_model_crs(self, rect, source_crs):
+        """Reproject a rectangle from source_crs into the model's chosen CRS
+        (see the CRS controls above the extent actions).
+        """
+        return self._transform_rect(rect, source_crs, self.data_manager.get_model_crs())
+
+    def _rect_from_model_crs(self, rect, dest_crs):
+        """Reproject a rectangle from the model's chosen CRS into dest_crs."""
+        return self._transform_rect(rect, self.data_manager.get_model_crs(), dest_crs)
+
+    def _on_show_bounding_box_toggled(self, checked):
+        """Show or hide the bounding box outline on the map canvas."""
+        if checked:
+            self._update_bounding_box_rubber_band()
+        elif self._bounding_box_rubber_band is not None:
+            self._bounding_box_rubber_band.hide()
+
+    def _update_bounding_box_rubber_band(self):
+        """Redraw the bounding box outline on the canvas from the current
+        X/Y extent fields, reprojected into the canvas's own CRS. A no-op
+        while the "Show Bounding Box on Map" button isn't checked.
+        """
+        if not self.showBoundingBoxButton.isChecked():
+            return
+        canvas = self.data_manager.map_canvas
+        if canvas is None:
+            return
+
+        if self._bounding_box_rubber_band is None:
+            rubber_band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+            rubber_band.setColor(QColor(255, 0, 0, 60))
+            rubber_band.setStrokeColor(QColor(255, 0, 0, 200))
+            rubber_band.setWidth(2)
+            self._bounding_box_rubber_band = rubber_band
+
+        rect = QgsRectangle(
+            self.originXSpinBox.value(),
+            self.originYSpinBox.value(),
+            self.maxXSpinBox.value(),
+            self.maxYSpinBox.value(),
+        )
+        rect = self._rect_from_model_crs(rect, canvas.mapSettings().destinationCrs())
+        self._bounding_box_rubber_band.setToGeometry(QgsGeometry.fromRect(rect), None)
+        self._bounding_box_rubber_band.show()
 
     def initialize_crs_ui(self):
         """Initialize CRS controls with current settings."""
@@ -171,6 +239,8 @@ class BoundingBoxWidget(QWidget):
             self.useProjectCrsRadioButton.blockSignals(False)
             self.useCustomCrsRadioButton.blockSignals(False)
             self.crsSelector.blockSignals(False)
+
+        self._update_bounding_box_rubber_band()
 
     def _onProjectCrsChanged(self, crs=None):
         """Handle project CRS changes and update UI when the widget is using the project CRS.
@@ -257,6 +327,7 @@ class BoundingBoxWidget(QWidget):
                     pass
 
         self._update_bounding_box_styles()
+        self._update_bounding_box_rubber_band()
 
     def useCurrentViewExtent(self):
         """Set bounding box values from the current map canvas view extent."""

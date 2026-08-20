@@ -176,6 +176,9 @@
       <widget class="QToolButton" name="drawOnMapButton"/>
      </item>
      <item>
+      <widget class="QToolButton" name="showBoundingBoxButton"/>
+     </item>
+     <item>
       <spacer name="boundingBoxActionsSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
