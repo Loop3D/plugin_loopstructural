@@ -304,21 +304,18 @@ class ModellingDataManager:
         if self.model_crs_callback:
             self.model_crs_callback(self.get_model_crs(), self._use_project_crs)
 
-    def set_elevation(self, elevation):
-        """Set the elevation for the model."""
-        self.elevation = elevation
-        self.dem_function = lambda x, y: self.elevation
-        self._model_manager.set_dem_function(self.dem_function)
+    def _refresh_dem_function(self):
+        """Recompute `dem_function` from the current `use_dem`/`dem_layer`/
+        `elevation` state and push it to the model manager.
 
-    def set_dem_layer(self, dem_layer):
-        self.dem_layer = dem_layer
-        if dem_layer is None:
-            self.dem_function = lambda x, y: 0.0
-            self.logger(
-                message="DEM layer is None, using 0.0 for elevation. Choose a valid layer or specify a constant value",
-                log_level=2,
-            )
-        else:
+        `dem_function` must be derived from all three together, not just
+        whichever of `set_use_dem`/`set_dem_layer`/`set_elevation` happened to
+        run last -- that "last call wins" approach previously let a
+        just-restored, valid DEM layer get silently overwritten back to a
+        flat constant (e.g. project load always restores `elevation` after
+        `dem_layer`, even when `use_dem` is True).
+        """
+        if self.use_dem and self.dem_layer is not None:
 
             def dem_function(x, y):
                 if not self.dem_layer.isValid():
@@ -327,20 +324,41 @@ class ModellingDataManager:
                         log_level=2,
                     )
                     return 0.0
-                return (
-                    self.dem_layer.dataProvider().sample(QgsPointXY(x, y), 1)[0]
-                    if self.dem_layer
-                    else np.nan
-                )
+                value = self.dem_layer.dataProvider().sample(QgsPointXY(x, y), 1)[0]
+                # `sample()` returns NaN (not None) for points outside the
+                # raster's extent or on nodata cells, depending on provider.
+                if value is None or np.isnan(value):
+                    return 0.0
+                return value
 
             self.dem_function = dem_function
-            self._model_manager.set_dem_function(self.dem_function)
+        else:
+            elevation = self.elevation if not np.isnan(self.elevation) else 0.0
+            self.dem_function = lambda x, y: elevation
+        self._model_manager.set_dem_function(self.dem_function)
+
+    def set_elevation(self, elevation):
+        """Set the constant elevation used when no DEM layer is active."""
+        self.elevation = elevation
+        self._refresh_dem_function()
+
+    def set_dem_layer(self, dem_layer):
+        """Set the DEM layer to sample elevation from when `use_dem` is True."""
+        self.dem_layer = dem_layer
+        if dem_layer is None:
+            self.logger(
+                message="DEM layer is None, using 0.0 for elevation. Choose a valid layer or specify a constant value",
+                log_level=2,
+            )
+        self._refresh_dem_function()
         if self.dem_callback:
             self.dem_callback(self.dem_layer)
 
     def set_use_dem(self, use_dem):
+        """Switch the active elevation source between the DEM layer and the
+        constant elevation."""
         self.use_dem = use_dem
-        self._model_manager.set_dem_function(self.dem_function)
+        self._refresh_dem_function()
 
     def set_basal_contacts(self, basal_contacts, unitname_field=None, use_z_coordinate=False):
         """Set the basal contacts for the model."""

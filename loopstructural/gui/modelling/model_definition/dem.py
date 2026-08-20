@@ -17,6 +17,7 @@ class DEMWidget(QWidget):
         configure_layer_combo(self.demLayerQgsMapLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
         self.useDEMCheckBox.stateChanged.connect(self.onUseDEMClicked)
         self.elevationQgsDoubleSpinBox.valueChanged.connect(self.onElevationChanged)
+        self.demLayerQgsMapLayerComboBox.layerChanged.connect(self._sync_dem_layer)
         self.onElevationChanged()
         self.data_manager.set_dem_callback(self.set_dem_layer)
         self._guess_layer()
@@ -44,6 +45,19 @@ class DEMWidget(QWidget):
             self.data_manager.set_dem_layer(None)
             self.data_manager.set_elevation(self.elevationQgsDoubleSpinBox.value())
             self.data_manager.set_use_dem(False)
+
+    def _sync_dem_layer(self, layer):
+        """Keep the data manager's DEM layer in sync with the combo box.
+
+        Fires for every combo change -- user picks, `_guess_layer`, and
+        `_restore_selection` -- not just while "Use DEM" is checked, so a
+        selected layer always reaches `data_manager` even though nothing
+        previously connected this signal at all. Deliberately leaves
+        `use_dem` alone; the checkbox is the only thing that should switch
+        that on (see `onUseDEMClicked`/`onDEMLayerChanged`).
+        """
+        self.data_manager.set_dem_layer(layer)
+        self._persist_selection()
 
     def onDEMLayerChanged(self):
         """Handle changes to the DEM layer selection."""
