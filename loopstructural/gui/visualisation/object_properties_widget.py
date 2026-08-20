@@ -367,18 +367,16 @@ class ObjectPropertiesWidget(QWidget):
                     vals = next(iter(cdata.values()))
                 if vals is not None:
                     try:
-                        mn = (
-                            float(getattr(vals, 'min', lambda: min(vals))())
-                            if hasattr(vals, 'min')
-                            else float(min(vals))
-                        )
-                        mx = (
-                            float(getattr(vals, 'max', lambda: max(vals))())
-                            if hasattr(vals, 'max')
-                            else float(max(vals))
-                        )
-                        self.range_min.setText(str(mn))
-                        self.range_max.setText(str(mx))
+                        import numpy as _np
+
+                        arr = _np.asarray(vals, dtype=float)
+                        finite = arr[_np.isfinite(arr)]
+                        if finite.size > 0:
+                            self.range_min.setText(str(float(_np.min(finite))))
+                            self.range_max.setText(str(float(_np.max(finite))))
+                        else:
+                            self.range_min.clear()
+                            self.range_max.clear()
                     except Exception:
                         self.range_min.clear()
                         self.range_max.clear()
@@ -753,10 +751,11 @@ class ObjectPropertiesWidget(QWidget):
                     try:
                         import numpy as _np
 
-                        arr = _np.asarray(values) if values is not None else None
-                        if arr is not None and arr.size > 0:
-                            mn = float(_np.nanmin(arr))
-                            mx = float(_np.nanmax(arr))
+                        arr = _np.asarray(values, dtype=float) if values is not None else None
+                        finite = arr[_np.isfinite(arr)] if arr is not None else None
+                        if finite is not None and finite.size > 0:
+                            mn = float(_np.min(finite))
+                            mx = float(_np.max(finite))
                     except Exception:
                         pass
                 if mn is not None and mx is not None:

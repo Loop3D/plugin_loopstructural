@@ -76,6 +76,20 @@ class TestRenderHistogram:
         assert self.ax.get_xlabel() == 'Value'
         assert self.ax.get_ylabel() == 'Count'
 
+    def test_nan_values_are_dropped_before_histogramming(self):
+        # a NaN in the auto-range would otherwise raise inside matplotlib
+        values = np.array([1.0, 2.0, np.nan, 3.0, np.inf])
+        render_histogram(self.ax, values)
+        assert len(self.ax.patches) > 0
+        assert self.ax.get_xlabel() == 'Value'
+
+    def test_all_nan_values_draws_placeholder_text(self):
+        values = np.array([np.nan, np.nan, np.inf])
+        render_histogram(self.ax, values)
+        assert len(self.ax.patches) == 0
+        assert len(self.ax.texts) == 1
+        assert self.ax.texts[0].get_text() == 'No finite scalar values'
+
 
 class TestApplyColormapLut:
     def test_no_cmap_does_nothing(self):
@@ -97,3 +111,17 @@ class TestApplyColormapLut:
 
         # no SetLookupTable/SetUseLookupTableScalarRange attrs -> should be a no-op, not raise
         apply_colormap_lut(_NotAMapper(), "viridis", None)
+
+    def test_sets_nan_color(self):
+        mapper = vtk.vtkPolyDataMapper()
+        apply_colormap_lut(mapper, "viridis", clim=(0.0, 10.0), nan_color=(1.0, 0.0, 0.0, 1.0))
+        lut = mapper.GetLookupTable()
+        assert tuple(lut.GetNanColor()) == (1.0, 0.0, 0.0, 1.0)
+
+    def test_nan_clim_is_ignored_instead_of_corrupting_range(self):
+        mapper = vtk.vtkPolyDataMapper()
+        # a caller that computed clim from an all-NaN array would land here
+        apply_colormap_lut(mapper, "viridis", clim=(float('nan'), float('nan')))
+        lut = mapper.GetLookupTable()
+        # default vtkLookupTable range (0, 1), untouched by the NaN clim
+        assert lut.GetRange() == (0.0, 1.0)

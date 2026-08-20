@@ -38,13 +38,25 @@ def get_scalar_values(mesh, scalar_name: str):
 
 
 def render_histogram(ax, values):
-    """Draw a scalar histogram (or a placeholder) onto a matplotlib Axes."""
+    """Draw a scalar histogram (or a placeholder) onto a matplotlib Axes.
+
+    NaN/inf entries in `values` are dropped before histogramming -- passing
+    them straight to `ax.hist` either raises (matplotlib cannot compute a
+    finite auto-range) or silently skews the bin edges, so a message is shown
+    if nothing finite remains.
+    """
     ax.clear()
-    if values is None:
+    finite = None
+    if values is not None:
+        arr = np.asarray(values, dtype=float).flatten()
+        finite = arr[np.isfinite(arr)]
+
+    if values is None or finite is None or finite.size == 0:
+        message = 'No scalar selected' if values is None else 'No finite scalar values'
         ax.text(
             0.5,
             0.5,
-            'No scalar selected',
+            message,
             ha='center',
             va='center',
             transform=ax.transAxes,
@@ -52,7 +64,7 @@ def render_histogram(ax, values):
         ax.set_xticks([])
         ax.set_yticks([])
     else:
-        ax.hist(values.flatten(), bins=40, color='C0', alpha=0.8)
+        ax.hist(finite, bins=40, color='C0', alpha=0.8)
         ax.set_xlabel('Value')
         ax.set_ylabel('Count')
 
@@ -76,9 +88,16 @@ def stratigraphic_ids_to_rgb(ids, colours, no_data_colour=(0.6, 0.6, 0.6)):
     return (rgb * 255).astype(np.uint8)
 
 
-def apply_colormap_lut(mapper, cmap, clim=None):
+def apply_colormap_lut(mapper, cmap, clim=None, nan_color=(0.6, 0.6, 0.6, 1.0)):
     """Build a VTK lookup table from a matplotlib colormap name and assign
     it to `mapper`, optionally scaled to `clim` (min, max).
+
+    `nan_color` is assigned to the LUT's dedicated NaN slot (RGBA, 0..1) so
+    missing/NaN scalar values render as a distinct neutral colour instead of
+    silently taking on whatever colour VTK's own NaN default happens to be.
+    `clim` is ignored (the LUT keeps whatever range it already had) if either
+    bound is NaN/inf, since a NaN-only source array must not be allowed to
+    stretch or collapse the colour range.
 
     Best-effort: silently does nothing if VTK/matplotlib pieces aren't
     available, or if any individual step fails -- matches the tolerance the
@@ -121,13 +140,23 @@ def apply_colormap_lut(mapper, cmap, clim=None):
                 except Exception:
                     pass
 
-                # set LUT range if we know clim
+                # give NaN/missing scalar values a distinct, non-polluting colour
+                try:
+                    lut.SetNanColor(*nan_color)
+                except Exception:
+                    pass
+
+                # set LUT range if we know clim (skip a NaN/inf clim -- that
+                # would come from an all-NaN or empty source array and must
+                # not be allowed to corrupt the table's range)
                 try:
                     if clim is not None and len(clim) == 2:
-                        try:
-                            lut.SetRange(float(clim[0]), float(clim[1]))
-                        except Exception:
-                            pass
+                        lo, hi = float(clim[0]), float(clim[1])
+                        if np.isfinite(lo) and np.isfinite(hi):
+                            try:
+                                lut.SetRange(lo, hi)
+                            except Exception:
+                                pass
                 except Exception:
                     pass
 
