@@ -5,6 +5,7 @@ import numpy as np
 import pyvista as pv
 from LoopStructural.datatypes import VectorPoints
 from qgis.core import (
+    QgsApplication,
     QgsCoordinateTransform,
     QgsGeometry,
     QgsMapLayerProxyModel,
@@ -12,6 +13,7 @@ from qgis.core import (
     QgsWkbTypes,
 )
 from qgis.gui import QgsMapLayerComboBox
+from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -23,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QSpinBox,
     QTabWidget,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -50,10 +53,18 @@ class FeatureListWidget(QWidget):
         self.data_manager = data_manager
 
         # Add buttons
-        self.addBoundingBoxButton = QPushButton("Add Model Bounding Box", self)
-        self.addFaultSurfacesButton = QPushButton("Add Fault Surfaces", self)
-        self.addStratigraphicSurfacesButton = QPushButton("Add Stratigraphic Surfaces", self)
-        self.addTopographyButton = QPushButton("Add Topography Surface", self)
+        self.addBoundingBoxButton = self._make_tool_button(
+            "extents.svg", "Add Model Bounding Box"
+        )
+        self.addFaultSurfacesButton = self._make_tool_button(
+            "mActionSplitFeatures.svg", "Add Fault Surfaces"
+        )
+        self.addStratigraphicSurfacesButton = self._make_tool_button(
+            "stacked-diagram.svg", "Add Stratigraphic Surfaces"
+        )
+        self.addTopographyButton = self._make_tool_button(
+            "mActionAddRasterLayer.svg", "Add Topography Surface"
+        )
         self.colourTopographyByStratigraphyCheckBox = QCheckBox(
             "Colour Topography by Stratigraphic Column", self
         )
@@ -68,13 +79,6 @@ class FeatureListWidget(QWidget):
             self._on_colour_topography_toggled
         )
 
-        # Add buttons to the layout
-        self.mainLayout.addWidget(self.addBoundingBoxButton)
-        self.mainLayout.addWidget(self.addFaultSurfacesButton)
-        self.mainLayout.addWidget(self.addStratigraphicSurfacesButton)
-        self.mainLayout.addWidget(self.addTopographyButton)
-        self.mainLayout.addWidget(self.colourTopographyByStratigraphyCheckBox)
-
         # background task handles for the topography surface (grid sampling and
         # stratigraphy evaluation both run off the GUI thread; see background_task.py)
         self._topography_thread = None
@@ -82,6 +86,19 @@ class FeatureListWidget(QWidget):
         self._topography_progress = None
 
         self._build_cross_section_controls()
+
+        # A single row of icon-only actions, in workflow order, replaces the
+        # previous stack of full-width text buttons.
+        actionsRow = QHBoxLayout()
+        actionsRow.addWidget(self.addBoundingBoxButton)
+        actionsRow.addWidget(self.addFaultSurfacesButton)
+        actionsRow.addWidget(self.addStratigraphicSurfacesButton)
+        actionsRow.addWidget(self.addTopographyButton)
+        actionsRow.addWidget(self.crossSectionButton)
+        actionsRow.addStretch(1)
+        self.mainLayout.addLayout(actionsRow)
+        self.mainLayout.addWidget(self.colourTopographyByStratigraphyCheckBox)
+
         # background task handles shared by the plane and line cross-section
         # actions (only one can run at a time)
         self._cross_section_thread = None
@@ -126,16 +143,29 @@ class FeatureListWidget(QWidget):
                 except Exception:
                     pass
 
-    def _build_cross_section_controls(self):
-        """Add a single "Cross Section..." button to the sidebar, which opens
-        a dialog with a plane (origin + normal) mode and a line-extrusion
-        (pick a QGIS line layer) mode as separate tabs. Both are added to the
-        viewer coloured by the stratigraphic column, reusing the same
-        evaluate-points -> ids -> rgb pipeline as topography colouring.
+    def _make_tool_button(self, theme_icon_name: str, tooltip: str) -> QToolButton:
+        """Build a small icon-only tool button using a QGIS theme icon, with
+        the given tooltip standing in for the label text it no longer shows.
         """
-        self.crossSectionButton = QPushButton("Cross Section...", self)
+        button = QToolButton(self)
+        button.setIcon(QgsApplication.getThemeIcon(theme_icon_name))
+        button.setIconSize(QSize(22, 22))
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
+        return button
+
+    def _build_cross_section_controls(self):
+        """Build the "Cross Section" icon button (added to the shared actions
+        row in __init__), which opens a dialog with a plane (origin + normal)
+        mode and a line-extrusion (pick a QGIS line layer) mode as separate
+        tabs. Both are added to the viewer coloured by the stratigraphic
+        column, reusing the same evaluate-points -> ids -> rgb pipeline as
+        topography colouring.
+        """
+        self.crossSectionButton = self._make_tool_button(
+            "mActionElevationProfile.svg", "Cross Section..."
+        )
         self.crossSectionButton.clicked.connect(self._show_cross_section_dialog)
-        self.mainLayout.addWidget(self.crossSectionButton)
 
         self.crossSectionDialog = QDialog(self)
         self.crossSectionDialog.setWindowTitle("Cross Section")

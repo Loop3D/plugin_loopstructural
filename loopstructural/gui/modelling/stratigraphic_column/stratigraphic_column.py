@@ -1,6 +1,7 @@
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
-from qgis.core import QgsMapLayerProxyModel, QgsStyle
+from qgis.core import QgsApplication, QgsMapLayerProxyModel, QgsStyle
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
+from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -9,7 +10,7 @@ from qgis.PyQt.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -68,24 +69,37 @@ class StratColumnWidget(QWidget):
         self.unitList.model().rowsMoved.connect(self.update_order)
         layout.addWidget(self.unitList)
 
-        # Add unit button
-        addUnitButton = QPushButton("Add Unit")
+        # A single row of icon-only actions for building/clearing the column.
+        addUnitButton = self._make_tool_button("mActionAdd.svg", "Add Unit")
         addUnitButton.clicked.connect(self.add_unit)
-        layout.addWidget(addUnitButton)
 
-        # Add unconformity button
-        addUnconformityButton = QPushButton("Add Unconformity")
+        addUnconformityButton = self._make_tool_button(
+            "mActionAddGroup.svg", "Add Unconformity"
+        )
         addUnconformityButton.clicked.connect(self.add_unconformity)
-        layout.addWidget(addUnconformityButton)
 
-        # add init from basal contacts button
-        initFromBasalContactsButton = QPushButton("Initialise from map")
+        initFromBasalContactsButton = self._make_tool_button(
+            "mActionSharingImport.svg", "Initialise from map"
+        )
         initFromBasalContactsButton.clicked.connect(
             self.init_stratigraphic_column_from_basal_contacts
         )
-        layout.addWidget(initFromBasalContactsButton)
 
-        # Layer/field pickers for pushing colours back onto a map layer
+        clearButton = self._make_tool_button(
+            "mActionDeleteSelected.svg", "Clear Stratigraphic Column"
+        )
+        clearButton.clicked.connect(self.clearColumn)
+
+        actionsRow = QHBoxLayout()
+        actionsRow.addWidget(addUnitButton)
+        actionsRow.addWidget(addUnconformityButton)
+        actionsRow.addWidget(initFromBasalContactsButton)
+        actionsRow.addWidget(clearButton)
+        actionsRow.addStretch(1)
+        layout.addLayout(actionsRow)
+
+        # Layer/field pickers for pushing colours back onto a map layer, with
+        # the apply action as an icon button at the end of the same row.
         layerRow = QHBoxLayout()
         self.unitsLayerComboBox = QgsMapLayerComboBox()
         configure_layer_combo(
@@ -97,18 +111,20 @@ class StratColumnWidget(QWidget):
         self.unitsLayerFieldComboBox.fieldChanged.connect(self._on_units_field_changed)
         layerRow.addWidget(self.unitsLayerComboBox)
         layerRow.addWidget(self.unitsLayerFieldComboBox)
-        layout.addLayout(layerRow)
 
-        # add apply colours to map button
-        applyColoursButton = QPushButton("Apply Colours to Map Layer")
+        applyColoursButton = self._make_tool_button(
+            "mIconColorSwatches.svg", "Apply Colours to Map Layer"
+        )
         applyColoursButton.setToolTip(
+            "Apply Colours to Map Layer\n"
             "Push the colours defined in the stratigraphic column onto the "
             "selected layer above as a categorized renderer."
         )
         applyColoursButton.clicked.connect(self.apply_colours_to_layer)
-        layout.addWidget(applyColoursButton)
+        layerRow.addWidget(applyColoursButton)
+        layout.addLayout(layerRow)
 
-        # Colour ramp picker + apply stratigraphic age button
+        # Colour ramp picker + apply stratigraphic age action, same pattern.
         ageRow = QHBoxLayout()
         ageRow.addWidget(QLabel("Colour ramp:"))
         self.strat_ageColorRampComboBox = QComboBox()
@@ -118,26 +134,37 @@ class StratColumnWidget(QWidget):
         if default_ramp_index >= 0:
             self.strat_ageColorRampComboBox.setCurrentIndex(default_ramp_index)
         ageRow.addWidget(self.strat_ageColorRampComboBox)
-        layout.addLayout(ageRow)
 
-        applyAgeButton = QPushButton("Apply Stratigraphic Age to Map Layer")
+        applyAgeButton = self._make_tool_button(
+            "rendererGraduatedSymbol.svg", "Apply Stratigraphic Age to Map Layer"
+        )
         applyAgeButton.setToolTip(
+            "Apply Stratigraphic Age to Map Layer\n"
             "Write a 'strat_order' field (0 = first unit in the column) onto "
             "the selected layer above and style it with a graduated colour ramp."
         )
         applyAgeButton.clicked.connect(self.apply_age_to_layer)
-        layout.addWidget(applyAgeButton)
+        ageRow.addWidget(applyAgeButton)
+        layout.addLayout(ageRow)
 
         self._guess_units_layer()
         self._restore_units_layer_selection()
         self._known_unit_names = self._get_known_unit_names()
 
-        clearButton = QPushButton("Clear Stratigraphic Column")
-        clearButton.clicked.connect(self.clearColumn)
-        layout.addWidget(clearButton)
         # Update display from data manager
         self.update_display()
         self.data_manager.set_stratigraphic_column_callback(self.update_display)
+
+    def _make_tool_button(self, theme_icon_name: str, tooltip: str) -> QToolButton:
+        """Build a small icon-only tool button using a QGIS theme icon, with
+        the given tooltip standing in for the label text it no longer shows.
+        """
+        button = QToolButton(self)
+        button.setIcon(QgsApplication.getThemeIcon(theme_icon_name))
+        button.setIconSize(QSize(22, 22))
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
+        return button
 
     def clearColumn(self):
         """Clear the stratigraphic column."""
