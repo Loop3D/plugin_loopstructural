@@ -165,25 +165,30 @@
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="selectFromCurrentLayerButton">
-     <property name="text">
-      <string>Select from layer current</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QPushButton" name="useCurrentViewExtentButton">
-     <property name="text">
-      <string>Use current view extent</string>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QPushButton" name="drawOnMapButton">
-     <property name="text">
-      <string>Draw on map</string>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="boundingBoxActionsRow">
+     <item>
+      <widget class="QToolButton" name="selectFromCurrentLayerButton"/>
+     </item>
+     <item>
+      <widget class="QToolButton" name="useCurrentViewExtentButton"/>
+     </item>
+     <item>
+      <widget class="QToolButton" name="drawOnMapButton"/>
+     </item>
+     <item>
+      <spacer name="boundingBoxActionsSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

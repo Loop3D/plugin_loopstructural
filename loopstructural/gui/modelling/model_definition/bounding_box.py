@@ -1,8 +1,9 @@
 import os
 
 import numpy as np
-from qgis.core import QgsProject
+from qgis.core import QgsApplication, QgsProject
 from qgis.PyQt import uic
+from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import QWidget
 
 from loopstructural.main.data_manager import default_bounding_box
@@ -14,6 +15,19 @@ class BoundingBoxWidget(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "bounding_box.ui")
         uic.loadUi(ui_path, self)
+
+        # The three extent-setting actions are icon-only tool buttons (styled
+        # here rather than in the .ui, to match the icon buttons used
+        # elsewhere in the plugin); their tooltips carry the old label text.
+        self._style_tool_button(
+            self.selectFromCurrentLayerButton, "mActionZoomToLayer.svg", "Select from Current Layer"
+        )
+        self._style_tool_button(
+            self.useCurrentViewExtentButton, "mActionSetToCanvasExtent.svg", "Use Current View Extent"
+        )
+        self._style_tool_button(
+            self.drawOnMapButton, "mActionAddBasicRectangle.svg", "Draw on Map"
+        )
 
         # Connect bounding box spinbox signals
         self.originXSpinBox.valueChanged.connect(lambda x: self.onChangeExtent({'xmin': x}))
@@ -45,6 +59,17 @@ class BoundingBoxWidget(QWidget):
         except Exception:
             # If the signal isn't available or connection fails, ignore to keep widget functional
             pass
+
+    @staticmethod
+    def _style_tool_button(button, theme_icon_name, tooltip):
+        """Configure a .ui-declared QToolButton with an icon and tooltip,
+        since icons aren't set from the .ui file (see the other icon-only
+        toolbars in the visualisation sidebar and stratigraphic column).
+        """
+        button.setIcon(QgsApplication.getThemeIcon(theme_icon_name))
+        button.setIconSize(QSize(22, 22))
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
 
     def initialize_crs_ui(self):
         """Initialize CRS controls with current settings."""
