@@ -14,6 +14,7 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -31,6 +32,8 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from loopstructural.__about__ import DIR_PLUGIN_ROOT
 
 from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
@@ -56,11 +59,11 @@ class FeatureListWidget(QWidget):
         self.addBoundingBoxButton = self._make_tool_button(
             "extents.svg", "Add Model Bounding Box"
         )
-        self.addFaultSurfacesButton = self._make_tool_button(
-            "mActionSplitFeatures.svg", "Add Fault Surfaces"
+        self.addFaultSurfacesButton = self._make_custom_icon_tool_button(
+            "fault.svg", "Add Fault Surfaces"
         )
-        self.addStratigraphicSurfacesButton = self._make_tool_button(
-            "stacked-diagram.svg", "Add Stratigraphic Surfaces"
+        self.addStratigraphicSurfacesButton = self._make_custom_icon_tool_button(
+            "stratigraphic_column_icon.svg", "Add Stratigraphic Surfaces"
         )
         self.addTopographyButton = self._make_tool_button(
             "mActionAddRasterLayer.svg", "Add Topography Surface"
@@ -147,8 +150,19 @@ class FeatureListWidget(QWidget):
         """Build a small icon-only tool button using a QGIS theme icon, with
         the given tooltip standing in for the label text it no longer shows.
         """
+        return self._build_tool_button(QgsApplication.getThemeIcon(theme_icon_name), tooltip)
+
+    def _make_custom_icon_tool_button(self, icon_filename: str, tooltip: str) -> QToolButton:
+        """Build a small icon-only tool button using one of this plugin's own
+        icons (see resources/images), for geological concepts QGIS's own
+        theme has no dedicated icon for.
+        """
+        icon_path = str(DIR_PLUGIN_ROOT / "resources" / "images" / icon_filename)
+        return self._build_tool_button(QIcon(icon_path), tooltip)
+
+    def _build_tool_button(self, icon: QIcon, tooltip: str) -> QToolButton:
         button = QToolButton(self)
-        button.setIcon(QgsApplication.getThemeIcon(theme_icon_name))
+        button.setIcon(icon)
         button.setIconSize(QSize(22, 22))
         button.setToolTip(tooltip)
         button.setAutoRaise(True)
@@ -162,8 +176,8 @@ class FeatureListWidget(QWidget):
         column, reusing the same evaluate-points -> ids -> rgb pipeline as
         topography colouring.
         """
-        self.crossSectionButton = self._make_tool_button(
-            "mActionElevationProfile.svg", "Cross Section..."
+        self.crossSectionButton = self._make_custom_icon_tool_button(
+            "cross_section.svg", "Cross Section..."
         )
         self.crossSectionButton.clicked.connect(self._show_cross_section_dialog)
 

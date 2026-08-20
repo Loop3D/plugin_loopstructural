@@ -2,6 +2,7 @@ from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColu
 from qgis.core import QgsApplication, QgsMapLayerProxyModel, QgsStyle
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -15,6 +16,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from loopstructural.__about__ import DIR_PLUGIN_ROOT
 from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
 from loopstructural.main.helpers import ColumnMatcher, get_layer_names
@@ -73,8 +75,8 @@ class StratColumnWidget(QWidget):
         addUnitButton = self._make_tool_button("mActionAdd.svg", "Add Unit")
         addUnitButton.clicked.connect(self.add_unit)
 
-        addUnconformityButton = self._make_tool_button(
-            "mActionAddGroup.svg", "Add Unconformity"
+        addUnconformityButton = self._make_custom_icon_tool_button(
+            "unconformity.svg", "Add Unconformity"
         )
         addUnconformityButton.clicked.connect(self.add_unconformity)
 
@@ -159,8 +161,19 @@ class StratColumnWidget(QWidget):
         """Build a small icon-only tool button using a QGIS theme icon, with
         the given tooltip standing in for the label text it no longer shows.
         """
+        return self._build_tool_button(QgsApplication.getThemeIcon(theme_icon_name), tooltip)
+
+    def _make_custom_icon_tool_button(self, icon_filename: str, tooltip: str) -> QToolButton:
+        """Build a small icon-only tool button using one of this plugin's own
+        icons (see resources/images), for geological concepts QGIS's own
+        theme has no dedicated icon for.
+        """
+        icon_path = str(DIR_PLUGIN_ROOT / "resources" / "images" / icon_filename)
+        return self._build_tool_button(QIcon(icon_path), tooltip)
+
+    def _build_tool_button(self, icon: QIcon, tooltip: str) -> QToolButton:
         button = QToolButton(self)
-        button.setIcon(QgsApplication.getThemeIcon(theme_icon_name))
+        button.setIcon(icon)
         button.setIconSize(QSize(22, 22))
         button.setToolTip(tooltip)
         button.setAutoRaise(True)

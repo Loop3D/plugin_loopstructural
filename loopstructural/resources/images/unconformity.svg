@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Older, tilted rock below the erosion surface -->
+  <path d="M4 60 L4 34 Q20 22 32 28 Q46 34 60 24 L60 60 Z" fill="#c97b4a" stroke="#333" stroke-width="4" stroke-linejoin="round"/>
+  <line x1="14" y1="52" x2="24" y2="34" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+  <line x1="34" y1="50" x2="46" y2="30" stroke="#333" stroke-width="4" stroke-linecap="round"/>
+  <!-- Fresh, flat rock deposited on top of the erosion surface -->
+  <path d="M4 34 Q20 22 32 28 Q46 34 60 24 L60 8 L4 8 Z" fill="#6ca96c" stroke="#333" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Erosion surface, emphasised -->
+  <path d="M4 34 Q20 22 32 28 Q46 34 60 24" fill="none" stroke="#a33" stroke-width="5" stroke-linecap="round"/>
+</svg>
