@@ -459,7 +459,11 @@ class SorterWidget(QWidget):
         if result and len(result) > 0:
             # Clear and update stratigraphic column in data_manager
             self.data_manager.clear_stratigraphic_column()
-            for unit in result:
+            # `result` is ordered youngest-to-oldest (see sort_stratigraphic_column's
+            # docstring), but add_to_stratigraphic_column -> add_unit defaults to
+            # where='top', which appends -- so units must be fed oldest-first for
+            # the appended sequence to actually end up youngest-last ("on top").
+            for unit in reversed(result):
                 self.data_manager.add_to_stratigraphic_column({'name': unit, 'type': 'unit'})
             self.data_manager.stratigraphic_column_callback()
             QMessageBox.information(
