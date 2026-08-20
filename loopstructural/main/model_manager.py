@@ -549,7 +549,7 @@ class GeologicalModelManager(Observable):
             data = []
             groupname = group.name
             stratigraphic_column[groupname] = {}
-            for u in group.units:
+            for u in reversed(group.units):
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is None:
                     continue
