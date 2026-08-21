@@ -90,11 +90,16 @@ class TestFaultDomainBoundary:
 
         registered = manager.model.data
         fault_rows = registered.loc[registered['feature_name'] == 'boundary_fault']
-        # The original 2 trace points plus 2 synthetic points extending the
-        # trace to the model's bounding box edges (see
-        # `_extend_fault_trace_to_domain`).
+        # The default bounding box here (never set explicitly) is smaller
+        # than the trace itself, so no synthetic edge-extension points get
+        # added (see TestExtendFaultTraceToDomain for that, with a
+        # realistic bounding box). What's registered is the 2 trace points
+        # as value (val=0) constraints, plus the same 2 points again as
+        # orientation (val=NaN, strike/dip) constraints -- a domain fault
+        # needs both, see _domain_fault_dip / _extend_fault_trace_to_domain.
         assert len(fault_rows) == 4
-        assert set(fault_rows['val']) == {0}
+        assert len(fault_rows.loc[fault_rows['val'] == 0]) == 2
+        assert fault_rows['val'].isna().sum() == 2
 
     def test_group_boundary_without_fault_link_uses_flat_unconformity(self, manager):
         column, _boundary = _two_group_column()
@@ -258,3 +263,29 @@ class TestExtendFaultTraceToDomain:
         extended = manager._extend_fault_trace_to_domain(trace)
 
         assert len(extended) == 2
+
+    def test_local_tangent_varies_along_a_curved_trace(self, manager):
+        """Regression test for a real bug: fitting one global best-fit line
+        through a curved trace (the old approach) flattens its curvature
+        out, and can extrapolate/orient the interpolated surface on the
+        wrong side of real nearby data. Confirmed on a live project where
+        a global-line fit put a stratigraphic unit's own contact data on
+        the opposite side of its domain-boundary fault from a bounding-box
+        corner that a correct local (nearest-segment) classification put
+        on the *same* side. Each point's strike must instead follow its
+        own local tangent.
+        """
+        manager.update_bounding_box(BoundingBox(origin=[0, 0, 0], maximum=[100, 100, 100]))
+        # An L-shaped trace: a horizontal leg then a vertical leg.
+        trace = pd.DataFrame(
+            {'X': [20.0, 50.0, 50.0], 'Y': [50.0, 50.0, 80.0], 'Z': [0.0, 0.0, 0.0]}
+        )
+
+        extended = manager._extend_fault_trace_to_domain(trace)
+
+        strikes = extended['strike'].to_numpy()
+        # Row 0's local tangent is horizontal (towards row 1); row 2's is
+        # vertical (away from row 1) -- these must differ substantially. A
+        # single global best-fit line would instead give every point close
+        # to the same strike.
+        assert abs(((strikes[0] - strikes[2] + 180) % 360) - 180) > 45

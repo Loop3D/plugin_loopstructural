@@ -458,8 +458,18 @@ class FeatureListWidget(QWidget):
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
 
         for surface in stratigraphic_surfaces:
+            mesh = surface.vtk()
+            if mesh.n_points == 0:
+                # A unit with no digitised data of its own (e.g. an
+                # undigitised placeholder like "Top") can have no
+                # constrained geometry anywhere in the model, so its
+                # isovalue may not intersect the solved field at all --
+                # pyvista refuses to plot an empty mesh, so skip it rather
+                # than crashing every surface after it in this loop.
+                logger.info(f"Skipping '{surface.name}': isosurface has no geometry.")
+                continue
             self.viewer.add_mesh_object(
-                surface.vtk(),
+                mesh,
                 name=surface.name,
                 color=surface.colour,
                 source_feature=surface.name,

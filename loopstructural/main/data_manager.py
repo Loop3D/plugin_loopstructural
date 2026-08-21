@@ -1099,6 +1099,8 @@ class ModellingDataManager:
             self._structural_orientations = data['structural_orientations']
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+            # See the matching call in update_from_dict for why this is needed.
+            self._stratigraphic_column.update_unit_values()
             self.stratigraphic_column_callback()
         self._fault_boundaries.clear()
         if data.get('fault_boundaries'):
@@ -1199,6 +1201,16 @@ class ModellingDataManager:
                 )
         if 'stratigraphic_column' in data:
             self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
+            # update_from_dict restores elements via add_element, not
+            # add_unit -- only add_unit computes each unit's min/max
+            # scalar-field range as a side effect. Without this, every
+            # restored unit keeps the default (0, inf) range, so
+            # evaluate_model can't tell any unit in a group apart from any
+            # other and just labels every point with whichever unit was
+            # last in the group (see GeologicalModelManager.
+            # set_stratigraphic_column, which already does this for the
+            # very first load -- this covers every reload afterwards).
+            self._stratigraphic_column.update_unit_values()
         else:
             self._stratigraphic_column.clear()
 

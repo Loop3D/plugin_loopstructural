@@ -592,91 +592,115 @@ class GeologicalModelManager(Observable):
 
     def _extend_fault_trace_to_domain(self, fault_data):
         """Add two synthetic points that extend a fault's trace out to the
-        edges of the model's bounding box along its own overall trend.
+        edges of the model's bounding box, and attach a `strike` column
+        derived from the trace's own *local* tangent at each point.
 
         `create_and_add_domain_fault` interpolates a scalar field only from
         the points it is given, over the model's exact bounding box (no
         buffer, unlike a displacement fault's mesh) -- so a locally
         digitised trace only reliably constrains the surface near itself,
-        and the domain crop can wander unpredictably further away. Fitting
-        a line through the existing XY points and adding two constraint
-        points where that line meets the bounding box edges keeps the
-        interpolated surface following the fault's actual trend all the
-        way across the domain, rather than an arbitrary extrapolation --
+        and the domain crop can wander unpredictably further away.
+        Extending each end along its own local tangent, out to where it
+        meets the bounding box edge, keeps the interpolated surface
+        following the trace's actual trend all the way across the domain --
         this is what makes the fault behave as an "infinite" domain
         boundary rather than a locally-anchored patch.
 
+        Using each point's *local* tangent (rather than one global
+        best-fit line through the whole trace) matters for a genuinely
+        curved trace: fitting a single global line flattens that curvature
+        out, and extrapolating along it can land an extension point (or
+        bias the interpolated field generally) on the wrong side of the
+        real curve relative to data that's actually near the trace.
+        Confirmed on a live project: a global-line fit classified a
+        stratigraphic unit's own contact data as being on the opposite
+        side of the domain fault from a bounding-box corner that a proper
+        local (nearest-segment) classification put on the *same* side as
+        that data -- i.e. the global fit was extrapolating the wrong way.
+
         Z at each synthetic point is extrapolated linearly against
-        distance along that line, so a dipping trace keeps its dip.
+        distance along the local end segment, so a dipping trace keeps its
+        dip at the point it's extended from.
         """
         xy = fault_data[['X', 'Y']].to_numpy()
-        if len(xy) < 2:
-            return fault_data
-        centroid = xy.mean(axis=0)
-        # Principal direction of the trace via SVD -- robust to a
-        # near-vertical (large-Y-range, small-X-range) trace, unlike a
-        # simple polyfit of Y against X.
-        _, _, vt = np.linalg.svd(xy - centroid)
-        direction = vt[0]
-        clipped = self._clip_line_to_bounding_box(centroid, direction)
-        if clipped is None:
-            return fault_data
-        t_min, t_max = clipped
-        projections = (xy - centroid) @ direction
         z = fault_data['Z'].to_numpy()
-        if len(np.unique(projections)) > 1:
-            z_slope, z_intercept = np.polyfit(projections, z, 1)
-        else:
-            z_slope, z_intercept = 0.0, float(np.mean(z))
-        new_rows = []
-        for t in (t_min, t_max):
-            point_xy = centroid + direction * t
-            new_rows.append({'X': point_xy[0], 'Y': point_xy[1], 'Z': z_slope * t + z_intercept})
-        return pd.concat([fault_data, pd.DataFrame(new_rows)], ignore_index=True)
+        n = len(xy)
+        result = fault_data.copy()
+        if n < 2:
+            result['strike'] = np.nan
+            return result
 
-    def _domain_fault_orientation_rows(self, points_xyz, fault_entry):
-        """Build strike/dip orientation constraint rows for a domain-boundary fault.
-
-        A domain fault built only from same-valued (val=0) points has no
-        information about which direction the field should vary -- the
-        minimum-curvature solution that exactly satisfies "value=0 along
-        this line" with nothing else to go on is a trivial constant/flat
-        field (zero curvature everywhere, zero misfit). That's
-        geometrically useless: the crop condition
-        `domain_fault.evaluate_value(pos) > 0`
-        (see `LoopStructural.modelling.core._model_relationships`) is then
-        never true anywhere, so everything on the "positive" side reads as
-        NaN. Confirmed against a live project: a fault built from 31 trace
-        points and 2 extension points, all val=0, interpolated to an
-        exactly flat 0.0 field everywhere; adding one orientation
-        constraint per point produced a properly varying field crossing
-        zero along the fault's own trend.
-
-        Strike comes from the trace's own principal direction (matching
-        `_extend_fault_trace_to_domain`'s line fit); dip comes from the
-        ingested fault trace data's `dip` column if present (matching how
-        `update_fault_features` picks up dip for a displacement fault),
-        otherwise defaults to vertical (90 degrees).
-        """
-        xy = points_xyz[['X', 'Y']].to_numpy()
-        if len(xy) < 2:
-            return None
-        centroid = xy.mean(axis=0)
-        _, _, vt = np.linalg.svd(xy - centroid)
-        direction = vt[0]
+        # Local tangent per point: central difference for interior points,
+        # forward/backward difference at the ends. Assumes points follow
+        # the digitised line's vertex order (true for AllSampler-derived
+        # trace data, which walks each LineString's coords in order).
+        tangents = np.zeros((n, 2))
+        tangents[0] = xy[1] - xy[0]
+        tangents[-1] = xy[-1] - xy[-2]
+        if n > 2:
+            tangents[1:-1] = xy[2:] - xy[:-2]
         # strikedip2vector's strike is degrees clockwise from North (+Y);
         # atan2(dx, dy) matches that convention directly.
-        strike = float(np.degrees(np.arctan2(direction[0], direction[1])) % 360)
-        dip = 90.0
+        result['strike'] = np.degrees(np.arctan2(tangents[:, 0], tangents[:, 1])) % 360
+
+        new_rows = []
+        # Extend backward past the first point, continuing on its own
+        # local tangent (pointing away from the second point).
+        start_seg = xy[1] - xy[0]
+        start_len = np.linalg.norm(start_seg)
+        if start_len > 1e-9:
+            direction = -start_seg / start_len
+            clipped = self._clip_line_to_bounding_box(xy[0], direction)
+            if clipped is not None:
+                _, t_max = clipped
+                if t_max > 0:
+                    point_xy = xy[0] + direction * t_max
+                    z_slope = (z[1] - z[0]) / start_len
+                    new_rows.append(
+                        {
+                            'X': point_xy[0],
+                            'Y': point_xy[1],
+                            'Z': z[0] - z_slope * t_max,
+                            'strike': result['strike'].iloc[0],
+                        }
+                    )
+        # Extend forward past the last point, continuing on its own local
+        # tangent (pointing away from the second-to-last point).
+        end_seg = xy[-1] - xy[-2]
+        end_len = np.linalg.norm(end_seg)
+        if end_len > 1e-9:
+            direction = end_seg / end_len
+            clipped = self._clip_line_to_bounding_box(xy[-1], direction)
+            if clipped is not None:
+                _, t_max = clipped
+                if t_max > 0:
+                    point_xy = xy[-1] + direction * t_max
+                    z_slope = (z[-1] - z[-2]) / end_len
+                    new_rows.append(
+                        {
+                            'X': point_xy[0],
+                            'Y': point_xy[1],
+                            'Z': z[-1] + z_slope * t_max,
+                            'strike': result['strike'].iloc[-1],
+                        }
+                    )
+        if not new_rows:
+            return result
+        return pd.concat([result, pd.DataFrame(new_rows)], ignore_index=True)
+
+    def _domain_fault_dip(self, fault_entry):
+        """Dip (degrees from horizontal) for a domain-boundary fault.
+
+        Uses the ingested fault trace data's `dip` column if present
+        (matching how `update_fault_features` picks up dip for a
+        displacement fault), otherwise defaults to vertical (90 degrees).
+        """
         raw_data = fault_entry.get('data') if fault_entry else None
         if raw_data is not None and 'dip' in raw_data:
             dip_values = raw_data['dip'].dropna()
             if not dip_values.empty:
-                dip = float(dip_values.mean())
-        rows = points_xyz[['X', 'Y', 'Z']].copy()
-        rows['strike'] = strike
-        rows['dip'] = dip
-        return rows
+                return float(dip_values.mean())
+        return 90.0
 
     def _build_domain_fault_boundary(self, fault_name, groupname):
         """Build `fault_name` as a domain-fault boundary in place of a flat unconformity.
@@ -702,14 +726,19 @@ class GeologicalModelManager(Observable):
                 log_level=2,
             )
             return False
-        data_for_fault = self._extend_fault_trace_to_domain(fault_data[['X', 'Y', 'Z']].copy())
-        orientation_rows = self._domain_fault_orientation_rows(data_for_fault, fault_entry)
-        data_for_fault['feature_name'] = fault_name
-        data_for_fault['val'] = 0
-        if orientation_rows is not None:
+        extended = self._extend_fault_trace_to_domain(fault_data[['X', 'Y', 'Z']].copy())
+
+        value_rows = extended[['X', 'Y', 'Z']].copy()
+        value_rows['feature_name'] = fault_name
+        value_rows['val'] = 0
+
+        orientation_rows = extended.dropna(subset=['strike'])[['X', 'Y', 'Z', 'strike']].copy()
+        data_for_fault = value_rows
+        if not orientation_rows.empty:
+            orientation_rows['dip'] = self._domain_fault_dip(fault_entry)
             orientation_rows['feature_name'] = fault_name
             orientation_rows['val'] = np.nan
-            data_for_fault = pd.concat([data_for_fault, orientation_rows], ignore_index=True)
+            data_for_fault = pd.concat([value_rows, orientation_rows], ignore_index=True)
         # Unlike create_and_add_foliation/create_and_add_fault (which
         # normalise their own `data=` argument internally via
         # model.prepare_data before building), create_and_add_domain_fault
@@ -758,10 +787,32 @@ class GeologicalModelManager(Observable):
             groupname = group.name
             stratigraphic_column[groupname] = {}
             for u in reversed(group.units):
+                # `reversed(group.units)` walks youngest-to-oldest (matching
+                # StratigraphicColumn.update_unit_values's own cumulative
+                # walk), so `val` must accumulate every unit's thickness
+                # *before* being used as that unit's own training value --
+                # regardless of whether the unit has any digitised data --
+                # to land on `u.max()`, not `u.min()`.
+                #
+                # `u.min()` is the boundary shared with the next *younger*
+                # neighbour (this unit's top); `u.max()` is the boundary
+                # shared with the next *older* neighbour (this unit's true
+                # base). Digitised "basal contact" data represents a unit's
+                # base, so it belongs at `u.max()`. Using `u.min()` instead
+                # anchors every unit's own contact points to its top
+                # boundary rather than its base -- confirmed on a live
+                # project: every unit's own mapped points evaluated into its
+                # next-younger neighbour's bracket instead of its own.
+                #
+                # Accumulating unconditionally (not skipped for a unit with
+                # no digitised data, e.g. an undigitised "Top"/basement
+                # placeholder) also keeps every later unit's value aligned
+                # with `get_isovalues()`'s own cumulative-thickness bracket
+                # boundaries, which don't know or care which units were
+                # actually mapped.
+                val += u.thickness
                 unit_data = self.stratigraphy.get(u.name, None)
-                if unit_data is None:
-                    continue
-                else:
+                if unit_data is not None:
                     if 'contact' in unit_data:
                         contact = unit_data['contact']
                         if not contact.empty:
@@ -774,8 +825,6 @@ class GeologicalModelManager(Observable):
                             orientations['val'] = np.nan
                             orientations['feature_name'] = groupname
                             data.append(orientations)
-
-                val += u.thickness
             if len(data) == 0:
                 self._debug_manager.log(
                     f"No data found for group {groupname}, skipping.", log_level=2
