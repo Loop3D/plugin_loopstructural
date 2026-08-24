@@ -98,7 +98,9 @@ def extract_basal_contacts(
     unit_name_col = 'UNITNAME' if 'UNITNAME' in geology.columns else unit_name_field
     if unit_name_col and unit_name_col in geology.columns:
         geology_unit_names = {str(v).strip() for v in geology[unit_name_col].dropna().unique()}
-        stratigraphic_names = {str(name).strip() for name in stratigraphic_order if name is not None}
+        stratigraphic_names = {
+            str(name).strip() for name in stratigraphic_order if name is not None
+        }
         ignored_names = {str(unit).strip() for unit in ignore_units if unit is not None}
         missing_from_column = sorted(geology_unit_names - stratigraphic_names - ignored_names)
         if missing_from_column:
