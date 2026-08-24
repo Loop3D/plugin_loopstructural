@@ -174,7 +174,7 @@ class FaultTopologyWidget(QDialog):
                     # not just the ones map2loop found a relationship for. A fault with
                     # no detected topological relationship is still a real fault and
                     # must not be dropped from the fault topology.
-                    new_faults = set(str(v) for v in gdf['ID'].unique())
+                    new_faults = {str(v) for v in gdf['ID'].unique()}
 
                     # Add new faults; never remove existing ones here, so faults
                     # without a detected relationship (or ones the user added
@@ -209,9 +209,7 @@ class FaultTopologyWidget(QDialog):
                                 else:
                                     f1 = str(row.iloc[0])
                                     f2 = str(row.iloc[1])
-                                ft.update_fault_relationship(
-                                    f1, f2, FaultRelationshipType.ABUTTING
-                                )
+                                ft.update_fault_relationship(f1, f2, FaultRelationshipType.ABUTTING)
                             except Exception:
                                 pass
 

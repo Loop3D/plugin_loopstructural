@@ -152,9 +152,7 @@ class TestTrainingValueIsUnitsOwnBase:
         i.e. `u.max()` -- see module docstring for why max() (not min(), which
         `get_isovalues()` reports) is the correct target for basal-contact
         training data."""
-        units_by_name = {
-            u.name: u for group in column.get_groups() for u in group.units
-        }
+        units_by_name = {u.name: u for group in column.get_groups() for u in group.units}
         return {name: units_by_name[name].max() for name in unit_names}
 
     @staticmethod
