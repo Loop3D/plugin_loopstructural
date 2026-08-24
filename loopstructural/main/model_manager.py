@@ -787,30 +787,27 @@ class GeologicalModelManager(Observable):
             groupname = group.name
             stratigraphic_column[groupname] = {}
             for u in reversed(group.units):
-                # `reversed(group.units)` walks youngest-to-oldest (matching
-                # StratigraphicColumn.update_unit_values's own cumulative
-                # walk), so `val` must accumulate every unit's thickness
-                # *before* being used as that unit's own training value --
-                # regardless of whether the unit has any digitised data --
-                # to land on `u.max()`, not `u.min()`.
+                # A unit's own `val` is `u.min()` -- the cumulative
+                # thickness *before* this unit's own thickness is added --
+                # matching `StratigraphicColumn.update_unit_values` (a unit
+                # is only added to the column oldest-first via `where=
+                # 'top'`, so `min()` is the boundary shared with the
+                # next-*older* neighbour processed just before it, i.e.
+                # this unit's own base) and `get_isovalues()` (LoopStructural
+                # core; both walk `reversed(group.units)` accumulating the
+                # same way, so a unit's own training value and the isovalue
+                # `get_isovalues()` later labels with this unit's name
+                # agree -- see test_stratigraphic_value_consistency.py).
                 #
-                # `u.min()` is the boundary shared with the next *younger*
-                # neighbour (this unit's top); `u.max()` is the boundary
-                # shared with the next *older* neighbour (this unit's true
-                # base). Digitised "basal contact" data represents a unit's
-                # base, so it belongs at `u.max()`. Using `u.min()` instead
-                # anchors every unit's own contact points to its top
-                # boundary rather than its base -- confirmed on a live
-                # project: every unit's own mapped points evaluated into its
-                # next-younger neighbour's bracket instead of its own.
-                #
-                # Accumulating unconditionally (not skipped for a unit with
-                # no digitised data, e.g. an undigitised "Top"/basement
-                # placeholder) also keeps every later unit's value aligned
-                # with `get_isovalues()`'s own cumulative-thickness bracket
-                # boundaries, which don't know or care which units were
-                # actually mapped.
-                val += u.thickness
+                # `val` must accumulate every unit's thickness regardless of
+                # whether that unit has any digitised data -- get_isovalues()
+                # assigns each unit's isovalue purely from cumulative
+                # thickness, with no knowledge of which units were actually
+                # mapped. Skipping the increment for an unmapped unit (e.g.
+                # a "Top" placeholder with no contact points) would shift
+                # every val assigned to units after it in this loop, so
+                # extracted isosurfaces would get labelled with the wrong
+                # unit name even though the geometry itself is fine.
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is not None:
                     if 'contact' in unit_data:
@@ -825,6 +822,8 @@ class GeologicalModelManager(Observable):
                             orientations['val'] = np.nan
                             orientations['feature_name'] = groupname
                             data.append(orientations)
+
+                val += u.thickness
             if len(data) == 0:
                 self._debug_manager.log(
                     f"No data found for group {groupname}, skipping.", log_level=2
