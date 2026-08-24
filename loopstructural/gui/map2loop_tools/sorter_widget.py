@@ -70,6 +70,7 @@ class SorterWidget(QWidget):
         self.sortingAlgorithmComboBox.currentIndexChanged.connect(self._on_algorithm_changed)
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
         self.structureLayerComboBox.layerChanged.connect(self._on_structure_layer_changed)
+        self.contactsLayerComboBox.layerChanged.connect(self._on_contacts_layer_changed)
         self.runButton.clicked.connect(self._run_sorter)
         self.orientationTypeComboBox.setCurrentIndex(1)  # Default to Dip Direction
         self._guess_layers()
@@ -277,6 +278,12 @@ class SorterWidget(QWidget):
 
             if dipdir_match := matcher.find_match('DIPDIR'):
                 self.dipDirFieldComboBox.setField(dipdir_match)
+
+    def _on_contacts_layer_changed(self):
+        """Update field combo boxes when contacts layer changes."""
+        layer = self.contactsLayerComboBox.currentLayer()
+        self.unitName1FieldComboBox.setLayer(layer)
+        self.unitName2FieldComboBox.setLayer(layer)
 
     def _on_algorithm_changed(self):
         """Update UI based on selected sorting algorithm and map2loop requirements."""
