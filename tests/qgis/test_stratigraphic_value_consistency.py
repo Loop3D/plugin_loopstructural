@@ -1,34 +1,37 @@
-"""Regression test for the basal-contact training-value direction.
+"""Regression test for the training-value / isovalue direction bug.
 
 `GeologicalModelManager.update_foliation_features` assigns a scalar `val` to
 each unit's basal contact before handing the data to the interpolator.
-`StratigraphicColumn.update_unit_values` (LoopStructural core) computes each
-unit's `min()`/`max()` by walking the column youngest-to-oldest, accumulating
-thickness from 0 -- forced by the fact that a basement unit's open-ended
-range (`thickness=inf`) only works when it's the *last* unit processed in
-that walk (an infinite thickness earlier would poison every unit after it).
-That makes `u.min()` the boundary shared with the next *younger* neighbour
-(a unit's top) and `u.max()` the boundary shared with the next *older*
-neighbour (a unit's true base).
+`StratigraphicColumn.get_isovalues` (LoopStructural core) later decides which
+name to stamp on each extracted isosurface, using its own idea of which
+value belongs to which unit.
 
-A digitised "basal contact" represents a unit's base, so it must be trained
-at `val = u.max()`, not `u.min()`. Training at `u.min()` (the old behaviour)
-anchors every unit's own contact points to its top boundary instead of its
-base -- confirmed on a live project: every unit's own mapped points
-evaluated into its next-younger neighbour's bracket instead of its own,
-e.g. "Formacao Betari"'s own contact data landing inside "Formacao
-Guaricanga"'s value range.
 
-Note `get_isovalues()` also reports `u.min()` per unit -- that's a separate
-concern (naming which unit an *extracted isosurface* belongs to), not a
-statement about which value basal-contact training data should use, so this
-test does not compare against it.
+Both walk `reversed(group.units)`, accumulating cumulative thickness the
+same way, so a unit's own training value must equal `u.min()` -- the
+cumulative thickness *before* that unit's own thickness is added. This is
+also each unit's true base: `add_unit(..., where='top')` (the default)
+appends to the end of the column, so building a column correctly means
+adding the truly oldest unit first and progressively younger ones after --
+each unit's own base is the boundary shared with the next-older neighbour
+processed just before it, i.e. `min()`. See LoopStructural's own
+`test_get_isovalues_multi_unit_group` (`tests/unit/modelling/
+test_stratigraphic_column.py`), whose comment states this explicitly: "the
+base of the oldest unit in a group is 0".
 
-This direction has flipped back and forth as this plugin and LoopStructural
-evolved independently -- see the "stratigraphic column was reversed" fixes
-in model_manager.py (2025-07-21) and the widget (2025-08-21, reverted
-2025-09-08). This test pins the invariant so a future change fails loudly
-here instead of silently inverting a user's model.
+If training and `get_isovalues()` disagree on this, every extracted surface
+gets labelled with the wrong unit while keeping correct geometry -- see the
+"stratigraphic column was reversed" fixes in model_manager.py (2025-07-21)
+and the widget (2025-08-21, reverted 2025-09-08). This has flipped back and
+forth as this plugin and LoopStructural evolved independently; this test
+pins the invariant so a future change on either side fails loudly here
+instead of silently inverting a user's model.
+
+Note this is a separate concern from whether a stratigraphic column's units
+were themselves *added* in the correct oldest-to-youngest order -- if they
+weren't, `min()`/`max()` stop corresponding to true geological base/top no
+matter what training does, and the fix is to reorder the column's units,
+not to change which value training uses.
 """
 
 import pandas as pd
@@ -61,7 +64,7 @@ def manager(monkeypatch):
     return manager
 
 
-class TestTrainingValueIsUnitsOwnBase:
+class TestTrainingValueMatchesIsovalue:
     def test_single_group_three_units(self, manager):
         column = StratigraphicColumn()
         column.clear(basement=False)  # single flat group, no unconformities
@@ -76,14 +79,14 @@ class TestTrainingValueIsUnitsOwnBase:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = self._own_base_by_unit(column, ('oldest', 'middle', 'youngest'))
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('oldest', 'middle', 'youngest'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name]), (
-                f"'{unit_name}' was trained with val={training_values[unit_name]} but its "
-                f"own base (boundary with the next-older neighbour) is "
-                f"{expected_values[unit_name]} -- basal-contact data must train at a unit's "
-                f"own max(), not min(), or extracted surfaces get the wrong unit name."
+                f"'{unit_name}' was trained with val={training_values[unit_name]} but "
+                f"get_isovalues() will label the value={expected_values[unit_name]} surface "
+                f"with this unit's name -- the trained field and the isosurface labels "
+                f"disagree on direction, so extracted surfaces will get the wrong unit name."
             )
 
     def test_two_groups_split_by_unconformity(self, manager):
@@ -102,9 +105,7 @@ class TestTrainingValueIsUnitsOwnBase:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = self._own_base_by_unit(
-            column, ('basin_floor', 'basin_fill', 'cover_lower', 'cover_upper')
-        )
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('basin_floor', 'basin_fill', 'cover_lower', 'cover_upper'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name])
@@ -115,19 +116,14 @@ class TestTrainingValueIsUnitsOwnBase:
         must still contribute its own thickness to `val` for every unit
         that follows it in the group -- `update_foliation_features` used to
         `continue` past an undigitised unit before accumulating its
-        thickness, which shifted every later unit's trained value by that
-        unit's thickness relative to its own true base.
+        thickness, which shifted every later unit's trained value relative
+        to what `get_isovalues()` expects.
         """
         column = StratigraphicColumn()
         column.clear(basement=False)
-        # Added first so it ends up last in `group.units` (each `add_unit`
-        # prepends) and therefore *first* in the `reversed(group.units)`
-        # build loop -- matching the live project, where the undigitised
-        # unit was the one whose skipped increment shifted every unit
-        # after it.
-        column.add_unit(name='Top', thickness=999.0, where='top')
-        column.add_unit(name='basin_fill', thickness=150.0, where='top')
         column.add_unit(name='basin_floor', thickness=50.0, where='top')
+        column.add_unit(name='basin_fill', thickness=150.0, where='top')
+        column.add_unit(name='Top', thickness=999.0, where='top')
 
         manager.stratigraphic_column = column
         for name in ('basin_floor', 'basin_fill'):
@@ -137,23 +133,15 @@ class TestTrainingValueIsUnitsOwnBase:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = self._own_base_by_unit(column, ('basin_floor', 'basin_fill'))
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('basin_floor', 'basin_fill'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name]), (
-                f"'{unit_name}' was trained with val={training_values[unit_name]} but its "
-                f"own base is {expected_values[unit_name]} -- an undigitised unit earlier in "
-                f"the group must still shift later units' trained values by its own thickness."
+                f"'{unit_name}' was trained with val={training_values[unit_name]} but "
+                f"get_isovalues() expects value={expected_values[unit_name]} -- an "
+                f"undigitised unit earlier in the group must still shift later units' "
+                f"trained values by its own thickness."
             )
-
-    @staticmethod
-    def _own_base_by_unit(column, unit_names):
-        """Each unit's own base: the boundary with the next-*older* neighbour,
-        i.e. `u.max()` -- see module docstring for why max() (not min(), which
-        `get_isovalues()` reports) is the correct target for basal-contact
-        training data."""
-        units_by_name = {u.name: u for group in column.get_groups() for u in group.units}
-        return {name: units_by_name[name].max() for name in unit_names}
 
     @staticmethod
     def _training_values_by_unit(captured_calls):
