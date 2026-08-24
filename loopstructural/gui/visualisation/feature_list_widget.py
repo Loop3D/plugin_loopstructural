@@ -56,9 +56,7 @@ class FeatureListWidget(QWidget):
         self.data_manager = data_manager
 
         # Add buttons
-        self.addBoundingBoxButton = self._make_tool_button(
-            "extents.svg", "Add Model Bounding Box"
-        )
+        self.addBoundingBoxButton = self._make_tool_button("extents.svg", "Add Model Bounding Box")
         self.addFaultSurfacesButton = self._make_custom_icon_tool_button(
             "fault.svg", "Add Fault Surfaces"
         )
@@ -724,7 +722,12 @@ class FeatureListWidget(QWidget):
             except Exception:
                 target_crs = None
         source_crs = layer.sourceCrs()
-        if target_crs is not None and target_crs.isValid() and source_crs.isValid() and source_crs != target_crs:
+        if (
+            target_crs is not None
+            and target_crs.isValid()
+            and source_crs.isValid()
+            and source_crs != target_crs
+        ):
             geom = QgsGeometry(geom)
             geom.transform(QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance()))
 

@@ -61,9 +61,7 @@ class TestTrainingValueMatchesIsovalue:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = {
-            name: entry['value'] for name, entry in column.get_isovalues().items()
-        }
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('oldest', 'middle', 'youngest'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name]), (
@@ -89,9 +87,7 @@ class TestTrainingValueMatchesIsovalue:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = {
-            name: entry['value'] for name, entry in column.get_isovalues().items()
-        }
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('basin_floor', 'basin_fill', 'cover_lower', 'cover_upper'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name])

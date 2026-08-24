@@ -32,11 +32,11 @@ class BoundingBoxWidget(QWidget):
             self.selectFromCurrentLayerButton, "mActionZoomToLayer.svg", "Select from Current Layer"
         )
         self._style_tool_button(
-            self.useCurrentViewExtentButton, "mActionSetToCanvasExtent.svg", "Use Current View Extent"
+            self.useCurrentViewExtentButton,
+            "mActionSetToCanvasExtent.svg",
+            "Use Current View Extent",
         )
-        self._style_tool_button(
-            self.drawOnMapButton, "mActionAddBasicRectangle.svg", "Draw on Map"
-        )
+        self._style_tool_button(self.drawOnMapButton, "mActionAddBasicRectangle.svg", "Draw on Map")
         self.drawOnMapButton.setCheckable(True)
         self.drawOnMapButton.clicked.connect(self.drawOnMap)
         self._draw_extent_tool = None
