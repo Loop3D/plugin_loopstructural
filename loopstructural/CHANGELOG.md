@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.2.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.13...v0.2.0) (2026-08-24)
+
+
+### Features
+
+* add a "Show Bounding Box on Map" toggle ([48dc6c1](https://github.com/Loop3D/plugin_loopstructural/commit/48dc6c1c6ba175da89990ff7608b01ba391e8285))
+* add fault-domain-boundary  ([#112](https://github.com/Loop3D/plugin_loopstructural/issues/112)) ([c7d8c42](https://github.com/Loop3D/plugin_loopstructural/commit/c7d8c42474ce22d79b52ccfc614406670c988a3a))
+* add functionality to view interpolator constraint data and sync processed feature data ([2a6469a](https://github.com/Loop3D/plugin_loopstructural/commit/2a6469aac5bbdad7f11796b57ea01e9ffb9484c8))
+* add layer and field pickers for stratigraphic column colors application and fix qt6 issues ([8e38c34](https://github.com/Loop3D/plugin_loopstructural/commit/8e38c344a4b9be452941d9881f207f4d99e642b1))
+* add save/load app state ([72c5086](https://github.com/Loop3D/plugin_loopstructural/commit/72c5086003f187b5988f1b634527666ed8b17605))
+* add solve model button and track feature solve state in gui ([c4dea81](https://github.com/Loop3D/plugin_loopstructural/commit/c4dea8178fc687fdc53ee20c28ad1a73aeb8ca27))
+* add stratigraphic age application functionality with color ramp selection ([13918db](https://github.com/Loop3D/plugin_loopstructural/commit/13918db09e8aebe1a7d32517cff6b086242072ea))
+* add topography surface and cross-section tools to the 3D viewer ([94669f8](https://github.com/Loop3D/plugin_loopstructural/commit/94669f819df3876585e38de14739410dcf148fb0))
+* allow cancelling a running model solve, and report the reason it stopped ([b539512](https://github.com/Loop3D/plugin_loopstructural/commit/b539512302eb12fc9e11820af90d4e0f1274d001))
+* allow reordering stratigraphic column rows by dragging a grip handle ([ec9e133](https://github.com/Loop3D/plugin_loopstructural/commit/ec9e13394f597edb6d155de8de9b707d9c313e28))
+* evaluate stratigraphic units at arbitrary points for topography draping ([9ee4853](https://github.com/Loop3D/plugin_loopstructural/commit/9ee48531fee9d625cf66303ba29de217e4ea86f8))
+* use custom geological icons for fault/unconformity/column/cross-section ([89a72b7](https://github.com/Loop3D/plugin_loopstructural/commit/89a72b7e527d9eef6af85737be57ea743c9a093b))
+* warn when a stratigraphic column unit has no match in the geology layer ([e1bf74f](https://github.com/Loop3D/plugin_loopstructural/commit/e1bf74f1cc3c8929e0c453dad3d7b133a3ef5491))
+* wire up the bounding box "Draw on Map" tool ([f6df006](https://github.com/Loop3D/plugin_loopstructural/commit/f6df006dd407bfbc04eb36be416d39eb9fd9b94d))
+
+
+### Bug Fixes
+
+* add reset app button ([520e756](https://github.com/Loop3D/plugin_loopstructural/commit/520e756288f590cb3c6282a6b315bd592dd6be33))
+* add sorted stratigraphic units oldest-first so the column isn't built reversed ([0d13a6c](https://github.com/Loop3D/plugin_loopstructural/commit/0d13a6c01509b12c303973297d9f785864aeebf3))
+* add zoom to object ([530e654](https://github.com/Loop3D/plugin_loopstructural/commit/530e654d19ea2d6b12390e01fc987dc0542c8e78))
+* address verified bugs and re-enable CI/test gates (review phase 1) ([b621131](https://github.com/Loop3D/plugin_loopstructural/commit/b62113191b87334c23b4c7491cde87d8bdf6deab))
+* build faults in cutting order and feed cross-cutting relationships to the interpolator ([eea546c](https://github.com/Loop3D/plugin_loopstructural/commit/eea546c2179af4d41561dc744029f859c60b3158))
+* bump to ls 1.7 and also restrict app to work with minor versions to derisk api drift ([a2f5b77](https://github.com/Loop3D/plugin_loopstructural/commit/a2f5b77df7f9c12aad0437c76d57cedb488f96ad))
+* calculate fault abutting relationships inside qgis ([b78496b](https://github.com/Loop3D/plugin_loopstructural/commit/b78496bb5dedce94070ecf208a57bf5690c5fa0d))
+* connect layer change to update field combo boxes ([#111](https://github.com/Loop3D/plugin_loopstructural/issues/111)) ([e460b30](https://github.com/Loop3D/plugin_loopstructural/commit/e460b30cdf91680cd45c23938a571afec3698146))
+* enhance feature build status checks and update status icon rendering ([ea6334b](https://github.com/Loop3D/plugin_loopstructural/commit/ea6334bd5d5ee5b792800dea27c02a0082376b1b))
+* enhance object selection and visibility handling in ObjectListWidget ([833250a](https://github.com/Loop3D/plugin_loopstructural/commit/833250ac83074f4a1d7b6d7e38b62b7452c45076))
+* give an accurate error when geology units are missing from the stratigraphic column ([e120dd1](https://github.com/Loop3D/plugin_loopstructural/commit/e120dd10c3887da4d5fd2d9d52a4e6e8a0df5976))
+* honor the use-Z-coordinate setting for basal contacts and structural orientations ([fe77ebd](https://github.com/Loop3D/plugin_loopstructural/commit/fe77ebd4dface161fc298605dd787ae15e56191a))
+* keep NaN scalar values from polluting the 3D viewer colour scale ([a3cd3d7](https://github.com/Loop3D/plugin_loopstructural/commit/a3cd3d72cc2c3cc6c4677778c3d5933d5324f2f9))
+* make the DEM layer actually drive elevation sampling ([d496f2b](https://github.com/Loop3D/plugin_loopstructural/commit/d496f2bd02e85fcbe787e67c967c08fc893a9fe0))
+* preserve faults without a detected relationship in topology recalculation ([6c2eaaf](https://github.com/Loop3D/plugin_loopstructural/commit/6c2eaaf8f15594676c7f80f58c40f0d0cb6216db))
+* qt4 compatibility check ([53138ee](https://github.com/Loop3D/plugin_loopstructural/commit/53138ee3328a031d95dfa01648962b34dce29ca0))
+* remove data converter from quick access ([5296e3f](https://github.com/Loop3D/plugin_loopstructural/commit/5296e3f072e4d0dc8f6f8c014e43d39baf24bf2a))
+* reproject bounding box extent actions into the chosen model CRS ([9db26cd](https://github.com/Loop3D/plugin_loopstructural/commit/9db26cd30b8dfa257d6def451d91c067ac085b48))
+* reproject geology and faults to a common CRS before basal contact extraction ([a9aa15d](https://github.com/Loop3D/plugin_loopstructural/commit/a9aa15d587e7a96c9cb8faa793f35c9bc21b1203))
+* set topology dirty when topology is changed ([c5f1adc](https://github.com/Loop3D/plugin_loopstructural/commit/c5f1adcb7fb6b627df8a475cee60b5f203a298a9))
+* stratigraphic column widget was inverting column ([814be12](https://github.com/Loop3D/plugin_loopstructural/commit/814be121e35b46cdfa38ad416318849ded8f9d85))
+* update compatibility for qt6 ([419abb3](https://github.com/Loop3D/plugin_loopstructural/commit/419abb367d4ed0fef8e4cc91993ed0a774fd44a1))
+* update qgis4 compatibility ([209738a](https://github.com/Loop3D/plugin_loopstructural/commit/209738a52724621838e1cd10ebfb3ec4c71872d9))
+* update qgis4 compatibility ([d80cead](https://github.com/Loop3D/plugin_loopstructural/commit/d80cead0be7ef3e460fc05f16458e7075eb17733))
+* wire up loop_common logging ([9bff4dc](https://github.com/Loop3D/plugin_loopstructural/commit/9bff4dc93dc32e625cb326804ac316ed51116a6d))
+
 ## [0.1.13](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.12...v0.1.13) (2026-02-19)
 
 
