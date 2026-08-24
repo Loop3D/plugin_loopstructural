@@ -18,8 +18,11 @@ import numpy as np
 import pandas as pd
 from LoopStructural.datatypes import BoundingBox
 from LoopStructural.modelling.core.fault_topology import FaultRelationshipType
-from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumn
-from LoopStructural.modelling.features import FeatureType, StructuralFrame
+from LoopStructural.modelling.core.stratigraphic_column import (
+    StratigraphicColumn,
+    StratigraphicUnconformity,
+)
+from LoopStructural.modelling.features import FeatureType, StructuralFrame, UnconformityFeature
 from LoopStructural.modelling.features.fold import FoldFrame
 from LoopStructural.utils.observer import Observable
 
@@ -111,6 +114,10 @@ class GeologicalModelManager(Observable):
         self.stratigraphy: Dict[str, StratigraphyEntry] = defaultdict(dict)
         self.stratigraphic_column = None
         self.fault_topology = None
+        # uuid (of a StratigraphicUnconformity in stratigraphic_column) ->
+        # fault name; see `set_fault_boundaries`. Shared by reference with
+        # ModellingDataManager, same as stratigraphic_column/fault_topology.
+        self.fault_boundaries: Dict[str, str] = {}
         # Observers managed by Observable base class
         self.dem_function = lambda x, y: 0
         # internal flag to temporarily suppress notifications (used when
@@ -240,6 +247,12 @@ class GeologicalModelManager(Observable):
                 fault_topology.attach(self._on_fault_topology_changed)
             except Exception:
                 pass
+
+    def set_fault_boundaries(self, fault_boundaries: Dict[str, str]):
+        """Set the uuid -> fault_name mapping of fault-linked stratigraphic
+        column boundaries (see `ModellingDataManager.set_fault_boundary`).
+        """
+        self.fault_boundaries = fault_boundaries
 
     # Topology events that change what actually feeds the interpolator (as
     # opposed to just which side of an already-solved fault gets cropped
@@ -531,6 +544,230 @@ class GeologicalModelManager(Observable):
     # def update_stratigraphic_unit(self, unit_data):
     #     self.data
 
+    def _closing_fault_boundary(self, group):
+        """Return the fault name that closes `group` from above, if any.
+
+        The boundary "closing" a group off from the next (younger) group is
+        the first `StratigraphicUnconformity` above the group's youngest
+        unit in `stratigraphic_column.order`. If that boundary has been
+        linked to a fault (`ModellingDataManager.set_fault_boundary`), the
+        group should be capped by that fault's surface -- a non-displacing
+        domain split, see `create_and_add_domain_fault` -- instead of the
+        flat isovalue-0 surface `add_unconformity` uses.
+        """
+        if not group.units or not self.fault_boundaries or self.stratigraphic_column is None:
+            return None
+        order = self.stratigraphic_column.order
+        youngest_uuid = group.units[0].uuid
+        start = next((i for i, e in enumerate(order) if e.uuid == youngest_uuid), None)
+        if start is None:
+            return None
+        for element in order[start + 1 :]:
+            if isinstance(element, StratigraphicUnconformity):
+                return self.fault_boundaries.get(element.uuid)
+        return None
+
+    def _clip_line_to_bounding_box(self, centroid, direction):
+        """Return the (t_min, t_max) range along `centroid + t*direction`
+        (XY only) that stays within the model's bounding box, or None if
+        the line never crosses it. Standard slab-method line/box clip.
+        """
+        origin_xy = np.array(self.model.bounding_box.origin[:2], dtype=float)
+        maximum_xy = np.array(self.model.bounding_box.maximum[:2], dtype=float)
+        t_min, t_max = -np.inf, np.inf
+        for axis in (0, 1):
+            d = direction[axis]
+            if abs(d) < 1e-12:
+                if centroid[axis] < origin_xy[axis] or centroid[axis] > maximum_xy[axis]:
+                    return None
+                continue
+            t0 = (origin_xy[axis] - centroid[axis]) / d
+            t1 = (maximum_xy[axis] - centroid[axis]) / d
+            t0, t1 = min(t0, t1), max(t0, t1)
+            t_min = max(t_min, t0)
+            t_max = min(t_max, t1)
+        if t_min > t_max:
+            return None
+        return t_min, t_max
+
+    def _extend_fault_trace_to_domain(self, fault_data):
+        """Add two synthetic points that extend a fault's trace out to the
+        edges of the model's bounding box, and attach a `strike` column
+        derived from the trace's own *local* tangent at each point.
+
+        `create_and_add_domain_fault` interpolates a scalar field only from
+        the points it is given, over the model's exact bounding box (no
+        buffer, unlike a displacement fault's mesh) -- so a locally
+        digitised trace only reliably constrains the surface near itself,
+        and the domain crop can wander unpredictably further away.
+        Extending each end along its own local tangent, out to where it
+        meets the bounding box edge, keeps the interpolated surface
+        following the trace's actual trend all the way across the domain --
+        this is what makes the fault behave as an "infinite" domain
+        boundary rather than a locally-anchored patch.
+
+        Using each point's *local* tangent (rather than one global
+        best-fit line through the whole trace) matters for a genuinely
+        curved trace: fitting a single global line flattens that curvature
+        out, and extrapolating along it can land an extension point (or
+        bias the interpolated field generally) on the wrong side of the
+        real curve relative to data that's actually near the trace.
+        Confirmed on a live project: a global-line fit classified a
+        stratigraphic unit's own contact data as being on the opposite
+        side of the domain fault from a bounding-box corner that a proper
+        local (nearest-segment) classification put on the *same* side as
+        that data -- i.e. the global fit was extrapolating the wrong way.
+
+        Z at each synthetic point is extrapolated linearly against
+        distance along the local end segment, so a dipping trace keeps its
+        dip at the point it's extended from.
+        """
+        xy = fault_data[['X', 'Y']].to_numpy()
+        z = fault_data['Z'].to_numpy()
+        n = len(xy)
+        result = fault_data.copy()
+        if n < 2:
+            result['strike'] = np.nan
+            return result
+
+        # Local tangent per point: central difference for interior points,
+        # forward/backward difference at the ends. Assumes points follow
+        # the digitised line's vertex order (true for AllSampler-derived
+        # trace data, which walks each LineString's coords in order).
+        tangents = np.zeros((n, 2))
+        tangents[0] = xy[1] - xy[0]
+        tangents[-1] = xy[-1] - xy[-2]
+        if n > 2:
+            tangents[1:-1] = xy[2:] - xy[:-2]
+        # strikedip2vector's strike is degrees clockwise from North (+Y);
+        # atan2(dx, dy) matches that convention directly.
+        result['strike'] = np.degrees(np.arctan2(tangents[:, 0], tangents[:, 1])) % 360
+
+        new_rows = []
+        # Extend backward past the first point, continuing on its own
+        # local tangent (pointing away from the second point).
+        start_seg = xy[1] - xy[0]
+        start_len = np.linalg.norm(start_seg)
+        if start_len > 1e-9:
+            direction = -start_seg / start_len
+            clipped = self._clip_line_to_bounding_box(xy[0], direction)
+            if clipped is not None:
+                _, t_max = clipped
+                if t_max > 0:
+                    point_xy = xy[0] + direction * t_max
+                    z_slope = (z[1] - z[0]) / start_len
+                    new_rows.append(
+                        {
+                            'X': point_xy[0],
+                            'Y': point_xy[1],
+                            'Z': z[0] - z_slope * t_max,
+                            'strike': result['strike'].iloc[0],
+                        }
+                    )
+        # Extend forward past the last point, continuing on its own local
+        # tangent (pointing away from the second-to-last point).
+        end_seg = xy[-1] - xy[-2]
+        end_len = np.linalg.norm(end_seg)
+        if end_len > 1e-9:
+            direction = end_seg / end_len
+            clipped = self._clip_line_to_bounding_box(xy[-1], direction)
+            if clipped is not None:
+                _, t_max = clipped
+                if t_max > 0:
+                    point_xy = xy[-1] + direction * t_max
+                    z_slope = (z[-1] - z[-2]) / end_len
+                    new_rows.append(
+                        {
+                            'X': point_xy[0],
+                            'Y': point_xy[1],
+                            'Z': z[-1] + z_slope * t_max,
+                            'strike': result['strike'].iloc[-1],
+                        }
+                    )
+        if not new_rows:
+            return result
+        return pd.concat([result, pd.DataFrame(new_rows)], ignore_index=True)
+
+    def _domain_fault_dip(self, fault_entry):
+        """Dip (degrees from horizontal) for a domain-boundary fault.
+
+        Uses the ingested fault trace data's `dip` column if present
+        (matching how `update_fault_features` picks up dip for a
+        displacement fault), otherwise defaults to vertical (90 degrees).
+        """
+        raw_data = fault_entry.get('data') if fault_entry else None
+        if raw_data is not None and 'dip' in raw_data:
+            dip_values = raw_data['dip'].dropna()
+            if not dip_values.empty:
+                return float(dip_values.mean())
+        return 90.0
+
+    def _build_domain_fault_boundary(self, fault_name, groupname):
+        """Build `fault_name` as a domain-fault boundary in place of a flat unconformity.
+
+        `GeologicalModel.create_and_add_domain_fault` (unlike
+        `create_and_add_fault`/`create_and_add_foliation`) has no `data=`
+        parameter -- it always reads the fault's points from `model.data`
+        filtered by `feature_name`, so the fault's trace data is registered
+        there first. Registration replaces any rows already tagged with
+        this fault name so repeated Initialize Model runs stay idempotent
+        instead of accumulating duplicate points on every rebuild.
+
+        Returns True if the domain fault was built, False if it fell back
+        to a flat unconformity for lack of trace data (caller should then
+        call `self.model.add_unconformity` itself).
+        """
+        fault_entry = self.faults.get(fault_name)
+        fault_data = fault_entry.get('data') if fault_entry else None
+        if fault_data is None or fault_data.empty:
+            self._debug_manager and self._debug_manager.log(
+                f"Fault '{fault_name}' is linked as a domain boundary for group "
+                f"'{groupname}' but has no trace data; using a flat unconformity instead.",
+                log_level=2,
+            )
+            return False
+        extended = self._extend_fault_trace_to_domain(fault_data[['X', 'Y', 'Z']].copy())
+
+        value_rows = extended[['X', 'Y', 'Z']].copy()
+        value_rows['feature_name'] = fault_name
+        value_rows['val'] = 0
+
+        orientation_rows = extended.dropna(subset=['strike'])[['X', 'Y', 'Z', 'strike']].copy()
+        data_for_fault = value_rows
+        if not orientation_rows.empty:
+            orientation_rows['dip'] = self._domain_fault_dip(fault_entry)
+            orientation_rows['feature_name'] = fault_name
+            orientation_rows['val'] = np.nan
+            data_for_fault = pd.concat([value_rows, orientation_rows], ignore_index=True)
+        # Unlike create_and_add_foliation/create_and_add_fault (which
+        # normalise their own `data=` argument internally via
+        # model.prepare_data before building), create_and_add_domain_fault
+        # reads straight from model.data with no normalisation -- it
+        # expects every standard column (gx/gy/gz/nx/ny/nz/...) to already
+        # be present, or the interpolator crashes looking them up. Run it
+        # through prepare_data ourselves before writing it in.
+        data_for_fault = self.model.prepare_data(data_for_fault, include_feature_name=True)
+        existing_data = self.model.data
+        if existing_data is not None and not existing_data.empty:
+            existing_data = existing_data.loc[existing_data['feature_name'] != fault_name]
+            self.model.data = pd.concat([existing_data, data_for_fault], ignore_index=True)
+        else:
+            # An empty placeholder frame built with `pd.DataFrame(columns=...)`
+            # defaults every column to object dtype; concatenating that with
+            # `data_for_fault`'s float columns can leave the result as
+            # object dtype too, and `add_data_to_interpolator` then fails
+            # calling `np.isnan` on an object-dtype column. Assign directly
+            # instead of concatenating with a dtype-less placeholder.
+            self.model.data = data_for_fault
+        self.model.create_and_add_domain_fault(
+            fault_name,
+            nelements=PlgSettingsStructure.interpolator_nelements,
+            npw=PlgSettingsStructure.interpolator_npw,
+            cpw=PlgSettingsStructure.interpolator_cpw,
+            regularisation=PlgSettingsStructure.interpolator_regularisation,
+        )
+        return True
+
     def update_foliation_features(self):
         """Builds the stratigraphic feature from the stratigraphic column data
         and the basal contacts and structural orientations data.
@@ -550,6 +787,29 @@ class GeologicalModelManager(Observable):
             groupname = group.name
             stratigraphic_column[groupname] = {}
             for u in group.units:
+                # A unit's own `val` is `u.min()` -- the cumulative
+                # thickness *before* this unit's own thickness is added --
+                # matching `StratigraphicColumn.update_unit_values` (a unit
+                # is only added to the column oldest-first via `where=
+                # 'top'`, so `min()` is the boundary shared with the
+                # next-*older* neighbour processed just before it, i.e.
+                # this unit's own base) and `get_isovalues()` (LoopStructural
+                # core). `group.units` (from `get_groups()`) is already in
+                # that oldest-after-youngest walk order, and `get_isovalues()`
+                # accumulates over it directly with no extra reversal, so
+                # this loop must not reverse it either -- doing so trains
+                # each unit with the wrong scalar value, see
+                # test_stratigraphic_value_consistency.py.
+                #
+                # `val` must accumulate every unit's thickness regardless of
+                # whether that unit has any digitised data -- get_isovalues()
+                # assigns each unit's isovalue purely from cumulative
+                # thickness, with no knowledge of which units were actually
+                # mapped. Skipping the increment for an unmapped unit (e.g.
+                # a "Top" placeholder with no contact points) would shift
+                # every val assigned to units after it in this loop, so
+                # extracted isosurfaces would get labelled with the wrong
+                # unit name even though the geometry itself is fine.
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is not None:
                     if 'contact' in unit_data:
@@ -581,10 +841,50 @@ class GeologicalModelManager(Observable):
                 cpw=PlgSettingsStructure.interpolator_cpw,
                 regularisation=PlgSettingsStructure.interpolator_regularisation,
             )
-            self.model.add_unconformity(foliation, 0)
+            fault_name = self._closing_fault_boundary(group)
+            if fault_name is None or not self._build_domain_fault_boundary(fault_name, groupname):
+                self.model.add_unconformity(foliation, 0)
+        self._strip_spurious_regions_from_domain_faults()
         self.model.stratigraphic_column = self.stratigraphic_column
         # foliation features were rebuilt; let observers know
         self._emit('foliation_features_updated')
+
+    def _strip_spurious_regions_from_domain_faults(self):
+        """Work around a LoopStructural core gap that corrupts a domain
+        fault's own scalar field.
+
+        `add_unconformity`'s backward crop walk (in LoopStructural's
+        `_model_relationships.FeatureRelationshipManager.add_unconformity`)
+        only recognises `FeatureType.FAULT`/`INACTIVEFAULT` as "already
+        handled, skip" -- it doesn't know about `FeatureType.DOMAINFAULT`.
+        So whenever a later group in the same Initialize Model run falls
+        back to a plain `add_unconformity` (no fault linked to its
+        boundary), that call walks straight through any domain-boundary
+        fault built earlier and incorrectly adds itself as a region on it.
+        Since `GeologicalFeature.evaluate_value` returns NaN wherever a
+        feature's regions don't hold, the domain fault's own field then
+        reads as NaN on whichever side that unrelated unconformity's
+        condition fails -- "NaN on one side" of an otherwise valid domain
+        boundary.
+
+        A domain fault is meant to crop other features, not be cropped
+        itself -- except by an *earlier* domain fault, which is a
+        legitimate, intentional cascade (`_add_domain_fault_above` adds
+        that as a plain lambda region, not an `UnconformityFeature`). So
+        strip only the `UnconformityFeature`-typed regions injected by the
+        bug, leaving any real domain-fault-vs-domain-fault crop intact.
+        """
+        for feature in self.model.features:
+            if getattr(feature, 'type', None) != FeatureType.DOMAINFAULT:
+                continue
+            kept = [r for r in feature.regions if not isinstance(r, UnconformityFeature)]
+            if len(kept) != len(feature.regions):
+                self._debug_manager and self._debug_manager.log(
+                    f"Removing {len(feature.regions) - len(kept)} unconformity region(s) "
+                    f"incorrectly applied to domain-boundary fault '{feature.name}'.",
+                    log_level=2,
+                )
+                feature.regions = kept
 
     def _report_progress(self, message: str):
         """Report progress on a long-running model update.
@@ -683,7 +983,13 @@ class GeologicalModelManager(Observable):
 
     def update_fault_features(self):
         """Update the fault features in the geological model."""
+        domain_boundary_faults = set(self.fault_boundaries.values())
         for fault_name in self._fault_build_order():
+            if fault_name in domain_boundary_faults:
+                # Built as a non-displacing domain fault in
+                # update_foliation_features instead -- see
+                # `_build_domain_fault_boundary`.
+                continue
             fault_data = self.faults[fault_name]
             self._report_progress(f"Building fault '{fault_name}'")
             if qgisAttributeIsNone(fault_name):
@@ -734,6 +1040,19 @@ class GeologicalModelManager(Observable):
                 )
         self.apply_fault_abutting_relationships()
 
+    def _get_feature_by_name_or_none(self, name):
+        """Non-raising counterpart to `GeologicalModel.get_feature_by_name`.
+
+        The wrapped `GeologicalModel` raises `ValueError` for a name that
+        hasn't been built yet rather than returning None, which several
+        call sites in this manager treat as "not built yet, skip it" --
+        `__contains__` (`name in self.model`) checks `feature_name_index`
+        directly, so this restores that non-raising lookup.
+        """
+        if name not in self.model:
+            return None
+        return self.model.get_feature_by_name(name)
+
     def apply_fault_abutting_relationships(self):
         """Re-apply fault-fault ABUTTING relationships as region crops on the
         already-built fault surfaces, for every pair currently in the topology.
@@ -754,20 +1073,30 @@ class GeologicalModelManager(Observable):
         """
         if self.fault_topology is None:
             return
+        # Domain-boundary faults (see `_build_domain_fault_boundary`) are
+        # non-displacing GeologicalFeatures, not FaultSegments, and are only
+        # built later in `update_foliation_features` -- calling this before
+        # that has run would look up a feature that doesn't exist yet.
+        # ABUTTING relationships don't apply to them either way (that's a
+        # FaultSegment-specific crop), matching their exclusion from the
+        # Fault Adjacency tab.
+        domain_boundary_faults = set(self.fault_boundaries.values())
         for f in self.fault_topology.faults:
-            fault_feature = self.model.get_feature_by_name(f)
+            if f in domain_boundary_faults:
+                continue
+            fault_feature = self._get_feature_by_name_or_none(f)
             if fault_feature is None or not hasattr(fault_feature, 'abut'):
                 continue
             coord0 = fault_feature.__getitem__(0)
             for f2 in self.fault_topology.faults:
-                if f == f2:
+                if f == f2 or f2 in domain_boundary_faults:
                     continue
                 relationship = self.fault_topology.get_fault_relationship(f, f2)
                 existing_region = fault_feature.abut.get(f2)
                 if relationship is FaultRelationshipType.ABUTTING:
                     if existing_region is not None:
                         continue  # already cropped against f2
-                    f2_feature = self.model.get_feature_by_name(f2)
+                    f2_feature = self._get_feature_by_name_or_none(f2)
                     if f2_feature is None:
                         continue
                     # Determine which side of f2 to keep ourselves, ignoring any
@@ -911,7 +1240,8 @@ class GeologicalModelManager(Observable):
             len(self.stratigraphic_column.get_groups()) if self.stratigraphic_column else 0
         )
         self._progress_callback = progress_callback
-        self._progress_total = len(self.faults) + group_count
+        displacement_fault_count = len(set(self.faults) - set(self.fault_boundaries.values()))
+        self._progress_total = displacement_fault_count + group_count
         self._progress_current = 0
         dbg = getattr(self, '_debug_manager', None)
         if dbg is not None:

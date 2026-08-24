@@ -232,7 +232,11 @@ class StratColumnWidget(QWidget):
                         widget, _ = self._widget_cache[unit.uuid]
                         # Update widget data without rebuilding
                         if hasattr(widget, 'setData'):
-                            widget.setData(unit.to_dict())
+                            unit_data = unit.to_dict()
+                            if isinstance(widget, UnconformityWidget):
+                                unit_data = self._enrich_unconformity_data(unit_data)
+                                widget.set_available_faults(self._get_available_fault_names())
+                            widget.setData(unit_data)
                 return
 
             # If order/content differs, do a full rebuild
@@ -263,7 +267,31 @@ class StratColumnWidget(QWidget):
             if unit.element_type == StratigraphicColumnElementType.UNIT:
                 self.add_unit(unit_data=unit.to_dict(), create_new=False)
             elif unit.element_type == StratigraphicColumnElementType.UNCONFORMITY:
-                self.add_unconformity(unconformity_data=unit.to_dict(), create_new=False)
+                self.add_unconformity(
+                    unconformity_data=self._enrich_unconformity_data(unit.to_dict()),
+                    create_new=False,
+                )
+
+    def _enrich_unconformity_data(self, unconformity_data):
+        """Merge in the plugin-side fault-boundary link for an unconformity row.
+
+        `StratigraphicUnconformity.to_dict()` (core) only knows `erode`/
+        `onlap`; the fault link is tracked separately in the data manager
+        (see `ModellingDataManager.set_fault_boundary`), so it has to be
+        folded in here for display.
+        """
+        fault_name = self.data_manager.get_fault_boundary(unconformity_data.get('uuid'))
+        if fault_name:
+            unconformity_data = dict(unconformity_data)
+            unconformity_data['unconformity_type'] = 'fault'
+            unconformity_data['fault_name'] = fault_name
+        return unconformity_data
+
+    def _get_available_fault_names(self):
+        """Fault names offered when marking an unconformity as a domain boundary."""
+        if not self.data_manager:
+            return []
+        return list(self.data_manager._fault_topology.faults)
 
     def init_stratigraphic_column_from_basal_contacts(self):
         if self.data_manager:
@@ -482,11 +510,13 @@ class StratColumnWidget(QWidget):
             widget, _ = self._widget_cache[unconformity.uuid]
             # Just update the data, don't recreate the widget
             if hasattr(widget, 'setData'):
+                widget.set_available_faults(self._get_available_fault_names())
                 widget.setData(unconformity_data)
             return
 
         unconformity_widget = UnconformityWidget(uuid=unconformity.uuid)
         unconformity_widget.deleteRequested.connect(self.delete_unit)
+        unconformity_widget.dataChanged.connect(lambda: self.update_element(unconformity_widget))
         unconformity_widget.dragHandlePressed.connect(
             lambda: self._on_drag_start(unconformity_widget)
         )
@@ -500,6 +530,8 @@ class StratColumnWidget(QWidget):
         item.setSizeHint(unconformity_widget.sizeHint())
         self.unitList.addItem(item)
         self.unitList.setItemWidget(item, unconformity_widget)
+        unconformity_widget.set_available_faults(self._get_available_fault_names())
+        unconformity_widget.setData(unconformity_data)
 
         # Cache the widget for efficient updates
         self._widget_cache[unconformity.uuid] = (unconformity_widget, item)
@@ -605,6 +637,30 @@ class StratColumnWidget(QWidget):
         """
         if self.data_manager:
             unit_data = unit_widget.getData()
+            if isinstance(unit_widget, UnconformityWidget):
+                fault_name = unit_data.pop('fault_name', None)
+                is_fault_boundary = unit_data.get('unconformity_type') == 'fault'
+                if is_fault_boundary:
+                    # The core stratigraphic column only knows erode/onlap --
+                    # the fault link lives in the data manager's side table
+                    # (see set_fault_boundary), so store it as a plain
+                    # erosional boundary here.
+                    unit_data['unconformity_type'] = 'erode'
+                if is_fault_boundary and fault_name:
+                    self.data_manager.set_fault_boundary(unit_widget.uuid, fault_name)
+                    if not self.data_manager.fault_spans_model_domain(fault_name):
+                        QMessageBox.information(
+                            self,
+                            "Fault Domain Boundary",
+                            f"Fault '{fault_name}' does not reach every edge of the model "
+                            "bounding box.\n\nA fault used as a domain boundary crops the "
+                            "whole model, so its digitised trace will automatically be "
+                            "extended out to the domain edges along its overall trend when "
+                            "the model is built. For best results the trace should still "
+                            "roughly follow the fault's real direction across the gap.",
+                        )
+                else:
+                    self.data_manager.clear_fault_boundary(unit_widget.uuid)
             self.data_manager._stratigraphic_column.update_element(unit_data)
             # Trigger callback to notify all listeners of the change
             if self.data_manager.stratigraphic_column_callback:

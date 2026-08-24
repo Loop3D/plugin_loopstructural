@@ -20,6 +20,7 @@ from ....main.model_manager import ModelSolveCancelled
 from .add_foliation_dialog import AddFoliationDialog
 from .add_unconformity_dialog import AddUnconformityDialog
 from .feature_details_panel import (
+    BaseFeatureDetailsPanel,
     FaultFeatureDetailsPanel,
     FoldedFeatureDetailsPanel,
     FoliationFeatureDetailsPanel,
@@ -459,6 +460,17 @@ class GeologicalModelTab(QWidget):
             )
         elif feature.type == FeatureType.FOLDED:
             self.featureDetailsPanel = FoldedFeatureDetailsPanel(
+                feature=feature, model_manager=self.model_manager, data_manager=self.data_manager
+            )
+        elif feature.type == FeatureType.DOMAINFAULT:
+            # A domain fault is built by the same GeologicalFeatureBuilder
+            # as a foliation (see create_and_add_domain_fault), just with a
+            # different .type tag -- the generic base panel (interpolator
+            # settings, data layers, export/evaluate) already applies to it
+            # unchanged. Skip FoliationFeatureDetailsPanel's fold-frame
+            # attachment controls, which don't make sense for a domain
+            # boundary.
+            self.featureDetailsPanel = BaseFeatureDetailsPanel(
                 feature=feature, model_manager=self.model_manager, data_manager=self.data_manager
             )
         else:

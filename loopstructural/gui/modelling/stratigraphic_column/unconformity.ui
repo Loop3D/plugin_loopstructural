@@ -61,12 +61,27 @@
        <string>onlap</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>fault</string>
+      </property>
+     </item>
     </widget>
    </item>
    <item row="0" column="1">
     <widget class="QLabel" name="labelName">
      <property name="text">
       <string>Type</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1" colspan="2">
+    <widget class="QComboBox" name="comboBoxFaultName">
+     <property name="toolTip">
+      <string>Fault whose surface realises this boundary as a domain split</string>
+     </property>
+     <property name="visible">
+      <bool>false</bool>
      </property>
     </widget>
    </item>
