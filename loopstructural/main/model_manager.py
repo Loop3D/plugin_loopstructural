@@ -786,7 +786,7 @@ class GeologicalModelManager(Observable):
             data = []
             groupname = group.name
             stratigraphic_column[groupname] = {}
-            for u in reversed(group.units):
+            for u in group.units:
                 # A unit's own `val` is `u.min()` -- the cumulative
                 # thickness *before* this unit's own thickness is added --
                 # matching `StratigraphicColumn.update_unit_values` (a unit
@@ -794,10 +794,12 @@ class GeologicalModelManager(Observable):
                 # 'top'`, so `min()` is the boundary shared with the
                 # next-*older* neighbour processed just before it, i.e.
                 # this unit's own base) and `get_isovalues()` (LoopStructural
-                # core; both walk `reversed(group.units)` accumulating the
-                # same way, so a unit's own training value and the isovalue
-                # `get_isovalues()` later labels with this unit's name
-                # agree -- see test_stratigraphic_value_consistency.py).
+                # core). `group.units` (from `get_groups()`) is already in
+                # that oldest-after-youngest walk order, and `get_isovalues()`
+                # accumulates over it directly with no extra reversal, so
+                # this loop must not reverse it either -- doing so trains
+                # each unit with the wrong scalar value, see
+                # test_stratigraphic_value_consistency.py.
                 #
                 # `val` must accumulate every unit's thickness regardless of
                 # whether that unit has any digitised data -- get_isovalues()
