@@ -6,6 +6,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -21,6 +22,7 @@ from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
 from loopstructural.main.helpers import ColumnMatcher, get_layer_names
 
+from .init_from_field_dialog import InitFromLayerFieldDialog
 from .stratigraphic_unit import StratigraphicUnitWidget
 
 
@@ -87,6 +89,16 @@ class StratColumnWidget(QWidget):
             self.init_stratigraphic_column_from_basal_contacts
         )
 
+        initFromLayerFieldButton = self._make_tool_button(
+            "mIconFieldText.svg", "Initialise from Layer Field"
+        )
+        initFromLayerFieldButton.setToolTip(
+            "Initialise from Layer Field\n"
+            "Pick a polygon layer and a field, and add a unit for each unique "
+            "value found in that field."
+        )
+        initFromLayerFieldButton.clicked.connect(self.init_stratigraphic_column_from_layer_field)
+
         clearButton = self._make_tool_button(
             "mActionDeleteSelected.svg", "Clear Stratigraphic Column"
         )
@@ -96,6 +108,7 @@ class StratColumnWidget(QWidget):
         actionsRow.addWidget(addUnitButton)
         actionsRow.addWidget(addUnconformityButton)
         actionsRow.addWidget(initFromBasalContactsButton)
+        actionsRow.addWidget(initFromLayerFieldButton)
         actionsRow.addWidget(clearButton)
         actionsRow.addStretch(1)
         layout.addLayout(actionsRow)
@@ -299,6 +312,26 @@ class StratColumnWidget(QWidget):
             self.update_display()
         else:
             print("Error: Data manager is not initialized.")
+
+    def init_stratigraphic_column_from_layer_field(self):
+        if not self.data_manager:
+            print("Error: Data manager is not initialized.")
+            return
+        dialog = InitFromLayerFieldDialog(self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        layer = dialog.selected_layer()
+        field_name = dialog.selected_field()
+        applied = self.data_manager.init_stratigraphic_column_from_layer_field(layer, field_name)
+        if applied:
+            self.update_display()
+        else:
+            QMessageBox.warning(
+                self,
+                "Initialise from Layer Field",
+                f"Could not initialise the stratigraphic column. No values were found in "
+                f"field '{field_name}'.",
+            )
 
     def _guess_units_layer(self):
         """Attempt to auto-select the geological units layer and unit name field."""

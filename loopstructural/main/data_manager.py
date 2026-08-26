@@ -409,6 +409,49 @@ class ModellingDataManager:
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
+    def init_stratigraphic_column_from_layer_field(self, layer, field_name):
+        """Initialise the stratigraphic column from the unique values of a
+        field on a polygon layer.
+
+        Parameters
+        ----------
+        layer : QgsVectorLayer
+            The layer to read unit names from.
+        field_name : str
+            Name of the field on ``layer`` holding the stratigraphic unit name.
+
+        Returns
+        -------
+        bool
+            True if any units were found and added, False otherwise.
+        """
+        if layer is None or not field_name:
+            self.logger(message="No layer/field set, cannot initialise stratigraphic column.")
+            return False
+
+        unique_names = []
+        for feature in layer.getFeatures():
+            value = feature[field_name]
+            if value is None or (hasattr(value, 'isNull') and value.isNull()):
+                continue
+            text = str(value).strip()
+            if text and text not in unique_names:
+                unique_names.append(text)
+
+        if not unique_names:
+            self.logger(
+                message=f"No values found in field '{field_name}' on layer '{layer.name()}'."
+            )
+            return False
+
+        for unit_name in unique_names:
+            if not self._stratigraphic_column.get_unit_by_name(name=unit_name):
+                self._stratigraphic_column.add_unit(name=unit_name, colour=None)
+        self.update_stratigraphy()
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
+        return True
+
     def apply_stratigraphic_colours_to_layer(self, layer, field_name):
         """Push the stratigraphic column's unit colours onto a map layer.
 
