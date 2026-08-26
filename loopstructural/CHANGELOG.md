@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.2.0...v0.3.0) (2026-08-26)
+
+
+### Features
+
+* colour basal contacts by stratigraphic unit ([bade472](https://github.com/Loop3D/plugin_loopstructural/commit/bade472126b95c98b42fc05cc006d7857e96baa0))
+
+
+### Bug Fixes
+
+* guard against deleted QGIS layers and empty fault traces ([a02dffb](https://github.com/Loop3D/plugin_loopstructural/commit/a02dffbb87f780212b1ea8767b2203127bfabbe2))
+* initialise stratigraphic column from the geological units layer ([57e4b37](https://github.com/Loop3D/plugin_loopstructural/commit/57e4b3798262ec2f4f9e39ae14f05b92909c72c2))
+* stop auto-solving features when interpolator params change ([888d786](https://github.com/Loop3D/plugin_loopstructural/commit/888d7863eece4f45de7961d81f629d22ed7fe3c6))
+
 ## [0.2.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.1.13...v0.2.0) (2026-08-24)
 
 
