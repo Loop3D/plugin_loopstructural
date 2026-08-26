@@ -1,7 +1,7 @@
 from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip
 from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
-from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -97,13 +97,6 @@ class BaseFeatureDetailsPanel(QWidget):
 
         # Set the main layout
         self.setLayout(mainLayout)
-
-        # Debounce timer for rebuilds: schedule a single rebuild after user stops
-        # interacting for a short interval to avoid repeated expensive builds.
-        self._rebuild_timer = QTimer(self)
-        self._rebuild_timer.setSingleShot(True)
-        self._rebuild_timer.setInterval(500)  # milliseconds; adjust as desired
-        self._rebuild_timer.timeout.connect(self._perform_rebuild)
 
         ## define interpolator parameters
         # Regularisation spin box
@@ -727,19 +720,18 @@ class BaseFeatureDetailsPanel(QWidget):
         mem_layer.updateExtents()
         QgsProject.instance().addMapLayer(mem_layer)
 
-    def schedule_rebuild(self, delay_ms: int = 500):
-        """Schedule a debounced rebuild of the current feature.
-
-        Multiple calls will reset the timer so only a single rebuild occurs
-        after user activity has settled.
+    def schedule_rebuild(self):
+        """Flag the current feature as not up to date, without solving it.
 
         Callers are expected to have already flagged the feature's builder as
         not up to date (either via `update_build_arguments`, which does this
         itself, or by calling `builder.set_not_up_to_date(...)` directly).
-        This notifies observers immediately -- on the GUI thread, since this
-        is only ever called from a widget's valueChanged handler -- so the
-        feature list's tick flips to "not built" right away instead of
-        lagging behind by `delay_ms` until the rebuild actually runs.
+        This just notifies observers -- on the GUI thread, since this is only
+        ever called from a widget's valueChanged handler -- so the feature
+        list's tick flips to "not built" right away. It deliberately does not
+        trigger an actual rebuild/solve: that stays a user-initiated action
+        (e.g. the "Solve Model" button), since re-solving can be expensive and
+        the user may still be adjusting other parameters.
         """
         if self.model_manager is not None:
             try:
@@ -750,22 +742,4 @@ class BaseFeatureDetailsPanel(QWidget):
                         obs()
                     except Exception:
                         pass
-        try:
-            if self._rebuild_timer is None:
-                return
-            self._rebuild_timer.stop()
-            self._rebuild_timer.setInterval(delay_ms)
-            self._rebuild_timer.start()
-        except Exception:
-            logger.debug('Failed to schedule debounced rebuild', exc_info=True)
 
-    def _perform_rebuild(self):
-        """Perform the actual build operation when the debounce timer fires."""
-        try:
-            if not hasattr(self, 'feature') or self.feature is None:
-                return
-            # StructuralFrame consists of three sub-features
-            self.model_manager.update_feature(self.feature.name)
-
-        except Exception:
-            logger.debug('Debounced rebuild failed', exc_info=True)
