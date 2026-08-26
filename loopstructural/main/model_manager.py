@@ -94,6 +94,8 @@ class AllSampler:
                     {'X': coords[0], 'Y': coords[1], 'Z': z, 'feature_id': feature_id, **attributes}
                 )
             feature_id += 1
+        if not points:
+            return pd.DataFrame(points, columns=['X', 'Y', 'Z', 'feature_id'])
         df = pd.DataFrame(points)
         return df
 

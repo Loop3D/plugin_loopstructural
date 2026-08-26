@@ -1099,15 +1099,31 @@ class ModellingDataManager:
 
         # Replace layer objects with layer names
         if basal_contacts and 'layer' in basal_contacts and basal_contacts['layer'] is not None:
-            basal_contacts['layer'] = basal_contacts['layer'].name()
+            try:
+                basal_contacts['layer'] = basal_contacts['layer'].name()
+            except RuntimeError as e:
+                self.logger(message=f"Error getting basal contacts layer name: {e}", log_level=2)
+                basal_contacts['layer'] = None
         if fault_traces and 'layer' in fault_traces and fault_traces['layer'] is not None:
-            fault_traces['layer'] = fault_traces['layer'].name()
+            try:
+                fault_traces['layer'] = fault_traces['layer'].name()
+            except RuntimeError as e:
+                self.logger(message=f"Error getting fault traces layer name: {e}", log_level=2)
+                fault_traces['layer'] = None
         if (
             structural_orientations
             and 'layer' in structural_orientations
             and structural_orientations['layer'] is not None
         ):
-            structural_orientations['layer'] = structural_orientations['layer'].name()
+            try:
+                structural_orientations['layer'] = structural_orientations['layer'].name()
+            except RuntimeError as e:
+                self.logger(
+                    message=f"Error getting structural orientations layer name: {e}",
+                    log_level=2,
+                )
+                structural_orientations['layer'] = None
+        dem_layer_name = None
         if self.dem_layer is not None:
             try:
                 dem_layer_name = self.dem_layer.name()
