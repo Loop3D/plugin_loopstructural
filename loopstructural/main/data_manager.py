@@ -17,6 +17,7 @@ from qgis.core import (
     QgsStyle,
     QgsSymbol,
     QgsVectorLayer,
+    QgsWkbTypes,
 )
 from qgis.PyQt.QtGui import QColor
 
@@ -481,6 +482,11 @@ class ModellingDataManager:
             if unit.element_type != StratigraphicColumnElementType.UNIT:
                 continue
             symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            if layer.geometryType() == QgsWkbTypes.LineGeometry:
+                # default line symbols are thin (~0.26mm) and hard to tell
+                # apart by colour at a glance -- widen so per-unit basal
+                # contact colours are easy to distinguish on the map canvas.
+                symbol.setWidth(0.8)
             qcolour = _colour_to_qcolor(unit.colour)
             if qcolour is not None:
                 symbol.setColor(qcolour)
@@ -579,6 +585,23 @@ class ModellingDataManager:
             if u.element_type == StratigraphicColumnElementType.UNIT:
                 units.append(u.name)
         return units
+
+    def get_stratigraphic_unit_colours(self):
+        """Get a mapping of stratigraphic unit name to its assigned colour.
+
+        Colours are normalised to hex strings (e.g. '#89cebc'). The
+        stratigraphic column stores unit colours in whatever form
+        LoopStructural gives them (often an RGB float triple in [0, 1]
+        rather than a hex string); writing that raw value into a layer
+        attribute breaks QGIS's memory provider, which rejects the whole
+        addFeatures() batch when a list is stored in a string field.
+        """
+        colours = {}
+        for u in self._stratigraphic_column.order:
+            if u.element_type == StratigraphicColumnElementType.UNIT:
+                qcolour = _colour_to_qcolor(u.colour)
+                colours[u.name] = qcolour.name() if qcolour is not None else None
+        return colours
 
     def add_to_stratigraphic_column(self, unit_data):
         """Add a unit or unconformity to the stratigraphic column."""

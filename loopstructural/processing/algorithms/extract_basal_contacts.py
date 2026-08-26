@@ -134,15 +134,23 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
         strati_column = self.parameterAsSource(parameters, self.INPUT_STRATI_COLUMN, context)
         # ensure we always have a stratigraphic order list defined
         strati_order = []
+        unit_colours = None
         ignore_units = self.parameterAsMatrix(parameters, self.INPUT_IGNORE_UNITS, context)
 
         if isinstance(strati_column, QgsProcessingParameterMapLayer):
             raise QgsProcessingException("Invalid stratigraphic column layer")
 
         elif strati_column is not None:
-            # extract unit names from strati_column
+            # extract unit names (and colours, if present) from strati_column
             field_name = "unit_name"
-            strati_order = [f[field_name] for f in strati_column.getFeatures()]
+            has_colour_field = "colour" in [f.name() for f in strati_column.fields()]
+            strati_order = []
+            unit_colours = {} if has_colour_field else None
+            for f in strati_column.getFeatures():
+                unit_name = f[field_name]
+                strati_order.append(unit_name)
+                if has_colour_field:
+                    unit_colours[unit_name] = f["colour"]
 
         if not ignore_units or all(
             isinstance(unit, str) and not unit.strip() for unit in ignore_units
@@ -164,6 +172,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
             all_contacts=True,
             updater=feedback.pushInfo,
             target_crs=geology.crs() if geology else None,
+            unit_colours=unit_colours,
         )
         basal_contacts = result['basal_contacts']
         all_contacts = result['all_contacts']

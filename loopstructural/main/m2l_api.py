@@ -45,6 +45,7 @@ def extract_basal_contacts(
     updater=None,
     debug_manager=None,
     target_crs=None,
+    unit_colours=None,
 ):
     """Extract basal contacts from geological data.
 
@@ -69,6 +70,10 @@ def extract_basal_contacts(
         the two layers line up spatially. If None, geology and faults keep
         their own source CRS, which silently produces wrong (often empty)
         results whenever the two layers were digitised in different CRSs.
+    unit_colours : dict, optional
+        Mapping of unit name to colour. When given, a 'colour' column is
+        added to the returned basal contacts, looked up by the 'basal_unit'
+        each contact was extracted for.
 
     Returns
     -------
@@ -160,6 +165,11 @@ def extract_basal_contacts(
         basal_contacts = basal_contacts[
             ~basal_contacts['basal_unit'].astype(str).str.strip().isin(ignore_units)
         ].reset_index(drop=True)
+    if unit_colours and basal_contacts.empty is False and 'basal_unit' in basal_contacts.columns:
+        colours_by_name = {str(name).strip(): colour for name, colour in unit_colours.items()}
+        basal_contacts['colour'] = basal_contacts['basal_unit'].astype(str).str.strip().map(
+            colours_by_name
+        )
     if all_contacts:
         return {'basal_contacts': basal_contacts, 'all_contacts': all_contacts_result}
     return {'basal_contacts': basal_contacts}

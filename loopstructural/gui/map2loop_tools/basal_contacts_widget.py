@@ -259,7 +259,11 @@ class BasalContactsWidget(QWidget):
                 addGeoDataFrameToproject(result['all_contacts'], "All contacts")
                 contact_type = "all contacts and basal contacts"
             elif not all_contacts and result['basal_contacts'].empty is False:
-                addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
+                basal_layer = addGeoDataFrameToproject(result['basal_contacts'], "Basal contacts")
+                if self.data_manager:
+                    self.data_manager.apply_stratigraphic_colours_to_layer(
+                        basal_layer, 'basal_unit'
+                    )
             else:
                 QMessageBox.information(
                     self,
@@ -368,6 +372,9 @@ class BasalContactsWidget(QWidget):
         stratigraphic_order = (
             self.data_manager.get_stratigraphic_unit_names() if self.data_manager else []
         )
+        unit_colours = (
+            self.data_manager.get_stratigraphic_unit_colours() if self.data_manager else {}
+        )
         all_contacts = self.allContactsCheckBox.isChecked()
         target_crs = self.data_manager.get_model_crs() if self.data_manager else None
         if target_crs is None or not target_crs.isValid():
@@ -415,6 +422,7 @@ class BasalContactsWidget(QWidget):
                 updater=progress_callback,
                 debug_manager=self._debug,
                 target_crs=target_crs,
+                unit_colours=unit_colours,
             )
             return result, all_contacts
 
