@@ -1,9 +1,8 @@
 pyvistaqt
 pyvista
-LoopStructural~=1.7.0
+LoopStructural~=1.8.0
 pyqtgraph
 loopsolver
 geopandas
-numpy==1.26.4
 map2loop~=3.3.1
-LoopDataConverter==0.3.0
+LoopDataConverter==0.3.0    
