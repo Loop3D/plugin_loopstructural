@@ -6,14 +6,31 @@ each unit's basal contact before handing the data to the interpolator.
 name to stamp on each extracted isosurface, using its own idea of which
 value belongs to which unit.
 
-These two must agree on direction (does value increase from oldest-to-
-youngest, or youngest-to-oldest?), or every extracted surface gets labelled
-with the wrong unit while keeping correct geometry -- see the "stratigraphic
-column was reversed" fixes in model_manager.py (2025-07-21) and the widget
-(2025-08-21, reverted 2025-09-08). This has flipped back and forth as this
-plugin and LoopStructural evolved independently; this test pins the
-invariant so a future change on either side fails loudly here instead of
-silently inverting a user's model.
+Both walk `reversed(group.units)`, accumulating cumulative thickness the
+same way, so a unit's own training value must equal `u.min()` -- the
+cumulative thickness *before* that unit's own thickness is added. This is
+also each unit's true base: `add_unit(..., where='top')` (the default)
+appends to the end of the column, so building a column correctly means
+adding the truly oldest unit first and progressively younger ones after --
+each unit's own base is the boundary shared with the next-older neighbour
+processed just before it, i.e. `min()`. See LoopStructural's own
+`test_get_isovalues_multi_unit_group` (`tests/unit/modelling/
+test_stratigraphic_column.py`), whose comment states this explicitly: "the
+base of the oldest unit in a group is 0".
+
+If training and `get_isovalues()` disagree on this, every extracted surface
+gets labelled with the wrong unit while keeping correct geometry -- see the
+"stratigraphic column was reversed" fixes in model_manager.py (2025-07-21)
+and the widget (2025-08-21, reverted 2025-09-08). This has flipped back and
+forth as this plugin and LoopStructural evolved independently; this test
+pins the invariant so a future change on either side fails loudly here
+instead of silently inverting a user's model.
+
+Note this is a separate concern from whether a stratigraphic column's units
+were themselves *added* in the correct oldest-to-youngest order -- if they
+weren't, `min()`/`max()` stop corresponding to true geological base/top no
+matter what training does, and the fix is to reorder the column's units,
+not to change which value training uses.
 """
 
 import pandas as pd
@@ -61,9 +78,7 @@ class TestTrainingValueMatchesIsovalue:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = {
-            name: entry['value'] for name, entry in column.get_isovalues().items()
-        }
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('oldest', 'middle', 'youngest'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name]), (
@@ -89,12 +104,43 @@ class TestTrainingValueMatchesIsovalue:
         manager.update_foliation_features()
 
         training_values = self._training_values_by_unit(manager._captured_calls)
-        expected_values = {
-            name: entry['value'] for name, entry in column.get_isovalues().items()
-        }
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
 
         for unit_name in ('basin_floor', 'basin_fill', 'cover_lower', 'cover_upper'):
             assert training_values[unit_name] == pytest.approx(expected_values[unit_name])
+
+    def test_undigitised_unit_does_not_shift_later_units_in_group(self, manager):
+        """Regression test for a real bug: a unit with no digitised contact
+        or orientation data (e.g. a "Top" unit nobody has mapped points for)
+        must still contribute its own thickness to `val` for every unit
+        that follows it in the group -- `update_foliation_features` used to
+        `continue` past an undigitised unit before accumulating its
+        thickness, which shifted every later unit's trained value relative
+        to what `get_isovalues()` expects.
+        """
+        column = StratigraphicColumn()
+        column.clear(basement=False)
+        column.add_unit(name='basin_floor', thickness=50.0, where='top')
+        column.add_unit(name='basin_fill', thickness=150.0, where='top')
+        column.add_unit(name='Top', thickness=999.0, where='top')
+
+        manager.stratigraphic_column = column
+        for name in ('basin_floor', 'basin_fill'):
+            manager.stratigraphy[name]['contact'] = _contact(name)
+        # 'Top' deliberately has no entry in manager.stratigraphy at all.
+
+        manager.update_foliation_features()
+
+        training_values = self._training_values_by_unit(manager._captured_calls)
+        expected_values = {name: entry['value'] for name, entry in column.get_isovalues().items()}
+
+        for unit_name in ('basin_floor', 'basin_fill'):
+            assert training_values[unit_name] == pytest.approx(expected_values[unit_name]), (
+                f"'{unit_name}' was trained with val={training_values[unit_name]} but "
+                f"get_isovalues() expects value={expected_values[unit_name]} -- an "
+                f"undigitised unit earlier in the group must still shift later units' "
+                f"trained values by its own thickness."
+            )
 
     @staticmethod
     def _training_values_by_unit(captured_calls):

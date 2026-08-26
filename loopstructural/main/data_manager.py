@@ -89,6 +89,13 @@ class ModellingDataManager:
         self.logger = logger
         self._stratigraphic_column = StratigraphicColumn()
         self._fault_topology = FaultTopology(self._stratigraphic_column)
+        # Maps a stratigraphic-column unconformity's uuid to the name of an
+        # existing fault that should realise that boundary, instead of a
+        # flat isovalue surface -- see `set_fault_boundary`. Kept as a plain
+        # dict (not part of `StratigraphicColumn` itself) so this stays a
+        # plugin-side concept for now; passed by reference to the model
+        # manager the same way `_stratigraphic_column`/`_fault_topology` are.
+        self._fault_boundaries: dict[str, str] = {}
         self._model_manager = None
         self.bounding_box_callback = None
         self.basal_contacts_callback = None
@@ -137,6 +144,7 @@ class ModellingDataManager:
         self._model_manager = model_manager
         self._model_manager.set_stratigraphic_column(self._stratigraphic_column)
         self._model_manager.set_fault_topology(self._fault_topology)
+        self._model_manager.set_fault_boundaries(self._fault_boundaries)
         self._model_manager.update_bounding_box(self._bounding_box)
 
     def set_bounding_box(
@@ -557,9 +565,102 @@ class ModellingDataManager:
     def remove_from_stratigraphic_column(self, unit_uuid):
         """Remove a unit or unconformity from the stratigraphic column."""
         self._stratigraphic_column.remove_unit(uuid=unit_uuid)
+        self._fault_boundaries.pop(unit_uuid, None)
         self.update_stratigraphy()
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
+
+    def set_fault_boundary(self, unconformity_uuid, fault_name):
+        """Mark a stratigraphic-column unconformity as realised by an
+        existing fault instead of a flat isovalue surface.
+
+        Parameters
+        ----------
+        unconformity_uuid : str
+            uuid of the `StratigraphicUnconformity` element in the column.
+        fault_name : str
+            Name of an existing fault (as known to `_fault_topology`) whose
+            surface should be used as the domain boundary at this point in
+            the column.
+        """
+        self._fault_boundaries[unconformity_uuid] = fault_name
+        if self.stratigraphic_column_callback:
+            self.stratigraphic_column_callback()
+
+    def clear_fault_boundary(self, unconformity_uuid):
+        """Undo `set_fault_boundary`, reverting the unconformity to a plain isovalue boundary."""
+        if self._fault_boundaries.pop(unconformity_uuid, None) is not None:
+            if self.stratigraphic_column_callback:
+                self.stratigraphic_column_callback()
+
+    def get_fault_boundary(self, unconformity_uuid):
+        """Return the fault name linked to this unconformity, or None."""
+        return self._fault_boundaries.get(unconformity_uuid)
+
+    def get_fault_boundaries(self):
+        """Return the uuid -> fault_name mapping of all fault-linked boundaries."""
+        return dict(self._fault_boundaries)
+
+    def get_fault_boundary_fault_names(self):
+        """Return the set of fault names currently used as domain boundaries.
+
+        These faults are built as non-displacing domain splits (see
+        `GeologicalModelManager.update_foliation_features`), so they should
+        not also be offered in fault-fault (FAULTED/ABUTTING) or
+        fault-stratigraphy relationship editors, which assume a
+        displacement-modelled fault.
+        """
+        return set(self._fault_boundaries.values())
+
+    def fault_spans_model_domain(self, fault_name, *, tolerance=0.0):
+        """Check whether a fault's trace data reaches every edge of the
+        model's XY bounding box.
+
+        A fault used as a domain boundary crops the *entire* model on
+        either side of its interpolated surface (see
+        `LoopStructural.modelling.core._model_relationships`), so unlike an
+        ordinary local fault trace it needs to be constrained across the
+        whole domain -- otherwise the interpolator extrapolates the crop
+        surface into areas with no supporting data. Returns True if no
+        fault trace data is available yet (nothing to check against).
+
+        Parameters
+        ----------
+        fault_name : str
+            Name of the fault to check, as found in `get_fault_traces()`'s layer.
+        tolerance : float, optional
+            Allowed gap, in model units, between the trace's extent and the
+            bounding box edge before it is considered "not spanning".
+        """
+        if self._fault_traces is None or self._fault_traces['layer'] is None:
+            return True
+        layer = self._fault_traces['layer']
+        name_field = self._fault_traces['fault_name_field']
+        trace_extent = None
+        for feature in layer.getFeatures():
+            if name_field is not None and str(feature[name_field]) != str(fault_name):
+                continue
+            geom = feature.geometry()
+            if geom is None or geom.isEmpty():
+                continue
+            bbox = geom.boundingBox()
+            trace_extent = bbox if trace_extent is None else trace_extent.combineExtentWith(bbox)
+        if trace_extent is None:
+            return True
+        xmin, ymin = self._bounding_box.origin[0], self._bounding_box.origin[1]
+        xmax, ymax = self._bounding_box.maximum[0], self._bounding_box.maximum[1]
+        # A boundary only needs to fully cross the domain along one axis (an
+        # east-west or north-south cut) to split the whole model -- it does
+        # not need to cover the full bounding box in both directions.
+        spans_x = (
+            trace_extent.xMinimum() <= xmin + tolerance
+            and trace_extent.xMaximum() >= xmax - tolerance
+        )
+        spans_y = (
+            trace_extent.yMinimum() <= ymin + tolerance
+            and trace_extent.yMaximum() >= ymax - tolerance
+        )
+        return spans_x or spans_y
 
     def update_stratigraphic_column_order(self, new_order):
         """Update the order of units in the stratigraphic column."""
@@ -956,6 +1057,7 @@ class ModellingDataManager:
             'stratigraphic_column': (
                 self._stratigraphic_column.to_dict() if self._stratigraphic_column else None
             ),
+            'fault_boundaries': dict(self._fault_boundaries),
             'dem_layer': dem_layer_name if self.dem_layer else None,
             'use_dem': self.use_dem,
             'elevation': self.elevation,
@@ -997,7 +1099,12 @@ class ModellingDataManager:
             self._structural_orientations = data['structural_orientations']
         if 'stratigraphic_column' in data:
             self._stratigraphic_column = StratigraphicColumn.from_dict(data['stratigraphic_column'])
+            # See the matching call in update_from_dict for why this is needed.
+            self._stratigraphic_column.update_unit_values()
             self.stratigraphic_column_callback()
+        self._fault_boundaries.clear()
+        if data.get('fault_boundaries'):
+            self._fault_boundaries.update(data['fault_boundaries'])
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']
 
@@ -1011,6 +1118,23 @@ class ModellingDataManager:
 
     def update_from_dict(self, data):
         """Update the data manager from a dictionary."""
+        # Model CRS must be restored before anything below that reprojects
+        # a layer against it (basal_contacts/fault_traces/
+        # structural_orientations, all via get_model_crs()) -- restoring it
+        # last meant every reprojection during project load ran against
+        # whatever `_use_project_crs`/`_model_crs` still held from __init__
+        # (use_project_crs=True, i.e. the *project's* CRS) instead of the
+        # saved model CRS, silently skipping reprojection whenever a layer
+        # happened to already be in the project's CRS but not the model's.
+        if 'use_project_crs' in data:
+            self._use_project_crs = data['use_project_crs']
+        else:
+            self._use_project_crs = True
+        if 'model_crs' in data and data['model_crs'] is not None:
+            crs = QgsCoordinateReferenceSystem(data['model_crs'])
+            if crs.isValid():
+                self.set_model_crs(crs, use_project_crs=self._use_project_crs)
+
         if 'bounding_box' in data:
             self.set_bounding_box(
                 xmin=data['bounding_box']['origin'][0],
@@ -1077,24 +1201,29 @@ class ModellingDataManager:
                 )
         if 'stratigraphic_column' in data:
             self._stratigraphic_column.update_from_dict(data['stratigraphic_column'])
+            # update_from_dict restores elements via add_element, not
+            # add_unit -- only add_unit computes each unit's min/max
+            # scalar-field range as a side effect. Without this, every
+            # restored unit keeps the default (0, inf) range, so
+            # evaluate_model can't tell any unit in a group apart from any
+            # other and just labels every point with whichever unit was
+            # last in the group (see GeologicalModelManager.
+            # set_stratigraphic_column, which already does this for the
+            # very first load -- this covers every reload afterwards).
+            self._stratigraphic_column.update_unit_values()
         else:
             self._stratigraphic_column.clear()
+
+        # Mutate in place rather than reassign: `_fault_boundaries` is
+        # shared by reference with the model manager (see set_model_manager).
+        self._fault_boundaries.clear()
+        if data.get('fault_boundaries'):
+            self._fault_boundaries.update(data['fault_boundaries'])
 
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']
         else:
             self.widget_settings = {}
-
-        # Load model CRS settings
-        if 'use_project_crs' in data:
-            self._use_project_crs = data['use_project_crs']
-        else:
-            self._use_project_crs = True
-
-        if 'model_crs' in data and data['model_crs'] is not None:
-            crs = QgsCoordinateReferenceSystem(data['model_crs'])
-            if crs.isValid():
-                self.set_model_crs(crs, use_project_crs=self._use_project_crs)
 
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()

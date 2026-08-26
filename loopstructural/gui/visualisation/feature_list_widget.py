@@ -56,9 +56,7 @@ class FeatureListWidget(QWidget):
         self.data_manager = data_manager
 
         # Add buttons
-        self.addBoundingBoxButton = self._make_tool_button(
-            "extents.svg", "Add Model Bounding Box"
-        )
+        self.addBoundingBoxButton = self._make_tool_button("extents.svg", "Add Model Bounding Box")
         self.addFaultSurfacesButton = self._make_custom_icon_tool_button(
             "fault.svg", "Add Fault Surfaces"
         )
@@ -458,8 +456,18 @@ class FeatureListWidget(QWidget):
         stratigraphic_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
 
         for surface in stratigraphic_surfaces:
+            mesh = surface.vtk()
+            if mesh.n_points == 0:
+                # A unit with no digitised data of its own (e.g. an
+                # undigitised placeholder like "Top") can have no
+                # constrained geometry anywhere in the model, so its
+                # isovalue may not intersect the solved field at all --
+                # pyvista refuses to plot an empty mesh, so skip it rather
+                # than crashing every surface after it in this loop.
+                logger.info(f"Skipping '{surface.name}': isosurface has no geometry.")
+                continue
             self.viewer.add_mesh_object(
-                surface.vtk(),
+                mesh,
                 name=surface.name,
                 color=surface.colour,
                 source_feature=surface.name,
@@ -724,7 +732,12 @@ class FeatureListWidget(QWidget):
             except Exception:
                 target_crs = None
         source_crs = layer.sourceCrs()
-        if target_crs is not None and target_crs.isValid() and source_crs.isValid() and source_crs != target_crs:
+        if (
+            target_crs is not None
+            and target_crs.isValid()
+            and source_crs.isValid()
+            and source_crs != target_crs
+        ):
             geom = QgsGeometry(geom)
             geom.transform(QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance()))
 
