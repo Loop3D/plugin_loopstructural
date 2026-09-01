@@ -44,7 +44,7 @@ jobs:
 
       - name: Open pull request
         if: steps.bump.outputs.changed == '1'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "fix: bump LoopStructural pin to ${{ steps.latest.outputs.version }}"
           title: "Bump LoopStructural pin to ${{ steps.latest.outputs.version }}"
