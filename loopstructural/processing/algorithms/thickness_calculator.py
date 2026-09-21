@@ -33,6 +33,7 @@ from qgis.core import (
 )
 
 # Internal imports
+from ...main.m2l_api import extract_basal_contacts
 from ...main.vectorLayerWrapper import (
     dataframeToQgsTable,
     matrixToDict,
@@ -132,9 +133,9 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT_BASAL_CONTACTS,
-                "Basal Contacts",
+                "Basal Contacts (optional, extracted from geology if omitted)",
                 [QgsProcessing.TypeVectorLine],
-                defaultValue='Basal Contacts',
+                optional=True,
             )
         )
         self.addParameter(
@@ -261,9 +262,9 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
 
         sampled_contacts = self.parameterAsSource(parameters, self.INPUT_SAMPLED_CONTACTS, context)
         unit_name_field = self.parameterAsString(parameters, self.INPUT_UNIT_NAME_FIELD, context)
+        geology_layer = self.parameterAsVectorLayer(parameters, self.INPUT_GEOLOGY, context)
 
         if bounding_box_type == 0:
-            geology_layer = self.parameterAsVectorLayer(parameters, self.INPUT_GEOLOGY, context)
             extent = geology_layer.extent()
             bounding_box = {
                 'minx': extent.xMinimum(),
@@ -315,7 +316,19 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
         # convert layers to dataframe or geodataframe
         units = qgsLayerToDataFrame(geology_data)
         geology_data = qgsLayerToGeoDataFrame(geology_data)
-        basal_contacts = qgsLayerToGeoDataFrame(basal_contacts)
+        if basal_contacts is not None:
+            basal_contacts = qgsLayerToGeoDataFrame(basal_contacts)
+        else:
+            feedback.pushInfo(
+                "No basal contacts layer supplied; extracting basal contacts from geology layer..."
+            )
+            basal_contacts = extract_basal_contacts(
+                geology=geology_layer,
+                stratigraphic_order=stratigraphic_order,
+                unit_name_field=unit_name_field,
+                updater=feedback.pushInfo,
+                target_crs=geology_layer.crs() if geology_layer else None,
+            )['basal_contacts']
         structure_data = qgsLayerToDataFrame(structure_data)
         rename_map = {}
         missing_fields = []
