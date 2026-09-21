@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.3.0...v0.4.0) (2026-09-21)
+
+
+### Features
+
+* add Form Line constraint type for tangent/strike and interface data ([f6e60eb](https://github.com/Loop3D/plugin_loopstructural/commit/f6e60eb79facd9d575349156ed798bc6e46a2b0c))
+
 ## [0.3.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.2.0...v0.3.0) (2026-08-26)
 
 
