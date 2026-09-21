@@ -1,9 +1,12 @@
 from qgis.core import QgsMapLayerProxyModel
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -436,6 +439,8 @@ class LayerSelectionDialog(QDialog):
             self._setup_value_fields(layout)
         elif self.layer_type == "Inequality":
             self._setup_inequality_fields(layout)
+        elif self.layer_type == "Form Line":
+            self._setup_form_line_fields(layout)
 
     def _setup_orientation_fields(self, layout):
         """Setup fields for orientation data type."""
@@ -505,6 +510,85 @@ class LayerSelectionDialog(QDialog):
 
         self.field_combos = {'value_field': self.value_field_combo}
 
+    def _setup_form_line_fields(self, layout):
+        """Setup fields for form line data type.
+
+        A form line has no attribute field to pick -- its geometry *is* the
+        constraint. The only choice is what the line means to the scalar
+        field: that it's constant (but unknown) along the line, or that the
+        line marks the local strike direction of the field.
+
+        "Constrain Strike" can optionally add a dip magnitude too (e.g. an
+        axial surface known to dip ~60 degrees). This is added as a
+        low-weight constraint alongside the (hard) per-vertex strike from
+        the line, rather than replacing it: the line's own direction is a
+        precisely known fact, but the dip is usually only a rough regional
+        estimate, and digitising direction leaves which way the surface
+        dips ambiguous -- "Reverse dip direction" flips between the two
+        mirror-image planes that share the same strike and dip magnitude.
+        """
+        field_layout = QHBoxLayout()
+
+        constraint_label = QLabel("Constraint:")
+        self.constraint_combo = QComboBox()
+        self.constraint_combo.addItems(["Constant Value", "Constrain Strike"])
+        if self.existing_data.get('form_line_constraint') == 'strike':
+            self.constraint_combo.setCurrentText("Constrain Strike")
+
+        field_layout.addWidget(constraint_label)
+        field_layout.addWidget(self.constraint_combo)
+        layout.addLayout(field_layout)
+
+        self.dip_group = QWidget()
+        dip_layout = QFormLayout(self.dip_group)
+
+        self.constrain_dip_checkbox = QCheckBox("Also constrain dip (weak)")
+        self.constrain_dip_checkbox.setChecked(
+            self.existing_data.get('form_line_dip') is not None
+        )
+        dip_layout.addRow(self.constrain_dip_checkbox)
+
+        self.dip_spin = QDoubleSpinBox()
+        self.dip_spin.setRange(0, 90)
+        self.dip_spin.setValue(self.existing_data.get('form_line_dip') or 60.0)
+        dip_layout.addRow("Dip", self.dip_spin)
+
+        self.reverse_dip_checkbox = QCheckBox("Reverse dip direction")
+        self.reverse_dip_checkbox.setChecked(
+            bool(self.existing_data.get('form_line_reverse_dip', False))
+        )
+        dip_layout.addRow(self.reverse_dip_checkbox)
+
+        self.dip_weight_spin = QDoubleSpinBox()
+        self.dip_weight_spin.setRange(0.001, 1.0)
+        self.dip_weight_spin.setSingleStep(0.01)
+        self.dip_weight_spin.setDecimals(3)
+        self.dip_weight_spin.setValue(self.existing_data.get('form_line_dip_weight', 0.1))
+        dip_layout.addRow("Weight", self.dip_weight_spin)
+
+        self.dip_spin.setEnabled(self.constrain_dip_checkbox.isChecked())
+        self.reverse_dip_checkbox.setEnabled(self.constrain_dip_checkbox.isChecked())
+        self.dip_weight_spin.setEnabled(self.constrain_dip_checkbox.isChecked())
+        self.constrain_dip_checkbox.toggled.connect(self.dip_spin.setEnabled)
+        self.constrain_dip_checkbox.toggled.connect(self.reverse_dip_checkbox.setEnabled)
+        self.constrain_dip_checkbox.toggled.connect(self.dip_weight_spin.setEnabled)
+
+        layout.addWidget(self.dip_group)
+
+        def update_dip_visibility(text):
+            self.dip_group.setVisible(text == "Constrain Strike")
+
+        self.constraint_combo.currentTextChanged.connect(update_dip_visibility)
+        update_dip_visibility(self.constraint_combo.currentText())
+
+        self.field_combos = {
+            'constraint_combo': self.constraint_combo,
+            'constrain_dip_checkbox': self.constrain_dip_checkbox,
+            'dip_spin': self.dip_spin,
+            'reverse_dip_checkbox': self.reverse_dip_checkbox,
+            'dip_weight_spin': self.dip_weight_spin,
+        }
+
     def _setup_inequality_fields(self, layout):
         """Setup fields for inequality data type."""
         field_layout = QHBoxLayout()
@@ -542,7 +626,10 @@ class LayerSelectionDialog(QDialog):
             return False
 
         layer_name = self.layer_combo.currentLayer().name()
-        if layer_name in self.data_manager.feature_data.get(self.feature_name, {}):
+        is_layer_being_edited = layer_name == self.existing_data.get('layer_name')
+        if not is_layer_being_edited and layer_name in self.data_manager.feature_data.get(
+            self.feature_name, {}
+        ):
             self.data_manager.logger("Layer already selected.", log_level=2)
             self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
             return False
@@ -585,6 +672,19 @@ class LayerSelectionDialog(QDialog):
                 return
             self.layer_data['lower_field'] = self.field_combos['lower_field'].currentField()
             self.layer_data['upper_field'] = self.field_combos['upper_field'].currentField()
+
+        elif self.layer_type == "Form Line":
+            constraint_text = self.field_combos['constraint_combo'].currentText()
+            is_strike = constraint_text == "Constrain Strike"
+            self.layer_data['form_line_constraint'] = 'strike' if is_strike else 'value'
+            if is_strike and self.field_combos['constrain_dip_checkbox'].isChecked():
+                self.layer_data['form_line_dip'] = self.field_combos['dip_spin'].value()
+                self.layer_data['form_line_reverse_dip'] = self.field_combos[
+                    'reverse_dip_checkbox'
+                ].isChecked()
+                self.layer_data['form_line_dip_weight'] = self.field_combos[
+                    'dip_weight_spin'
+                ].value()
 
         self.accept()
 

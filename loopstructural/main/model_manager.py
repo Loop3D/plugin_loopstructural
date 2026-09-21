@@ -100,6 +100,38 @@ class AllSampler:
         return df
 
 
+def _form_line_tangent_vectors(df: pd.DataFrame) -> np.ndarray:
+    """Per-vertex unit tangent (tx, ty, tz) along each digitised line in `df`.
+
+    Points are grouped by `feature_id` (one group per digitised line, in the
+    vertex order `AllSampler` walks each geometry's coords) and the local
+    tangent at each vertex is a central difference against its neighbours,
+    falling back to a forward/backward difference at each line's two ends --
+    the same construction used for fault traces in
+    `GeologicalModelManager._extend_fault_trace_to_domain`, generalised to 3D
+    and without the bounding-box extension (which is fault-specific).
+
+    A line with a single vertex has no direction, so its row is left as NaN.
+    """
+    xyz = df[['X', 'Y', 'Z']].to_numpy(dtype=float)
+    tangents = np.full((len(df), 3), np.nan)
+    for _, group_index in df.groupby('feature_id', sort=False).groups.items():
+        pos = df.index.get_indexer(group_index)
+        pts = xyz[pos]
+        n = len(pts)
+        if n < 2:
+            continue
+        t = np.zeros((n, 3))
+        t[0] = pts[1] - pts[0]
+        t[-1] = pts[-1] - pts[-2]
+        if n > 2:
+            t[1:-1] = pts[2:] - pts[:-2]
+        norm = np.linalg.norm(t, axis=1, keepdims=True)
+        norm[norm < 1e-9] = np.nan
+        tangents[pos] = t / norm
+    return tangents
+
+
 class GeologicalModelManager(Observable):
     """This class manages the geological model and assembles it from the data provided by the data manager.
     It is responsible for updating the model with faults, stratigraphy, and other geological features.
@@ -1424,8 +1456,9 @@ class GeologicalModelManager(Observable):
         data : dict
             Mapping of layer identifiers to dicts describing each layer. Each
             layer dict must include a 'type' key (one of 'Orientation',
-            'Formline', 'Value', 'Inequality') and the fields required by that
-            type (e.g. 'strike_field', 'dip_field', 'value_field', ...).
+            'Form Line', 'Value', 'Inequality') and the fields required by
+            that type (e.g. 'strike_field', 'dip_field', 'value_field',
+            'form_line_constraint', ...).
         folded_feature_name : str or None
             Optional name of a feature to which the foliation should be
             associated/converted (currently unused in this helper).
@@ -1443,15 +1476,54 @@ class GeologicalModelManager(Observable):
         # for z
         dfs = []
         kwargs = {}
+        interface_offset = 0
         for layer_data in data.values():
+            if layer_data.get('processed'):
+                # auto-synced rows from the map2loop workflow (type values
+                # like 'Contact (auto)') aren't meant for this manual path
+                continue
             if layer_data['type'] == 'Orientation':
                 df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
                 df['strike'] = df[layer_data['strike_field']]
+                if layer_data.get('orientation_format') == 'Dip Direction':
+                    df['strike'] = df['strike'] - 90
                 df['dip'] = df[layer_data['dip_field']]
                 df['feature_name'] = name
                 dfs.append(df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']])
-            elif layer_data['type'] == 'Formline':
-                pass
+            elif layer_data['type'] == 'Form Line':
+                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                df['feature_name'] = name
+                if layer_data.get('form_line_constraint') == 'strike':
+                    df[['tx', 'ty', 'tz']] = _form_line_tangent_vectors(df)
+                    df = df.dropna(subset=['tx', 'ty', 'tz'])
+                    dfs.append(df[['X', 'Y', 'Z', 'tx', 'ty', 'tz', 'feature_name']])
+                    dip = layer_data.get('form_line_dip')
+                    if dip is not None and not df.empty:
+                        # The line's own direction is a precisely known hard
+                        # fact (the tangent constraint above), but a fixed
+                        # dip magnitude is usually only a rough regional
+                        # estimate -- so it's added as a *low-weight*
+                        # constraint that nudges the field towards that dip
+                        # rather than rigidly enforcing it at every vertex.
+                        strike = np.degrees(np.arctan2(df['tx'], df['ty'])) % 360
+                        if layer_data.get('form_line_reverse_dip'):
+                            # A form line's strike is only known up to 180
+                            # degrees (it depends on digitising direction),
+                            # and unlike the tangent-only constraint above,
+                            # a fixed dip *magnitude* makes that ambiguity
+                            # matter: the two mirror-image planes sharing
+                            # this strike and dip differ by 180 degrees of
+                            # strike.
+                            strike = (strike + 180) % 360
+                        dip_df = df[['X', 'Y', 'Z', 'feature_name']].copy()
+                        dip_df['strike'] = strike
+                        dip_df['dip'] = dip
+                        dip_df['w'] = layer_data.get('form_line_dip_weight', 0.1)
+                        dfs.append(dip_df[['X', 'Y', 'Z', 'strike', 'dip', 'w', 'feature_name']])
+                else:
+                    df['interface'] = df['feature_id'].astype(float) + interface_offset
+                    interface_offset += df['feature_id'].nunique()
+                    dfs.append(df[['X', 'Y', 'Z', 'interface', 'feature_name']])
             elif layer_data['type'] == 'Value':
                 df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
                 df['val'] = df[layer_data['value_field']]
