@@ -429,9 +429,9 @@ def sample_contacts(
 
 def calculate_thickness(
     geology,
-    basal_contacts,
     sampled_contacts,
     structure,
+    basal_contacts=None,
     cross_sections=None,
     calculator_type="InterpolatedStructure",
     dtm=None,
@@ -451,12 +451,15 @@ def calculate_thickness(
     ----------
     geology : QgsVectorLayer or GeoDataFrame
         Geology polygon layer.
-    basal_contacts : QgsVectorLayer or GeoDataFrame
-        Basal contacts line layer.
     sampled_contacts : QgsVectorLayer or GeoDataFrame
         Sampled contacts point layer.
     structure : QgsVectorLayer or GeoDataFrame
         Structure point layer with orientation data.
+    basal_contacts : QgsVectorLayer or GeoDataFrame, optional
+        Basal contacts line layer, by default None. When omitted, basal
+        contacts are extracted automatically from ``geology`` using
+        ``stratigraphic_order``, so a separate basal-contacts extraction
+        step is not required.
     cross_sections : QgsVectorLayer or GeoDataFrame, optional
         Cross-sections line layer, by default None.
     calculator_type : str, optional
@@ -474,7 +477,9 @@ def calculate_thickness(
     max_line_length : float, optional
         Maximum line length for StructuralPoint calculator, by default None.
     stratigraphic_order : list, optional
-        List of unit names in stratigraphic order, by default None.
+        List of unit names in stratigraphic order, by default None. Required
+        when ``basal_contacts`` is omitted, so basal contacts can be derived
+        from the geology layer.
     updater : callable, optional
         Callback function for progress updates, by default None.
 
@@ -486,14 +491,35 @@ def calculate_thickness(
     if updater:
         updater(f"Calculating thickness using {calculator_type}...")
 
+    auto_extracted_basal_contacts = basal_contacts is None
+    if auto_extracted_basal_contacts:
+        if not stratigraphic_order:
+            raise ValueError(
+                "A basal contacts layer or a stratigraphic order is required to calculate "
+                "thickness: without a basal contacts layer, the stratigraphic order is "
+                "needed to extract basal contacts from the geology layer."
+            )
+        if updater:
+            updater("No basal contacts layer supplied; extracting basal contacts from geology...")
+        target_crs = geology.crs() if hasattr(geology, 'crs') else None
+        basal_contacts_gdf = extract_basal_contacts(
+            geology=geology,
+            stratigraphic_order=stratigraphic_order,
+            unit_name_field=unit_name_field,
+            updater=updater,
+            debug_manager=debug_manager,
+            target_crs=target_crs,
+        )['basal_contacts']
+
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
-    basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
-    basal_contacts_gdf = (
-        basal_contacts_gdf.rename(columns={basal_contacts_unit_name: 'basal_unit'})
-        if basal_contacts_unit_name
-        else basal_contacts_gdf
-    )
+    if not auto_extracted_basal_contacts:
+        basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
+        basal_contacts_gdf = (
+            basal_contacts_gdf.rename(columns={basal_contacts_unit_name: 'basal_unit'})
+            if basal_contacts_unit_name
+            else basal_contacts_gdf
+        )
     sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
     structure_gdf = qgsLayerToGeoDataFrame(structure)
     cross_sections_gdf = qgsLayerToGeoDataFrame(cross_sections)

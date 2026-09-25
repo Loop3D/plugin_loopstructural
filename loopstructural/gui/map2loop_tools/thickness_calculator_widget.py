@@ -338,15 +338,30 @@ class ThicknessCalculatorWidget(QWidget):
         # Validate inputs based on calculator type
         calculator_type = self.calculatorTypeComboBox.currentText()
 
-        if calculator_type == "InterpolatedStructure":
-            if not self.geologyLayerComboBox.currentLayer():
-                QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
-                return False
-            if not self.basalContactsComboBox.currentLayer():
-                QMessageBox.warning(self, "Missing Input", "Please select a basal contacts layer.")
+        if not self.geologyLayerComboBox.currentLayer():
+            QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
+            return False
+
+        # A basal contacts layer is optional: when omitted, basal contacts are
+        # extracted automatically from the geology layer using the
+        # stratigraphic column, so a stratigraphic order is required instead.
+        if not self.basalContactsComboBox.currentLayer():
+            stratigraphic_order = (
+                self.data_manager.get_stratigraphic_unit_names()
+                if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')
+                else None
+            )
+            if not stratigraphic_order:
+                QMessageBox.warning(
+                    self,
+                    "Missing Input",
+                    "Please select a basal contacts layer, or define a stratigraphic "
+                    "column so basal contacts can be extracted from the geology layer "
+                    "automatically.",
+                )
                 return False
 
-        elif calculator_type == "StructuralPoint":
+        if calculator_type == "StructuralPoint":
             if not self.structureLayerComboBox.currentLayer():
                 QMessageBox.warning(self, "Missing Input", "Please select a structure layer.")
                 return False
