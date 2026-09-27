@@ -49,7 +49,6 @@ class SorterWidget(QWidget):
 
         # Configure layer filters programmatically (avoid QGIS enums in UI)
         configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
-        configure_layer_combo(self.contactsLayerComboBox, QgsMapLayerProxyModel.LineLayer)
         configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.PointLayer)
         configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
 
@@ -70,7 +69,6 @@ class SorterWidget(QWidget):
         self.sortingAlgorithmComboBox.currentIndexChanged.connect(self._on_algorithm_changed)
         self.geologyLayerComboBox.layerChanged.connect(self._on_geology_layer_changed)
         self.structureLayerComboBox.layerChanged.connect(self._on_structure_layer_changed)
-        self.contactsLayerComboBox.layerChanged.connect(self._on_contacts_layer_changed)
         self.runButton.clicked.connect(self._run_sorter)
         self.orientationTypeComboBox.setCurrentIndex(1)  # Default to Dip Direction
         self._guess_layers()
@@ -147,12 +145,6 @@ class SorterWidget(QWidget):
         structure_layer = self.data_manager.find_layer_by_name(structure_layer_match)
         self.structureLayerComboBox.setLayer(structure_layer)
 
-        contact_layer_names = get_layer_names(self.contactsLayerComboBox)
-        contact_layer_matcher = ColumnMatcher(contact_layer_names)
-        contact_layer_match = contact_layer_matcher.find_match('CONTACTS')
-        contact_layer = self.data_manager.find_layer_by_name(contact_layer_match)
-        self.contactsLayerComboBox.setLayer(contact_layer)
-
         dem_layer_names = get_layer_names(self.dtmLayerComboBox)
         dem_layer_matcher = ColumnMatcher(dem_layer_names)
         dem_layer_match = dem_layer_matcher.find_match('DTM')
@@ -171,7 +163,6 @@ class SorterWidget(QWidget):
         for key, combo in (
             ('geology_layer', self.geologyLayerComboBox),
             ('structure_layer', self.structureLayerComboBox),
-            ('contacts_layer', self.contactsLayerComboBox),
             ('dtm_layer', self.dtmLayerComboBox),
         ):
             if layer_name := settings.get(key):
@@ -205,11 +196,6 @@ class SorterWidget(QWidget):
             'structure_layer': (
                 self.structureLayerComboBox.currentLayer().name()
                 if self.structureLayerComboBox.currentLayer()
-                else None
-            ),
-            'contacts_layer': (
-                self.contactsLayerComboBox.currentLayer().name()
-                if self.contactsLayerComboBox.currentLayer()
                 else None
             ),
             'dtm_layer': (
@@ -279,12 +265,6 @@ class SorterWidget(QWidget):
             if dipdir_match := matcher.find_match('DIPDIR'):
                 self.dipDirFieldComboBox.setField(dipdir_match)
 
-    def _on_contacts_layer_changed(self):
-        """Update field combo boxes when contacts layer changes."""
-        layer = self.contactsLayerComboBox.currentLayer()
-        self.unitName1FieldComboBox.setLayer(layer)
-        self.unitName2FieldComboBox.setLayer(layer)
-
     def _on_algorithm_changed(self):
         """Update UI based on selected sorting algorithm and map2loop requirements."""
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
@@ -304,13 +284,7 @@ class SorterWidget(QWidget):
         self.minAgeFieldComboBox.setVisible(False)
         self.maxAgeFieldLabel.setVisible(False)
         self.maxAgeFieldComboBox.setVisible(False)
-        self.unitName1FieldLabel.setVisible(False)
-        self.unitName1FieldComboBox.setVisible(False)
-        self.unitName2FieldLabel.setVisible(False)
-        self.unitName2FieldComboBox.setVisible(False)
 
-        self.contactsLayerLabel.setVisible(False)
-        self.contactsLayerComboBox.setVisible(False)
         self.structureLayerLabel.setVisible(False)
         self.structureLayerComboBox.setVisible(False)
         self.dipFieldLabel.setVisible(False)
@@ -332,19 +306,12 @@ class SorterWidget(QWidget):
             self.maxAgeFieldLabel.setVisible(True)
             self.maxAgeFieldComboBox.setVisible(True)
             self.maxAgeFieldComboBox.setLayer(geology_layer)
-        if 'unitname1_column' in required_fields or 'unitname_1' in required_fields:
-            self.unitName1FieldLabel.setVisible(True)
-            self.unitName1FieldComboBox.setVisible(True)
-            self.unitName1FieldComboBox.setLayer(self.contactsLayerComboBox.currentLayer())
-        if 'unitname2_column' in required_fields or 'unitname_2' in required_fields:
-            self.unitName2FieldLabel.setVisible(True)
-            self.unitName2FieldComboBox.setVisible(True)
-            self.unitName2FieldComboBox.setLayer(self.contactsLayerComboBox.currentLayer())
 
-        if 'contacts' in required_fields or 'contacts_layer' in required_fields:
-            self.contactsLayerLabel.setVisible(True)
-            self.contactsLayerComboBox.setVisible(True)
-        if 'structure' in required_fields or 'structure_layer' in required_fields:
+        if (
+            'structure' in required_fields
+            or 'structure_layer' in required_fields
+            or 'structure_data' in required_fields
+        ):
             self.structureLayerLabel.setVisible(True)
             self.structureLayerComboBox.setVisible(True)
             self.dipFieldLabel.setVisible(True)
@@ -378,13 +345,9 @@ class SorterWidget(QWidget):
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
             return False
 
-        if not self.contactsLayerComboBox.currentLayer():
-            QMessageBox.warning(self, "Missing Input", "Please select a contacts layer.")
-            return False
-
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
         algorithm_name = self.sorting_algorithms[algorithm_index]
-        is_observation_projections = algorithm_index == 5
+        is_observation_projections = algorithm_name == "Observation projections"
 
         if is_observation_projections:
             if not self.structureLayerComboBox.currentLayer():
@@ -402,7 +365,6 @@ class SorterWidget(QWidget):
 
         kwargs = {
             'geology': self.geologyLayerComboBox.currentLayer(),
-            'contacts': self.contactsLayerComboBox.currentLayer(),
             'sorting_algorithm': algorithm_name,
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
         }
@@ -511,7 +473,7 @@ class SorterWidget(QWidget):
             Dictionary of current widget parameters.
         """
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
-        is_observation_projections = algorithm_index == 5
+        is_observation_projections = self.sorting_algorithms[algorithm_index] == "Observation projections"
 
         params = {
             'sorting_algorithm': algorithm_index,
@@ -519,7 +481,6 @@ class SorterWidget(QWidget):
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'min_age_field': self.minAgeFieldComboBox.currentField(),
             'max_age_field': self.maxAgeFieldComboBox.currentField(),
-            'contacts_layer': self.contactsLayerComboBox.currentLayer(),
         }
 
         if is_observation_projections:
@@ -543,5 +504,3 @@ class SorterWidget(QWidget):
             self.sortingAlgorithmComboBox.setCurrentIndex(params['sorting_algorithm'])
         if params.get('geology_layer'):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
-        if params.get('contacts_layer'):
-            self.contactsLayerComboBox.setLayer(params['contacts_layer'])

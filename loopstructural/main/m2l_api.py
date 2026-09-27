@@ -92,6 +92,11 @@ def extract_basal_contacts(
 
     faults = qgsLayerToGeoDataFrame(faults, target_crs=target_crs) if faults else None
     if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology.columns:
+        # Drop any pre-existing 'UNITNAME' column first -- otherwise the rename
+        # below leaves two columns named 'UNITNAME', which breaks any later
+        # column selection on 'UNITNAME' (it returns a DataFrame, not a Series).
+        if 'UNITNAME' in geology.columns:
+            geology = geology.drop(columns=['UNITNAME'])
         geology = geology.rename(columns={unit_name_field: 'UNITNAME'})
     # Log parameters via DebugManager if provided
     ignore_units += [None]
@@ -175,6 +180,30 @@ def extract_basal_contacts(
     return {'basal_contacts': basal_contacts}
 
 
+def _extract_contacts_for_sorting(geology_gdf, unit_name_field, updater=None):
+    """Derive unit-to-unit contacts directly from geology, for sorters that need adjacency.
+
+    SorterAlpha, SorterMaximiseContacts and SorterObservationProjections all
+    require a 'contacts' GeoDataFrame with 'UNITNAME_1'/'UNITNAME_2' columns.
+    Unlike basal contacts, this adjacency doesn't depend on a stratigraphic
+    order -- which isn't known yet at this point, since sorting is what
+    produces it -- so it can always be derived from the geology layer alone.
+    """
+    geology_gdf = geology_gdf.copy()
+    if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
+        # Drop any pre-existing 'UNITNAME' column first -- otherwise the rename
+        # below leaves two columns named 'UNITNAME', and geology_gdf["UNITNAME"]
+        # returns a DataFrame instead of a Series, which crashes dissolve()
+        # inside extract_all_contacts with "Grouper for 'UNITNAME' not
+        # 1-dimensional".
+        if 'UNITNAME' in geology_gdf.columns:
+            geology_gdf = geology_gdf.drop(columns=['UNITNAME'])
+        geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
+    if updater:
+        updater("Extracting contacts from geology...")
+    return ContactExtractor(geology_gdf, None).extract_all_contacts()
+
+
 def sort_stratigraphic_column(
     geology,
     sorting_algorithm="Observation projections",
@@ -198,8 +227,11 @@ def sort_stratigraphic_column(
     ----------
     geology : QgsVectorLayer or GeoDataFrame
         Geology polygon layer.
-    contacts : QgsVectorLayer or GeoDataFrame
-        Contacts line layer.
+    contacts : QgsVectorLayer or GeoDataFrame, optional
+        Contacts line layer. Only needed to override the contacts that are
+        otherwise extracted automatically from `geology` for sorting
+        algorithms that need adjacency information (Adjacency α, Maximise
+        contacts, Observation projections).
     sorting_algorithm : str, optional
         Name of the sorting algorithm, by default "Observation projections".
     unit_name_field : str, optional
@@ -237,7 +269,12 @@ def sort_stratigraphic_column(
 
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
-    contacts_gdf = qgsLayerToGeoDataFrame(contacts)
+    if contacts is not None:
+        contacts_gdf = qgsLayerToGeoDataFrame(contacts)
+    elif 'contacts' in required_args or 'relationships' in required_args:
+        contacts_gdf = _extract_contacts_for_sorting(geology_gdf, unit_name_field, updater)
+    else:
+        contacts_gdf = pd.DataFrame()
 
     # Log parameters via DebugManager if provided
     if debug_manager:
@@ -287,6 +324,29 @@ def sort_stratigraphic_column(
     if 'length' in relationships_df.columns:
         relationships_df = relationships_df.drop(columns=['length'])
 
+    # Convert structure layer to a GeoDataFrame with 'DIP'/'DIPDIR' columns,
+    # matching the hardcoded column names map2loop's sorters read.
+    structure_gdf = None
+    if structure is not None:
+        structure_gdf = qgsLayerToGeoDataFrame(structure)
+        if dip_field and dip_field != 'DIP' and dip_field in structure_gdf.columns:
+            structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
+        if dipdir_field and dipdir_field in structure_gdf.columns:
+            if orientation_type == 'Strike':
+                structure_gdf['DIPDIR'] = structure_gdf[dipdir_field].apply(
+                    lambda val: (val + 90.0) % 360.0 if pd.notna(val) else val
+                )
+            elif orientation_type == 'Dip Direction' and dipdir_field != 'DIPDIR':
+                structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
+
+    # Convert DTM to a GDAL dataset, as map2loop's sorters read it via GDAL calls.
+    dtm_gdal = None
+    if dtm is not None:
+        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
+            dtm_gdal = qgsRasterToGdalDataset(dtm)
+        else:
+            dtm_gdal = dtm
+
     # Prepare all possible arguments
     all_args = {
         'geology_data': geology_gdf,
@@ -295,16 +355,21 @@ def sort_stratigraphic_column(
         'unit_name_field': unit_name_field,
         'min_age_column': min_age_field,
         'max_age_column': max_age_field,
-        'unitname1_field': unitname1_field,
-        'unitname2_field': unitname2_field,
-        'structure': qgsLayerToGeoDataFrame(structure) if structure is not None else None,
+        'structure_data': structure_gdf,
         'dip_field': dip_field,
         'dipdir_field': dipdir_field,
         'orientation_type': orientation_type,
-        'dtm': dtm,
+        'dtm_data': dtm_gdal,
         'updater': updater,
         'unit_name_column': unit_name_field,
     }
+    # Only override the sorter's own 'UNITNAME_1'/'UNITNAME_2' defaults when the
+    # caller explicitly names different columns -- passing None here would
+    # clobber those defaults and break the lookup against the extracted contacts.
+    if unitname1_field:
+        all_args['unitname1_column'] = unitname1_field
+    if unitname2_field:
+        all_args['unitname2_column'] = unitname2_field
 
     # Only pass required arguments to the sorter
     sorter_args = {k: v for k, v in all_args.items() if k in required_args}
