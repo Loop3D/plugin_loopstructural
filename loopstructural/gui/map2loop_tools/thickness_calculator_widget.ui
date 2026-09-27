@@ -63,22 +63,51 @@
      <item row="4" column="0">
       <widget class="QLabel" name="basalContactsLabel">
        <property name="text">
-        <string>Basal Contacts Layer:</string>
+        <string>Basal Contacts Layer (optional):</string>
+       </property>
+       <property name="toolTip">
+        <string>If left empty, basal contacts are calculated automatically from the Geology Layer and the stratigraphic column.</string>
        </property>
       </widget>
      </item>
      <item row="4" column="1">
-      <widget class="QgsMapLayerComboBox" name="basalContactsComboBox"/>
+      <widget class="QgsMapLayerComboBox" name="basalContactsComboBox">
+       <property name="allowEmptyLayer">
+        <bool>true</bool>
+       </property>
+       <property name="toolTip">
+        <string>If left empty, basal contacts are calculated automatically from the Geology Layer and the stratigraphic column.</string>
+       </property>
+      </widget>
      </item>
      <item row="6" column="0">
-      <widget class="QLabel" name="sampledContactsLabel">
+      <widget class="QLabel" name="samplingFrequencyLabel">
        <property name="text">
-        <string>Sampled Contacts Layer:</string>
+        <string>Sampling Frequency:</string>
+       </property>
+       <property name="toolTip">
+        <string>Spacing at which points are sampled along the basal contacts.</string>
        </property>
       </widget>
      </item>
      <item row="6" column="1">
-      <widget class="QgsMapLayerComboBox" name="sampledContactsComboBox"/>
+      <widget class="QgsDoubleSpinBox" name="samplingFrequencySpinBox">
+       <property name="toolTip">
+        <string>Spacing at which points are sampled along the basal contacts.</string>
+       </property>
+       <property name="decimals">
+        <number>2</number>
+       </property>
+       <property name="minimum">
+        <double>0.010000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>100000.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>200.000000000000000</double>
+       </property>
+      </widget>
      </item>
      <item row="7" column="0">
       <widget class="QLabel" name="structureLayerLabel">

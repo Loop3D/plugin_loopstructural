@@ -429,9 +429,9 @@ def sample_contacts(
 
 def calculate_thickness(
     geology,
-    basal_contacts,
-    sampled_contacts,
     structure,
+    sampling_frequency,
+    basal_contacts=None,
     cross_sections=None,
     calculator_type="InterpolatedStructure",
     dtm=None,
@@ -451,12 +451,16 @@ def calculate_thickness(
     ----------
     geology : QgsVectorLayer or GeoDataFrame
         Geology polygon layer.
-    basal_contacts : QgsVectorLayer or GeoDataFrame
-        Basal contacts line layer.
-    sampled_contacts : QgsVectorLayer or GeoDataFrame
-        Sampled contacts point layer.
+    basal_contacts : QgsVectorLayer or GeoDataFrame, optional
+        Basal contacts line layer, by default None. If not supplied, basal
+        contacts are calculated automatically from `geology` and
+        `stratigraphic_order` (which must then be provided).
     structure : QgsVectorLayer or GeoDataFrame
         Structure point layer with orientation data.
+    sampling_frequency : float
+        Spacing at which to sample points along the basal contacts, used to
+        build the sampled contacts points required by the thickness
+        calculators.
     cross_sections : QgsVectorLayer or GeoDataFrame, optional
         Cross-sections line layer, by default None.
     calculator_type : str, optional
@@ -488,15 +492,49 @@ def calculate_thickness(
 
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
-    basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
-    basal_contacts_gdf = (
-        basal_contacts_gdf.rename(columns={basal_contacts_unit_name: 'basal_unit'})
-        if basal_contacts_unit_name
-        else basal_contacts_gdf
-    )
-    sampled_contacts_gdf = qgsLayerToGeoDataFrame(sampled_contacts)
+    if basal_contacts is not None:
+        basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
+        basal_contacts_gdf = (
+            basal_contacts_gdf.rename(columns={basal_contacts_unit_name: 'basal_unit'})
+            if basal_contacts_unit_name
+            else basal_contacts_gdf
+        )
+    else:
+        # No basal contacts layer supplied -- derive it from the geology
+        # layer and the stratigraphic order instead of failing.
+        if not stratigraphic_order:
+            raise ValueError(
+                "No basal contacts layer was supplied and no stratigraphic order is "
+                "available to calculate it automatically. Either select a basal "
+                "contacts layer, or define the stratigraphic column so basal "
+                "contacts can be derived from the geology layer."
+            )
+        if updater:
+            updater("No basal contacts layer supplied; calculating basal contacts from geology...")
+        basal_contacts_gdf = extract_basal_contacts(
+            geology=geology,
+            stratigraphic_order=stratigraphic_order,
+            unit_name_field=unit_name_field,
+            updater=updater,
+            debug_manager=debug_manager,
+            target_crs=geology.crs() if hasattr(geology, 'crs') else None,
+        )['basal_contacts']
     structure_gdf = qgsLayerToGeoDataFrame(structure)
     cross_sections_gdf = qgsLayerToGeoDataFrame(cross_sections)
+
+    # Convert DTM to GDAL dataset if needed (used below for sampling, and
+    # again for the thickness calculator itself).
+    dtm_gdal = None
+    if dtm is not None:
+        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
+            dtm_gdal = qgsRasterToGdalDataset(dtm)
+        else:
+            dtm_gdal = dtm
+
+    if updater:
+        updater(f"Sampling basal contacts at spacing {sampling_frequency}...")
+    sampler = SamplerSpacing(spacing=sampling_frequency, dtm_data=dtm_gdal, geology_data=geology_gdf)
+    sampled_contacts_gdf = sampler.sample(basal_contacts_gdf)
 
     # Log parameters via DebugManager if provided
     if debug_manager:
@@ -540,14 +578,6 @@ def calculate_thickness(
             )
         elif orientation_type == 'Dip Direction':
             structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
-
-    # Convert DTM to GDAL dataset if needed
-    dtm_gdal = None
-    if dtm is not None:
-        if hasattr(dtm, 'source'):  # It's a QgsRasterLayer
-            dtm_gdal = qgsRasterToGdalDataset(dtm)
-        else:
-            dtm_gdal = dtm
 
     # Run thickness calculator
     if calculator_type == "InterpolatedStructure":

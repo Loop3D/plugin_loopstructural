@@ -50,8 +50,9 @@ class ThicknessCalculatorWidget(QWidget):
         # Configure layer filters programmatically (avoid enum values in .ui)
         configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
         configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
-        configure_layer_combo(self.basalContactsComboBox, QgsMapLayerProxyModel.LineLayer)
-        configure_layer_combo(self.sampledContactsComboBox, QgsMapLayerProxyModel.PointLayer)
+        configure_layer_combo(
+            self.basalContactsComboBox, QgsMapLayerProxyModel.LineLayer, allow_empty=True
+        )
         configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.PointLayer)
         configure_layer_combo(self.crossSectionLayerComboBox, QgsMapLayerProxyModel.LineLayer)
 
@@ -143,14 +144,6 @@ class ThicknessCalculatorWidget(QWidget):
         if basal_layer_match:
             basal_layer = self.data_manager.find_layer_by_name(basal_layer_match)
             self.basalContactsComboBox.setLayer(basal_layer)
-
-        # Attempt to find sampled contacts layer
-        sampled_contacts_names = get_layer_names(self.sampledContactsComboBox)
-        sampled_matcher = ColumnMatcher(sampled_contacts_names)
-        sampled_layer_match = sampled_matcher.find_match('SAMPLED_CONTACTS')
-        if sampled_layer_match:
-            sampled_layer = self.data_manager.find_layer_by_name(sampled_layer_match)
-            self.sampledContactsComboBox.setLayer(sampled_layer)
 
         # Attempt to find structure layer
         structure_layer_names = get_layer_names(self.structureLayerComboBox)
@@ -253,7 +246,6 @@ class ThicknessCalculatorWidget(QWidget):
             ('dtm_layer', self.dtmLayerComboBox),
             ('geology_layer', self.geologyLayerComboBox),
             ('basal_contacts_layer', self.basalContactsComboBox),
-            ('sampled_contacts_layer', self.sampledContactsComboBox),
             ('structure_layer', self.structureLayerComboBox),
             ("cross_sections_layer", self.crossSectionLayerComboBox),
         ):
@@ -267,6 +259,8 @@ class ThicknessCalculatorWidget(QWidget):
             self.orientationTypeComboBox.setCurrentIndex(settings['orientation_type_index'])
         if 'max_line_length' in settings:
             self.maxLineLengthSpinBox.setValue(settings['max_line_length'])
+        if 'sampling_frequency' in settings:
+            self.samplingFrequencySpinBox.setValue(settings['sampling_frequency'])
         if field := settings.get('unit_name_field'):
             self.unitNameFieldComboBox.setField(field)
         if field := settings.get('dip_field'):
@@ -296,11 +290,6 @@ class ThicknessCalculatorWidget(QWidget):
                 if self.basalContactsComboBox.currentLayer()
                 else None
             ),
-            'sampled_contacts_layer': (
-                self.sampledContactsComboBox.currentLayer().name()
-                if self.sampledContactsComboBox.currentLayer()
-                else None
-            ),
             'structure_layer': (
                 self.structureLayerComboBox.currentLayer().name()
                 if self.structureLayerComboBox.currentLayer()
@@ -314,6 +303,7 @@ class ThicknessCalculatorWidget(QWidget):
             'calculator_type_index': self.calculatorTypeComboBox.currentIndex(),
             'orientation_type_index': self.orientationTypeComboBox.currentIndex(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
+            'sampling_frequency': self.samplingFrequencySpinBox.value(),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'dip_field': self.dipFieldComboBox.currentField(),
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
@@ -338,15 +328,32 @@ class ThicknessCalculatorWidget(QWidget):
         # Validate inputs based on calculator type
         calculator_type = self.calculatorTypeComboBox.currentText()
 
-        if calculator_type == "InterpolatedStructure":
-            if not self.geologyLayerComboBox.currentLayer():
-                QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
-                return False
-            if not self.basalContactsComboBox.currentLayer():
-                QMessageBox.warning(self, "Missing Input", "Please select a basal contacts layer.")
+        # Geology is required for every calculator type (it provides the
+        # bounding box and unit list), even though only some types show
+        # geology-specific fields.
+        if not self.geologyLayerComboBox.currentLayer():
+            QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
+            return False
+
+        # A basal contacts layer is only required if it can't be calculated
+        # automatically from the geology layer and the stratigraphic column.
+        if not self.basalContactsComboBox.currentLayer():
+            stratigraphic_order = (
+                self.data_manager.get_stratigraphic_unit_names()
+                if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')
+                else None
+            )
+            if not stratigraphic_order:
+                QMessageBox.warning(
+                    self,
+                    "Missing Input",
+                    "Please select a basal contacts layer, or define the stratigraphic "
+                    "column (Stratigraphic Column panel) so basal contacts can be "
+                    "calculated automatically from the geology layer.",
+                )
                 return False
 
-        elif calculator_type == "StructuralPoint":
+        if calculator_type == "StructuralPoint":
             if not self.structureLayerComboBox.currentLayer():
                 QMessageBox.warning(self, "Missing Input", "Please select a structure layer.")
                 return False
@@ -512,7 +519,7 @@ class ThicknessCalculatorWidget(QWidget):
             'dtm': self.dtmLayerComboBox.currentLayer(),
             'geology': self.geologyLayerComboBox.currentLayer(),
             'basal_contacts': self.basalContactsComboBox.currentLayer(),
-            'sampled_contacts': self.sampledContactsComboBox.currentLayer(),
+            'sampling_frequency': self.samplingFrequencySpinBox.value(),
             'structure': self.structureLayerComboBox.currentLayer(),
             'cross_sections': self.crossSectionLayerComboBox.currentLayer(),
             'orientation_type': self.orientationTypeComboBox.currentText(),
