@@ -101,10 +101,10 @@ def extract_basal_contacts(
     # Log parameters via DebugManager if provided
     ignore_units += [None]
 
-    # map2loop's ContactExtractor raises a ValueError whose message names the
-    # wrong side of this mismatch (it says units are missing from the geology
-    # dataset when they are actually missing from the stratigraphic column).
-    # Check here first so the user gets an accurate, complete message instead.
+    # Units in the geology layer that are not in the stratigraphic column are
+    # kept in the geology (so they still bound the other units and appear in
+    # all contacts), but contacts that touch them are left out of the basal
+    # contacts. Tell the user which units are skipped.
     unit_name_col = 'UNITNAME' if 'UNITNAME' in geology.columns else unit_name_field
     if unit_name_col and unit_name_col in geology.columns:
         geology_unit_names = {str(v).strip() for v in geology[unit_name_col].dropna().unique()}
@@ -114,12 +114,14 @@ def extract_basal_contacts(
         ignored_names = {str(unit).strip() for unit in ignore_units if unit is not None}
         missing_from_column = sorted(geology_unit_names - stratigraphic_names - ignored_names)
         if missing_from_column:
-            raise ValueError(
+            message = (
                 "The geology layer has unit(s) with no entry in the stratigraphic column: "
                 + ", ".join(repr(name) for name in missing_from_column)
-                + ". Add these unit(s) to the Stratigraphic Column panel (or add them to "
-                "'Units to ignore') before extracting basal contacts."
+                + ". Contacts with these unit(s) are not included in the basal contacts."
             )
+            logger.warning(message)
+            if updater:
+                updater(message)
 
     if debug_manager:
         debug_manager.log_params(
@@ -155,7 +157,14 @@ def extract_basal_contacts(
 
     try:
         all_contacts_result = contact_extractor.extract_all_contacts()
-        basal_contacts = contact_extractor.extract_basal_contacts(stratigraphic_order)
+        # map2loop raises if a contact has a unit that is not in the column,
+        # so give it only the contacts between units that are in the column.
+        column_units = [name for name in stratigraphic_order if name is not None]
+        contact_extractor.contacts = all_contacts_result[
+            all_contacts_result['UNITNAME_1'].isin(column_units)
+            & all_contacts_result['UNITNAME_2'].isin(column_units)
+        ].reset_index(drop=True)
+        basal_contacts = contact_extractor.extract_basal_contacts(column_units)
         logger.debug(
             "Extracted contacts: all=%s basal=%s",
             all_contacts_result.shape,
