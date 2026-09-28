@@ -566,6 +566,8 @@ class GeologicalModelTab(QWidget):
 
     def delete_feature(self, item):
         feature_name = item.text(0)
+        # so that Initialize Model does not build it again
+        self.model_manager.remove_manual_foliation(feature_name)
         # Attempt to remove from the underlying model in a few ways
         try:
             # Try model's __delitem__ if supported

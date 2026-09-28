@@ -152,6 +152,11 @@ class GeologicalModelManager(Observable):
         # fault name; see `set_fault_boundaries`. Shared by reference with
         # ModellingDataManager, same as stratigraphic_column/fault_topology.
         self.fault_boundaries: Dict[str, str] = {}
+        # name -> add_foliation arguments for foliations added by the user
+        # (not from the stratigraphic column). update_model clears the model
+        # features, so it builds these again from here; see
+        # `_build_manual_foliations`. Insertion order is the build order.
+        self.manual_foliations: Dict[str, dict] = {}
         # Observers managed by Observable base class
         self.dem_function = lambda x, y: 0
         # internal flag to temporarily suppress notifications (used when
@@ -216,6 +221,7 @@ class GeologicalModelManager(Observable):
         self.groups = []
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
+        self.manual_foliations = {}
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._emit('model_updated')
@@ -1260,7 +1266,9 @@ class GeologicalModelManager(Observable):
         )
         self._progress_callback = progress_callback
         displacement_fault_count = len(set(self.faults) - set(self.fault_boundaries.values()))
-        self._progress_total = displacement_fault_count + group_count
+        self._progress_total = (
+            displacement_fault_count + group_count + len(self.manual_foliations)
+        )
         self._progress_current = 0
         dbg = getattr(self, '_debug_manager', None)
         if dbg is not None:
@@ -1276,6 +1284,9 @@ class GeologicalModelManager(Observable):
             # Update the model with stratigraphy
             self.update_fault_features()
             self.update_foliation_features()
+            # after the stratigraphy, so each gets the same unconformity
+            # regions as when the user added it
+            self._build_manual_foliations()
             # fault topology (abutting/faulted/stratigraphy relationships) was
             # just re-applied above, so any pending topology edit is now current
             self._topology_dirty = False
@@ -1466,7 +1477,55 @@ class GeologicalModelManager(Observable):
         ValueError
             If a layer uses an unknown 'type' value.
         """
-        # for z
+        # Copy each layer dict: the data manager replaces its 'df' and the
+        # user can edit the table later, but a rebuild must use the data the
+        # foliation was added with.
+        spec = {
+            'data': {key: dict(layer_data) for key, layer_data in data.items()},
+            'folded_feature_name': folded_feature_name,
+            'sampler': sampler,
+            'use_z_coordinate': use_z_coordinate,
+            'restrict_to_stratigraphic_domain': restrict_to_stratigraphic_domain,
+        }
+        self._create_foliation(name, **spec)
+        self.manual_foliations[name] = spec
+        # inform listeners that a new foliation/feature was added
+        self._emit('model_updated')
+
+    def remove_manual_foliation(self, name: str):
+        """Stop building the user-added foliation `name` in `update_model`.
+
+        Does not remove the feature from the current model.
+        """
+        self.manual_foliations.pop(name, None)
+
+    def _build_manual_foliations(self):
+        """Build again every foliation added with `add_foliation`.
+
+        Called by `update_model` after it clears the model features. A
+        foliation that fails is logged and skipped, so one bad input does
+        not stop the rebuild of the rest of the model.
+        """
+        for name, spec in self.manual_foliations.items():
+            self._report_progress(f"Building foliation '{name}'")
+            try:
+                self._create_foliation(name, **spec)
+            except Exception as e:
+                if self._debug_manager is not None:
+                    self._debug_manager.log(
+                        f"Could not build foliation '{name}': {e}", log_level=2
+                    )
+
+    def _create_foliation(
+        self,
+        name,
+        data,
+        folded_feature_name=None,
+        sampler=AllSampler(),
+        use_z_coordinate=False,
+        restrict_to_stratigraphic_domain=True,
+    ):
+        """Create the foliation feature in the model; see `add_foliation`."""
         dfs = []
         kwargs = {}
         interface_offset = 0
@@ -1539,8 +1598,6 @@ class GeologicalModelManager(Observable):
             foliation.regions = [
                 r for r in foliation.regions if not isinstance(r, UnconformityFeature)
             ]
-        # inform listeners that a new foliation/feature was added
-        self._emit('model_updated')
 
     def add_unconformity(
         self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY
