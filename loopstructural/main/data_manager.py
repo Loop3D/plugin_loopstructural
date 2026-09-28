@@ -48,6 +48,9 @@ def _colour_to_qcolor(colour):
 
 
 __title__ = "LoopStructural"
+# number of cells in the bounding box grid (used for isosurfaces and
+# evaluation, not for the interpolation)
+DEFAULT_BOUNDING_BOX_NELEMENTS = 100_000
 default_bounding_box = {
     'xmin': 0,
     'xmax': 1000,
@@ -156,6 +159,15 @@ class ModellingDataManager:
         """Set the bounding box for the model."""
         origin = self._bounding_box.origin
         maximum = self._bounding_box.maximum
+        # nsteps can be a list (see BoundingBoxWidget._on_nsteps_changed), and
+        # BoundingBox.nelements calls nsteps.prod()
+        current = float(np.prod(np.asarray(self._bounding_box.nsteps, dtype=float)))
+        # Keep the requested element count. The nelements setter rounds each
+        # axis up, so the product grows a little on each call. Use the product
+        # only when nsteps was changed somewhere else (for example the widget).
+        nelements = getattr(self, '_grid_nelements', None)
+        if nelements is None or current != getattr(self, '_grid_nsteps_product', None):
+            nelements = current
 
         if xmin is not None:
             origin[0] = xmin
@@ -171,6 +183,22 @@ class ModellingDataManager:
             maximum[2] = zmax
         self._bounding_box.origin = origin
         self._bounding_box.maximum = maximum
+        # nsteps does not change when origin/maximum change, so the old
+        # nsteps gives very long cells in the new box and small features (for
+        # example a synform core) do not show in the isosurfaces. Keep the
+        # element count and make the cells cubic again for the new extent.
+        # While the sides are set one at a time the box can have no volume
+        # (for example xmin > xmax); the nelements setter then gives nsteps of
+        # 0, and 0 elements stays 0 on every later call, so skip it until the
+        # box is valid, and use the default count if the count is not valid.
+        if np.all(np.asarray(maximum) - np.asarray(origin) > 0):
+            if not np.isfinite(nelements) or nelements < 1:
+                nelements = DEFAULT_BOUNDING_BOX_NELEMENTS
+            self._bounding_box.nelements = nelements
+            self._grid_nelements = nelements
+            self._grid_nsteps_product = float(
+                np.prod(np.asarray(self._bounding_box.nsteps, dtype=float))
+            )
         if mark_set:
             self._bounding_box_set = True
         self._model_manager.update_bounding_box(self._bounding_box)
