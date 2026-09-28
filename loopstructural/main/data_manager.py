@@ -9,9 +9,11 @@ from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColu
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
     QgsGraduatedSymbolRenderer,
     QgsPointXY,
     QgsProject,
+    QgsRectangle,
     QgsRendererCategory,
     QgsRendererRange,
     QgsStyle,
@@ -727,6 +729,71 @@ class ModellingDataManager:
             and trace_extent.yMaximum() >= ymax - tolerance
         )
         return spans_x or spans_y
+
+    def get_input_layers(self):
+        """Return a dict of {role: layer} for every input layer currently
+        configured (basal contacts, fault traces, structural orientations)."""
+        layers = {}
+        for role, config in (
+            ('Basal contacts', self._basal_contacts),
+            ('Fault traces', self._fault_traces),
+            ('Structural orientations', self._structural_orientations),
+        ):
+            if not config:
+                continue
+            layer = config.get('layer')
+            try:
+                if layer is None or not layer.isValid():
+                    continue
+            except RuntimeError:
+                # underlying C++ layer was deleted
+                continue
+            layers[role] = layer
+        return layers
+
+    def get_layers_outside_bounding_box(self):
+        """Check which input layers do not overlap the bounding box in XY.
+
+        Layer extents are reprojected into the model CRS before comparing.
+
+        Returns
+        -------
+        tuple(list, list)
+            (names of layers that overlap the bounding box,
+             names of layers that do not overlap it)
+        """
+        model_crs = self.get_model_crs()
+        bbox = QgsRectangle(
+            self._bounding_box.origin[0],
+            self._bounding_box.origin[1],
+            self._bounding_box.maximum[0],
+            self._bounding_box.maximum[1],
+        )
+        inside = []
+        outside = []
+        for role, layer in self.get_input_layers().items():
+            name = f"{role} ({layer.name()})"
+            try:
+                extent = layer.extent()
+                layer_crs = layer.crs()
+                if (
+                    model_crs is not None
+                    and model_crs.isValid()
+                    and layer_crs.isValid()
+                    and layer_crs != model_crs
+                ):
+                    transform = QgsCoordinateTransform(layer_crs, model_crs, self.project)
+                    extent = transform.transformBoundingBox(extent)
+            except Exception:
+                # can't determine the extent, so don't report it either way
+                continue
+            if extent.isNull():
+                continue
+            if bbox.intersects(extent) or bbox.contains(extent):
+                inside.append(name)
+            else:
+                outside.append(name)
+        return inside, outside
 
     def update_stratigraphic_column_order(self, new_order):
         """Update the order of units in the stratigraphic column."""

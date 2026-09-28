@@ -254,6 +254,9 @@ class GeologicalModelTab(QWidget):
                 )
                 return
 
+        if not self._confirm_bounding_box_contains_data():
+            return
+
         self._run_model_task(
             lambda progress_callback: self.model_manager.update_model(
                 notify_observers=False, progress_callback=progress_callback
@@ -268,6 +271,8 @@ class GeologicalModelTab(QWidget):
         # while a fault topology edit is pending re-Initialize.
         if not self.model_manager or self.model_manager.model_state not in _SOLVABLE_STATES:
             return
+        if not self._confirm_bounding_box_contains_data():
+            return
         self._run_model_task(
             lambda progress_callback: self.model_manager.update_all_features(
                 progress_callback=progress_callback, notify_observers=False
@@ -275,6 +280,37 @@ class GeologicalModelTab(QWidget):
             title="Solving Model",
             initial_label="Solving geological model...",
         )
+
+    def _confirm_bounding_box_contains_data(self):
+        """Warn the user if none of the input layers overlap the bounding
+        box. The model still solves in that case, but no surfaces appear, so
+        this is usually a bounding box that was never set correctly.
+        Returns True if the task should continue.
+        """
+        if self.data_manager is None:
+            return True
+        try:
+            inside, outside = self.data_manager.get_layers_outside_bounding_box()
+        except Exception:
+            return True
+        if inside or not outside:
+            return True
+        bb = self.data_manager.get_bounding_box()
+        layer_list = "\n".join(f"  - {name}" for name in outside)
+        reply = QMessageBox.warning(
+            self,
+            "Check bounding box",
+            "None of the input layers overlap the model bounding box:\n"
+            f"{layer_list}\n\n"
+            f"Bounding box X: {bb.origin[0]:g} to {bb.maximum[0]:g}, "
+            f"Y: {bb.origin[1]:g} to {bb.maximum[1]:g}\n\n"
+            "The model will solve, but no surfaces will appear. Check that the "
+            "bounding box in the Model Definition tab is correct.\n\n"
+            "Do you want to continue anyway?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return reply == QMessageBox.Yes
 
     def _run_model_task(self, target, *, title, initial_label):
         """Run `target(progress_callback)` on a background QThread with a
