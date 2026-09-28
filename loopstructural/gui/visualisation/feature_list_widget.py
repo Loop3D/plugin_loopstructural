@@ -23,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QTabWidget,
@@ -570,6 +571,20 @@ class FeatureListWidget(QWidget):
         """
         if not self.model_manager:
             logger.info("Model manager is not set.")
+            return
+        missing = self.model_manager.get_units_without_colour()
+        if missing:
+            QMessageBox.warning(
+                self,
+                "Missing unit colour",
+                "Cannot colour the topography by stratigraphy. These units have no "
+                "valid colour in the stratigraphic column:\n\n"
+                + "\n".join(missing)
+                + "\n\nSet a colour for each unit and try again.",
+            )
+            self.colourTopographyByStratigraphyCheckBox.blockSignals(True)
+            self.colourTopographyByStratigraphyCheckBox.setChecked(False)
+            self.colourTopographyByStratigraphyCheckBox.blockSignals(False)
             return
         mesh = self.viewer.meshes['topography_surface']['mesh']
 

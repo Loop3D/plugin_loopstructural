@@ -1736,6 +1736,23 @@ class GeologicalModelManager(Observable):
             colours.extend(unit.colour for unit in group.units)
         return colours
 
+    def get_units_without_colour(self) -> list:
+        """Return the names of units whose colour is missing or invalid.
+
+        `get_stratigraphic_column_colours` passes each colour straight to
+        matplotlib, which raises on None, '' or an unknown colour string.
+        """
+        from matplotlib.colors import is_color_like
+
+        if self.model is None or self.model.stratigraphic_column is None:
+            return []
+        return [
+            unit.name
+            for group in self.model.stratigraphic_column.get_groups()
+            for unit in group.units
+            if not unit.colour or not is_color_like(unit.colour)
+        ]
+
     def export_feature_values_to_geodataframe(
         self,
         feature_name: str,
