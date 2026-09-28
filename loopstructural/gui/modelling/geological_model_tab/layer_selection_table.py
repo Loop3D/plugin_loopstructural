@@ -619,17 +619,43 @@ class LayerSelectionDialog(QDialog):
             'upper_field': self.upper_field_combo,
         }
 
+    def _other_entries(self):
+        """Entries already on this feature, excluding the one being edited."""
+        editing_key = self.existing_data.get('layer_name')
+        return {
+            key: entry
+            for key, entry in self.data_manager.feature_data.get(self.feature_name, {}).items()
+            if key != editing_key
+        }
+
+    def _unique_layer_name(self, layer):
+        """Key for `layer` in `feature_data` that doesn't clash with other entries.
+
+        Entries are keyed by layer name, but QGIS allows several layers to
+        share a name (e.g. every scratch layer is "New scratch layer"), so a
+        suffix is added to keep a second same-named layer from overwriting
+        the first.
+        """
+        if layer is self.existing_data.get('layer'):
+            return self.existing_data['layer_name']
+        taken = self._other_entries().keys()
+        name = layer.name()
+        suffix = 2
+        unique_name = name
+        while unique_name in taken:
+            unique_name = f"{name} ({suffix})"
+            suffix += 1
+        return unique_name
+
     def _validate_layer_selection(self):
         """Validate the current layer selection."""
-        if self.layer_combo.currentLayer() is None:
+        layer = self.layer_combo.currentLayer()
+        if layer is None:
             self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
             return False
 
-        layer_name = self.layer_combo.currentLayer().name()
-        is_layer_being_edited = layer_name == self.existing_data.get('layer_name')
-        if not is_layer_being_edited and layer_name in self.data_manager.feature_data.get(
-            self.feature_name, {}
-        ):
+        # Compare layer objects, not names: different layers may share a name.
+        if any(entry.get('layer') is layer for entry in self._other_entries().values()):
             self.data_manager.logger("Layer already selected.", log_level=2)
             self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
             return False
@@ -644,7 +670,7 @@ class LayerSelectionDialog(QDialog):
 
         self.layer_data = {
             'layer': self.layer_combo.currentLayer(),
-            'layer_name': self.layer_combo.currentLayer().name(),
+            'layer_name': self._unique_layer_name(self.layer_combo.currentLayer()),
             'type': self.layer_type,
         }
 
