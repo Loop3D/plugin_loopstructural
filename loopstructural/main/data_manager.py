@@ -609,9 +609,16 @@ class ModellingDataManager:
         return True
 
     def get_stratigraphic_unit_names(self):
-        """Get the names of the stratigraphic units in the column."""
+        """Get the names of the stratigraphic units in the column, youngest first.
+
+        `StratigraphicColumn.order` is oldest first (the base is index 0).
+        map2loop expects the youngest unit first: `extract_basal_contacts`
+        gives each contact the unit with the lower index as its basal unit.
+        If the order is oldest first, each contact gets the name of the unit
+        below it, and the model folds are inverted.
+        """
         units = []
-        for u in self._stratigraphic_column.order:
+        for u in reversed(self._stratigraphic_column.order):
             if u.element_type == StratigraphicColumnElementType.UNIT:
                 units.append(u.name)
         return units

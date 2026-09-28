@@ -104,11 +104,21 @@ class StratColumnWidget(QWidget):
         )
         clearButton.clicked.connect(self.clearColumn)
 
+        reverseButton = self._make_tool_button(
+            "mActionReverseLine.svg", "Reverse Stratigraphic Column"
+        )
+        reverseButton.setToolTip(
+            "Reverse Stratigraphic Column\n"
+            "Flip the order of the column so the youngest unit becomes the oldest."
+        )
+        reverseButton.clicked.connect(self.reverseColumn)
+
         actionsRow = QHBoxLayout()
         actionsRow.addWidget(addUnitButton)
         actionsRow.addWidget(addUnconformityButton)
         actionsRow.addWidget(initFromBasalContactsButton)
         actionsRow.addWidget(initFromLayerFieldButton)
+        actionsRow.addWidget(reverseButton)
         actionsRow.addWidget(clearButton)
         actionsRow.addStretch(1)
         layout.addLayout(actionsRow)
@@ -207,6 +217,15 @@ class StratColumnWidget(QWidget):
             self._widget_cache.clear()
             print("Error: Data manager is not initialized.")
 
+    def reverseColumn(self):
+        """Reverse the order of the stratigraphic column (units and unconformities)."""
+        if not self.data_manager or not self.data_manager._stratigraphic_column:
+            return
+        uuids = [element.uuid for element in self.data_manager._stratigraphic_column.order]
+        if len(uuids) < 2:
+            return
+        self.data_manager.update_stratigraphic_column_order(list(reversed(uuids)))
+
     def update_display(self):
         """Update the widget display with efficient incremental updates.
 
@@ -233,7 +252,9 @@ class StratColumnWidget(QWidget):
                 # Widget was deleted
                 return
 
-            current_order = self.data_manager._stratigraphic_column.order
+            # `order` is oldest first (the base is index 0). Show the youngest
+            # unit at the top of the list, as in a stratigraphic column.
+            current_order = list(reversed(self.data_manager._stratigraphic_column.order))
             current_uuids = [unit.uuid for unit in current_order]
             cached_uuids = list(self._widget_cache.keys())
 
@@ -264,7 +285,8 @@ class StratColumnWidget(QWidget):
         Parameters
         ----------
         current_order : list
-            The current order of elements in the stratigraphic column
+            The elements of the stratigraphic column in display order
+            (youngest first)
         """
         # Check if the list widget is still valid (could be deleted in some cases)
         try:
@@ -520,7 +542,7 @@ class StratColumnWidget(QWidget):
         unit_widget.dragHandleReleased.connect(lambda: self._on_drag_end(unit_widget))
         item = QListWidgetItem()
         item.setSizeHint(unit_widget.sizeHint())
-        self.unitList.addItem(item)
+        self._add_list_item(item, at_top=create_new)
         self.unitList.setItemWidget(item, unit_widget)
         unit_widget.setData(unit_data)  # Set data for the unit widget
         unit_widget.set_known_unit_names(self._known_unit_names)
@@ -561,13 +583,33 @@ class StratColumnWidget(QWidget):
         )
         item = QListWidgetItem()
         item.setSizeHint(unconformity_widget.sizeHint())
-        self.unitList.addItem(item)
+        self._add_list_item(item, at_top=create_new)
         self.unitList.setItemWidget(item, unconformity_widget)
         unconformity_widget.set_available_faults(self._get_available_fault_names())
         unconformity_widget.setData(unconformity_data)
 
         # Cache the widget for efficient updates
         self._widget_cache[unconformity.uuid] = (unconformity_widget, item)
+
+    def _add_list_item(self, item, *, at_top):
+        """Add a row to the list. A new element goes on top of the column
+        (the end of `order`), so it is shown in the first row."""
+        if at_top:
+            self.unitList.insertItem(0, item)
+        else:
+            self.unitList.addItem(item)
+
+    def _ordered_uuids_from_rows(self):
+        """Return the uuids of the rows in `order` sequence (oldest first).
+        The rows are shown youngest first, so they are reversed."""
+        uuids = []
+        for i in range(self.unitList.count()):
+            widget = self.unitList.itemWidget(self.unitList.item(i))
+            if widget:
+                uuids.append(widget.uuid)
+            else:
+                print(f"Warning: Item at index {i} has no widget associated with it.")
+        return list(reversed(uuids))
 
     def delete_unit(self, unit_widget):
         for i in range(self.unitList.count()):
@@ -617,19 +659,20 @@ class StratColumnWidget(QWidget):
         if target_row is None or not self.data_manager:
             return
 
-        ordered_uuids = [
+        row_uuids = [
             self.unitList.itemWidget(self.unitList.item(i)).uuid
             for i in range(self.unitList.count())
         ]
         try:
-            current_row = ordered_uuids.index(widget.uuid)
+            current_row = row_uuids.index(widget.uuid)
         except ValueError:
             return
         if current_row == target_row:
             return
-        ordered_uuids.pop(current_row)
-        ordered_uuids.insert(target_row, widget.uuid)
-        self.data_manager.update_stratigraphic_column_order(ordered_uuids)
+        row_uuids.pop(current_row)
+        row_uuids.insert(target_row, widget.uuid)
+        # rows are youngest first, `order` is oldest first
+        self.data_manager.update_stratigraphic_column_order(list(reversed(row_uuids)))
 
     def _set_drop_indicator(self, row):
         """Highlight the row a drag would drop onto, clearing any previous highlight."""
@@ -652,15 +695,7 @@ class StratColumnWidget(QWidget):
     def update_order(self, parent, start, end, destination, row):
         """Update the data manager when the order of items changes."""
         if self.data_manager:
-            ordered_uuids = []
-            for i in range(self.unitList.count()):
-                item = self.unitList.item(i)
-                widget = self.unitList.itemWidget(item)
-                if widget:
-                    ordered_uuids.append(widget.uuid)
-                else:
-                    print(f"Warning: Item at index {i} has no widget associated with it.")
-            self.data_manager.update_stratigraphic_column_order(ordered_uuids)
+            self.data_manager.update_stratigraphic_column_order(self._ordered_uuids_from_rows())
 
     def update_element(self, unit_widget):
         """Update the data manager with the changes made in the unit widget.
