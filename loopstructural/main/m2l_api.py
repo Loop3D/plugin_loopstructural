@@ -762,6 +762,7 @@ def calculate_thickness(
 
     # Convert layers to GeoDataFrames
     geology_gdf = qgsLayerToGeoDataFrame(geology)
+    basal_contacts_gdf = None
     if basal_contacts is not None:
         basal_contacts_gdf = qgsLayerToGeoDataFrame(basal_contacts)
         basal_contacts_gdf = (
@@ -769,7 +770,19 @@ def calculate_thickness(
             if basal_contacts_unit_name
             else basal_contacts_gdf
         )
-    else:
+        # A memory layer has no features after the project is opened again,
+        # so treat an empty layer the same as no layer.
+        if basal_contacts_gdf is None or basal_contacts_gdf.empty:
+            if not stratigraphic_order:
+                raise ValueError(
+                    "The basal contacts layer has no features. Run the basal contacts "
+                    "extractor again, or define the stratigraphic column so basal "
+                    "contacts can be calculated from the geology layer."
+                )
+            if updater:
+                updater("The basal contacts layer has no features; calculating them from geology...")
+            basal_contacts_gdf = None
+    if basal_contacts_gdf is None:
         # No basal contacts layer supplied -- derive it from the geology
         # layer and the stratigraphic order instead of failing.
         if not stratigraphic_order:
@@ -779,7 +792,7 @@ def calculate_thickness(
                 "contacts layer, or define the stratigraphic column so basal "
                 "contacts can be derived from the geology layer."
             )
-        if updater:
+        if updater and basal_contacts is None:
             updater("No basal contacts layer supplied; calculating basal contacts from geology...")
         basal_contacts_gdf = extract_basal_contacts(
             geology=geology,
@@ -805,6 +818,12 @@ def calculate_thickness(
         updater(f"Sampling basal contacts at spacing {sampling_frequency}...")
     sampler = SamplerSpacing(spacing=sampling_frequency, dtm_data=dtm_gdal, geology_data=geology_gdf)
     sampled_contacts_gdf = sampler.sample(basal_contacts_gdf)
+    if sampled_contacts_gdf is None or len(sampled_contacts_gdf) == 0:
+        raise ValueError(
+            "No points were sampled along the basal contacts. Check that the basal "
+            "contacts layer has features and that the sampling frequency is smaller "
+            "than the contact lengths."
+        )
 
     # Log parameters via DebugManager if provided
     if debug_manager:
@@ -836,9 +855,16 @@ def calculate_thickness(
         if unit_name_field in geology_gdf.columns:
             geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
 
-    # Handle dip field
-    if dip_field and dip_field != 'DIP' and dip_field in structure_gdf.columns:
-        structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
+    if dip_field and dipdir_field and dip_field == dipdir_field:
+        raise ValueError(
+            f"The dip field and the dip direction/strike field are both '{dip_field}'. "
+            "Select a different field for each."
+        )
+    # Copy the columns (do not rename them), so that one source column can
+    # not remove the other one.
+    dip_values = None
+    if dip_field and dip_field in structure_gdf.columns:
+        dip_values = structure_gdf[dip_field].copy()
 
     # Handle dip direction field based on orientation type
     if dipdir_field and dipdir_field in structure_gdf.columns:
@@ -847,7 +873,9 @@ def calculate_thickness(
                 lambda val: (val + 90.0) % 360.0 if pd.notna(val) else val
             )
         elif orientation_type == 'Dip Direction':
-            structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
+            structure_gdf['DIPDIR'] = structure_gdf[dipdir_field]
+    if dip_values is not None:
+        structure_gdf['DIP'] = dip_values
 
     # Run thickness calculator
     if calculator_type == "InterpolatedStructure":

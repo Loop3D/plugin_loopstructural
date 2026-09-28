@@ -224,8 +224,10 @@ class ThicknessCalculatorWidget(QWidget):
             self.crossSectionLayerComboBox.setVisible(False)
 
         elif calculator_type == "InterpolatedStructure":
-            self.maxLineLengthLabel.setVisible(False)
-            self.maxLineLengthSpinBox.setVisible(False)
+            # InterpolatedStructure skips lines longer than max_line_length,
+            # so the user must be able to set it.
+            self.maxLineLengthLabel.setVisible(True)
+            self.maxLineLengthSpinBox.setVisible(True)
             self.crossSectionLayerLabel.setVisible(False)
             self.crossSectionLayerComboBox.setVisible(False)
 
@@ -527,7 +529,14 @@ class ThicknessCalculatorWidget(QWidget):
             'dip_field': self.dipFieldComboBox.currentField(),
             'dipdir_field': self.dipDirFieldComboBox.currentField(),
             'basal_contacts_unit_name': self.basalUnitNameFieldComboBox.currentField(),
-            'max_line_length': self.maxLineLengthSpinBox.value(),
+            # StructuralPoint and InterpolatedStructure both skip lines that are
+            # longer than max_line_length. AlongSection does not use it.
+            'max_line_length': (
+                self.maxLineLengthSpinBox.value()
+                if self.calculatorTypeComboBox.currentText()
+                in ("StructuralPoint", "InterpolatedStructure")
+                else None
+            ),
             'stratigraphic_order': (
                 self.data_manager.get_stratigraphic_unit_names()
                 if self.data_manager and hasattr(self.data_manager, 'get_stratigraphic_unit_names')
