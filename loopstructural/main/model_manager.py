@@ -808,6 +808,16 @@ class GeologicalModelManager(Observable):
         This method will automatically add unconformities based on the stratigraphic column.
         """
         stratigraphic_column = {}
+        # Take each unit's training value straight from `get_isovalues()`
+        # (LoopStructural core), which is what labels the extracted
+        # isosurfaces. Re-deriving the cumulative thickness here has drifted
+        # out of step with the core walk order more than once (the core now
+        # walks `reversed(group.units)`, oldest first), which puts every
+        # unit's data at another unit's isovalue -- see
+        # test_stratigraphic_value_consistency.py. `get_isovalues()` also
+        # counts the thickness of units with no digitised data, so an
+        # unmapped unit does not shift the values of the units above it.
+        isovalues = self.stratigraphic_column.get_isovalues()
         for _i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
             self._report_progress(f"Building stratigraphic group '{group.name}'")
             # check if the attribute is none, if its none we want so skip as it could be an
@@ -816,34 +826,11 @@ class GeologicalModelManager(Observable):
             if qgisAttributeIsNone(group) is None:
                 self._debug_manager.log(f"Group {group.name} has no data, skipping.", log_level=2)
                 continue
-            val = 0
             data = []
             groupname = group.name
             stratigraphic_column[groupname] = {}
             for u in group.units:
-                # A unit's own `val` is `u.min()` -- the cumulative
-                # thickness *before* this unit's own thickness is added --
-                # matching `StratigraphicColumn.update_unit_values` (a unit
-                # is only added to the column oldest-first via `where=
-                # 'top'`, so `min()` is the boundary shared with the
-                # next-*older* neighbour processed just before it, i.e.
-                # this unit's own base) and `get_isovalues()` (LoopStructural
-                # core). `group.units` (from `get_groups()`) is already in
-                # that oldest-after-youngest walk order, and `get_isovalues()`
-                # accumulates over it directly with no extra reversal, so
-                # this loop must not reverse it either -- doing so trains
-                # each unit with the wrong scalar value, see
-                # test_stratigraphic_value_consistency.py.
-                #
-                # `val` must accumulate every unit's thickness regardless of
-                # whether that unit has any digitised data -- get_isovalues()
-                # assigns each unit's isovalue purely from cumulative
-                # thickness, with no knowledge of which units were actually
-                # mapped. Skipping the increment for an unmapped unit (e.g.
-                # a "Top" placeholder with no contact points) would shift
-                # every val assigned to units after it in this loop, so
-                # extracted isosurfaces would get labelled with the wrong
-                # unit name even though the geometry itself is fine.
+                val = isovalues[u.name]['value']
                 unit_data = self.stratigraphy.get(u.name, None)
                 if unit_data is not None:
                     if 'contact' in unit_data:
@@ -858,8 +845,6 @@ class GeologicalModelManager(Observable):
                             orientations['val'] = np.nan
                             orientations['feature_name'] = groupname
                             data.append(orientations)
-
-                val += u.thickness
             if len(data) == 0:
                 self._debug_manager.log(
                     f"No data found for group {groupname}, skipping.", log_level=2
