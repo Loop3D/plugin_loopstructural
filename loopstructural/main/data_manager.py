@@ -1355,8 +1355,17 @@ class ModellingDataManager:
             return self.widget_settings[widget_name]
         return default
 
-    def add_foliation_to_model(self, foliation_name: str, *, folded_feature_name=None):
-        """Add a foliation to the model."""
+    def add_foliation_to_model(
+        self,
+        foliation_name: str,
+        *,
+        folded_feature_name=None,
+        restrict_to_stratigraphic_domain=True,
+    ):
+        """Add a foliation to the model.
+
+        See `ModelManager.add_foliation` for `restrict_to_stratigraphic_domain`.
+        """
         if foliation_name not in self.feature_data:
             raise ValueError(f"Foliation '{foliation_name}' does not exist in the data manager.")
         foliation_data = self.feature_data[foliation_name]
@@ -1371,6 +1380,7 @@ class ModellingDataManager:
                 foliation_data,
                 folded_feature_name=folded_feature_name,
                 use_z_coordinate=True,
+                restrict_to_stratigraphic_domain=restrict_to_stratigraphic_domain,
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
         else:

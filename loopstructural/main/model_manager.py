@@ -1446,6 +1446,7 @@ class GeologicalModelManager(Observable):
         folded_feature_name=None,
         sampler=AllSampler(),
         use_z_coordinate=False,
+        restrict_to_stratigraphic_domain=True,
     ):
         """Create and add a foliation feature from grouped input layers.
 
@@ -1467,6 +1468,13 @@ class GeologicalModelManager(Observable):
             rows (default: AllSampler()).
         use_z_coordinate : bool
             Whether to use Z coordinates from input geometries when present.
+        restrict_to_stratigraphic_domain : bool
+            If True (LoopStructural's default), the foliation keeps the
+            unconformity regions `create_and_add_foliation` applies from
+            features already in the model, so it only exists below them. If
+            False, those regions are removed -- needed for a foliation whose
+            data lies within the stratigraphic units (e.g. a cleavage), which
+            is otherwise masked (NaN) everywhere it has data.
 
         Raises
         ------
@@ -1539,7 +1547,13 @@ class GeologicalModelManager(Observable):
                 kwargs['solver'] = 'admm'
             else:
                 raise ValueError(f"Unknown layer type: {layer_data['type']}")
-        self.model.create_and_add_foliation(name, data=pd.concat(dfs, ignore_index=True), **kwargs)
+        foliation = self.model.create_and_add_foliation(
+            name, data=pd.concat(dfs, ignore_index=True), **kwargs
+        )
+        if not restrict_to_stratigraphic_domain:
+            foliation.regions = [
+                r for r in foliation.regions if not isinstance(r, UnconformityFeature)
+            ]
         # inform listeners that a new foliation/feature was added
         self._emit('model_updated')
 

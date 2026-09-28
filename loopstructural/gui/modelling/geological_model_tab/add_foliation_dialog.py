@@ -92,7 +92,13 @@ class AddFoliationDialog(QDialog):
 
         folded_feature_name = None
 
-        self.data_manager.add_foliation_to_model(self.name, folded_feature_name=folded_feature_name)
+        self.data_manager.add_foliation_to_model(
+            self.name,
+            folded_feature_name=folded_feature_name,
+            restrict_to_stratigraphic_domain=(
+                self.restrict_to_stratigraphic_domain_checkbox.isChecked()
+            ),
+        )
         self.accept()  # Close the dialog
 
     def cancel(self):
