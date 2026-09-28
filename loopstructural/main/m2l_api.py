@@ -33,6 +33,153 @@ PARAMETERS_DICTIONARY = {
     "Maximise contacts": SorterMaximiseContacts.required_arguments,
     "Observation projections": SorterObservationProjections.required_arguments,
 }
+# The direction of the result of these sorters (youngest or oldest first) is
+# arbitrary, so it is set from the structural data after the sort (see
+# orient_order_by_structure). Observation projections uses the dip, but its
+# travelling salesman route loses the direction.
+SORTERS_WITHOUT_YOUNGING = (
+    "NetworkX topological",
+    "Adjacency α",
+    "Maximise contacts",
+    "Observation projections",
+)
+# These sorters return a travelling salesman route, which is a closed cycle
+# (see repair_cycle_order).
+SORTERS_WITH_CYCLE = ("Maximise contacts", "Observation projections")
+
+
+def repair_cycle_order(order, contacts_gdf, unitname1_column, unitname2_column):
+    """Make a linear order from an order that is really a closed cycle.
+
+    SorterMaximiseContacts solves a travelling salesman problem, which returns
+    a closed route that can start at any unit, and can join two parts of the
+    column at the wrong ends. So its list can start in the middle of the
+    column, or have units that do not touch next to each other.
+
+    The cycle is split at each pair of neighbours with no shared contact.
+    Then the chains are joined end to end, each time with the pair of chain
+    ends that has the longest shared contact (a chain is turned around if
+    necessary). If there is only one chain, it is cut at the pair of
+    neighbours with the shortest shared contact.
+    """
+    n = len(order)
+    if n < 3 or contacts_gdf is None or len(contacts_gdf) == 0:
+        return order
+    lengths = {}
+    for _, row in contacts_gdf.iterrows():
+        pair = frozenset((row[unitname1_column], row[unitname2_column]))
+        lengths[pair] = lengths.get(pair, 0.0) + float(row.get('length', 0.0) or 0.0)
+
+    def contact(a, b):
+        return lengths.get(frozenset((a, b)), 0.0)
+
+    weights = [contact(order[i], order[(i + 1) % n]) for i in range(n)]
+    # rotate so that the list starts after the weakest link
+    weakest = n - 1 if weights[-1] <= min(weights) else weights.index(min(weights))
+    order = order[weakest + 1 :] + order[: weakest + 1]
+    if min(weights) > 0:
+        return order
+
+    # split into chains at the links with no contact
+    chains = [[order[0]]]
+    for previous, unit in zip(order, order[1:]):
+        if contact(previous, unit) > 0:
+            chains[-1].append(unit)
+        else:
+            chains.append([unit])
+    if len(chains) == 1:
+        return order
+
+    # join the chains, starting with the longest one
+    chains.sort(key=len, reverse=True)
+    result = chains.pop(0)
+    while chains:
+        best = None
+        for i, chain in enumerate(chains):
+            for candidate in (chain, chain[::-1]):
+                # candidate after result, or candidate before result
+                for at_end, value in (
+                    (True, contact(result[-1], candidate[0])),
+                    (False, contact(candidate[-1], result[0])),
+                ):
+                    if best is None or value > best[0]:
+                        best = (value, i, candidate, at_end)
+        _, i, candidate, at_end = best
+        chains.pop(i)
+        result = result + candidate if at_end else candidate + result
+    return result
+
+
+def orient_order_by_structure(
+    order, geology_gdf, unit_name_field, structure_gdf, max_distance=2000.0
+):
+    """Count the structural measurements that agree with a youngest-first order.
+
+    For each measurement, find the unit that contains it and the first other
+    unit along a line in the dip direction. For upright beds that unit is
+    younger, so it must come before the containing unit in `order`.
+
+    Parameters
+    ----------
+    order : list
+        Unit names, youngest first.
+    geology_gdf : GeoDataFrame
+        Geology polygons.
+    unit_name_field : str
+        Name of the unit name column in `geology_gdf`.
+    structure_gdf : GeoDataFrame
+        Point measurements with 'DIP' and 'DIPDIR' columns in degrees.
+    max_distance : float, optional
+        Length of the line in the dip direction, in map units.
+
+    Returns
+    -------
+    tuple(int, int)
+        (measurements that agree with `order`, measurements that do not)
+    """
+    import math
+
+    from shapely.geometry import LineString
+
+    index = {name: i for i, name in enumerate(order)}
+    geology = geology_gdf[[unit_name_field, 'geometry']].reset_index(drop=True)
+    sindex = geology.sindex
+    agree = 0
+    disagree = 0
+    for _, row in structure_gdf.iterrows():
+        point = row.geometry
+        dip = row.get('DIP')
+        dipdir = row.get('DIPDIR')
+        if point is None or point.geom_type != 'Point' or pd.isna(dip) or pd.isna(dipdir):
+            continue
+        if float(dip) <= 0:
+            # a horizontal bed has no dip direction
+            continue
+        containing = geology.iloc[sindex.query(point, predicate='within')]
+        if containing.empty:
+            continue
+        unit_a = containing.iloc[0][unit_name_field]
+        angle = math.radians(float(dipdir))
+        end = (
+            point.x + math.sin(angle) * max_distance,
+            point.y + math.cos(angle) * max_distance,
+        )
+        line = LineString([(point.x, point.y), end])
+        candidates = geology.iloc[sindex.query(line, predicate='intersects')]
+        candidates = candidates[candidates[unit_name_field] != unit_a]
+        if candidates.empty:
+            continue
+        distances = [point.distance(line.intersection(g)) for g in candidates.geometry]
+        unit_b = candidates.iloc[int(min(range(len(distances)), key=distances.__getitem__))][
+            unit_name_field
+        ]
+        if unit_a not in index or unit_b not in index:
+            continue
+        if index[unit_b] < index[unit_a]:
+            agree += 1
+        else:
+            disagree += 1
+    return agree, disagree
 
 
 def extract_basal_contacts(
@@ -326,6 +473,12 @@ def sort_stratigraphic_column(
             on=unit_name_field,
             how='left',
         )
+    # SorterUseNetworkX reads the literal 'layerId' and 'name' columns, and
+    # looks up units["name"][layerId], so layerId must be the row index.
+    units_df = units_df.reset_index(drop=True)
+    units_df['layerId'] = units_df.index
+    if 'name' not in units_df.columns:
+        units_df['name'] = units_df[unit_name_field]
     # Build relationships DataFrame (contacts without geometry)
     relationships_df = contacts_gdf.copy()
     if 'geometry' in relationships_df.columns:
@@ -337,16 +490,26 @@ def sort_stratigraphic_column(
     # matching the hardcoded column names map2loop's sorters read.
     structure_gdf = None
     if structure is not None:
+        if dip_field and dipdir_field and dip_field == dipdir_field:
+            raise ValueError(
+                f"The dip field and the dip direction/strike field are both '{dip_field}'. "
+                "Select a different field for each."
+            )
         structure_gdf = qgsLayerToGeoDataFrame(structure)
-        if dip_field and dip_field != 'DIP' and dip_field in structure_gdf.columns:
-            structure_gdf = structure_gdf.rename(columns={dip_field: 'DIP'})
+        # Copy the columns (do not rename them), so that one source column
+        # can not remove the other one.
+        dip_values = None
+        if dip_field and dip_field in structure_gdf.columns:
+            dip_values = structure_gdf[dip_field].copy()
         if dipdir_field and dipdir_field in structure_gdf.columns:
             if orientation_type == 'Strike':
                 structure_gdf['DIPDIR'] = structure_gdf[dipdir_field].apply(
                     lambda val: (val + 90.0) % 360.0 if pd.notna(val) else val
                 )
-            elif orientation_type == 'Dip Direction' and dipdir_field != 'DIPDIR':
-                structure_gdf = structure_gdf.rename(columns={dipdir_field: 'DIPDIR'})
+            elif orientation_type == 'Dip Direction':
+                structure_gdf['DIPDIR'] = structure_gdf[dipdir_field]
+        if dip_values is not None:
+            structure_gdf['DIP'] = dip_values
 
     # Convert DTM to a GDAL dataset, as map2loop's sorters read it via GDAL calls.
     dtm_gdal = None
@@ -401,6 +564,39 @@ def sort_stratigraphic_column(
     order = sorter.sort(units_df)
     if updater:
         updater(f"Sorting complete: {len(order)} units ordered")
+
+    if sorting_algorithm in SORTERS_WITH_CYCLE:
+        order = repair_cycle_order(
+            order,
+            contacts_gdf,
+            all_args.get('unitname1_column', 'UNITNAME_1'),
+            all_args.get('unitname2_column', 'UNITNAME_2'),
+        )
+
+    if sorting_algorithm in SORTERS_WITHOUT_YOUNGING:
+        if (
+            structure_gdf is not None
+            and 'DIP' in structure_gdf.columns
+            and 'DIPDIR' in structure_gdf.columns
+        ):
+            agree, disagree = orient_order_by_structure(
+                order, geology_gdf, unit_name_field, structure_gdf
+            )
+            if disagree > agree:
+                order = list(reversed(order))
+            message = (
+                f"Younging direction from structural data: {max(agree, disagree)} of "
+                f"{agree + disagree} measurements agree"
+                + (" (order reversed)." if disagree > agree else ".")
+            )
+        else:
+            message = (
+                f"{sorting_algorithm} does not find which unit is youngest. Select a "
+                "structure layer to set the direction, or examine the column."
+            )
+        logger.info(message)
+        if updater:
+            updater(message)
 
     return order
 

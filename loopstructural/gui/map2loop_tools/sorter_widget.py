@@ -10,7 +10,11 @@ from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.main.helpers import get_layer_names
-from loopstructural.main.m2l_api import PARAMETERS_DICTIONARY, SORTER_LIST
+from loopstructural.main.m2l_api import (
+    PARAMETERS_DICTIONARY,
+    SORTER_LIST,
+    SORTERS_WITHOUT_YOUNGING,
+)
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 
@@ -322,6 +326,16 @@ class SorterWidget(QWidget):
             self.orientationTypeComboBox.setVisible(True)
             self.dtmLayerLabel.setVisible(True)
             self.dtmLayerComboBox.setVisible(True)
+        elif algorithm_name in SORTERS_WITHOUT_YOUNGING:
+            # Optional: the structure data sets which end of the order is youngest.
+            self.structureLayerLabel.setVisible(True)
+            self.structureLayerComboBox.setVisible(True)
+            self.dipFieldLabel.setVisible(True)
+            self.dipFieldComboBox.setVisible(True)
+            self.dipDirFieldLabel.setVisible(True)
+            self.dipDirFieldComboBox.setVisible(True)
+            self.orientationTypeLabel.setVisible(True)
+            self.orientationTypeComboBox.setVisible(True)
 
         # Optionally, handle any additional custom fields from map2loop
         # (Add more widget visibility logic here if new fields are added in map2loop)
@@ -369,14 +383,27 @@ class SorterWidget(QWidget):
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
         }
 
-        # Add optional fields
-        min_age_field = self.minAgeFieldComboBox.currentField()
-        if min_age_field:
-            kwargs['min_age_field'] = min_age_field
+        # Add optional fields. Only the age based sorter uses the ages; a hidden
+        # age field (for example 'fid') would add one row per polygon to the units.
+        if algorithm_name == "Age based":
+            min_age_field = self.minAgeFieldComboBox.currentField()
+            if min_age_field:
+                kwargs['min_age_field'] = min_age_field
 
-        max_age_field = self.maxAgeFieldComboBox.currentField()
-        if max_age_field:
-            kwargs['max_age_field'] = max_age_field
+            max_age_field = self.maxAgeFieldComboBox.currentField()
+            if max_age_field:
+                kwargs['max_age_field'] = max_age_field
+
+        if (
+            algorithm_name in SORTERS_WITHOUT_YOUNGING
+            and self.structureLayerComboBox.currentLayer()
+        ):
+            kwargs['structure'] = self.structureLayerComboBox.currentLayer()
+            kwargs['dip_field'] = self.dipFieldComboBox.currentField()
+            kwargs['dipdir_field'] = self.dipDirFieldComboBox.currentField()
+            kwargs['orientation_type'] = self.orientation_types[
+                self.orientationTypeComboBox.currentIndex()
+            ]
 
         if is_observation_projections:
             kwargs['structure'] = self.structureLayerComboBox.currentLayer()
