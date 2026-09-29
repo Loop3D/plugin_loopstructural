@@ -1328,9 +1328,7 @@ class GeologicalModelManager(Observable):
         )
         self._progress_callback = progress_callback
         displacement_fault_count = len(set(self.faults) - set(self.fault_boundaries.values()))
-        self._progress_total = (
-            displacement_fault_count + group_count + len(self.manual_foliations)
-        )
+        self._progress_total = displacement_fault_count + group_count + len(self.manual_foliations)
         self._progress_current = 0
         dbg = getattr(self, '_debug_manager', None)
         if dbg is not None:
@@ -1719,9 +1717,7 @@ class GeologicalModelManager(Observable):
                 self._create_foliation(name, **spec)
             except Exception as e:
                 if self._debug_manager is not None:
-                    self._debug_manager.log(
-                        f"Could not build foliation '{name}': {e}", log_level=2
-                    )
+                    self._debug_manager.log(f"Could not build foliation '{name}': {e}", log_level=2)
 
     def _create_foliation(
         self,

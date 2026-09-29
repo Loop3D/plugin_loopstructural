@@ -36,9 +36,7 @@ def data_manager(tmp_path):
     _write_geographic_dem(path)
     dem_layer = QgsRasterLayer(str(path), "dem")
     assert dem_layer.isValid()
-    manager = ModellingDataManager(
-        project=QgsProject.instance(), mapCanvas=Mock(), logger=Mock()
-    )
+    manager = ModellingDataManager(project=QgsProject.instance(), mapCanvas=Mock(), logger=Mock())
     manager.set_model_manager(Mock())
     manager.set_model_crs(QgsCoordinateReferenceSystem(MODEL_CRS), use_project_crs=False)
     manager.set_dem_layer(dem_layer)

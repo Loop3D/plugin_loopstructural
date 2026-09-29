@@ -500,7 +500,9 @@ class SorterWidget(QWidget):
             Dictionary of current widget parameters.
         """
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
-        is_observation_projections = self.sorting_algorithms[algorithm_index] == "Observation projections"
+        is_observation_projections = (
+            self.sorting_algorithms[algorithm_index] == "Observation projections"
+        )
 
         params = {
             'sorting_algorithm': algorithm_index,
