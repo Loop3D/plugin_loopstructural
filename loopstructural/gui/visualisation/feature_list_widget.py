@@ -337,15 +337,34 @@ class FeatureListWidget(QWidget):
         add_vector_action = menu.addAction("Add Vector Field")
         add_data_action = menu.addAction("Add Data")
 
+        selected_items = self.treeWidget.selectedItems()
+        fold_actions = {}
+        if selected_items and self._get_fold(selected_items[0].text(0)) is not None:
+            fold_menu = menu.addMenu("Add Fold Constraints")
+            for constraint, label in self.FOLD_CONSTRAINT_LABELS.items():
+                fold_actions[fold_menu.addAction(label)] = constraint
+            fold_menu.addSeparator()
+            fold_actions[fold_menu.addAction("All")] = None
+
         action = menu.exec_(self.mapToGlobal(event.pos()))
 
-        selected_items = self.treeWidget.selectedItems()
         if not selected_items:
             return
 
         feature_name = selected_items[0].text(0)
 
-        if action == add_scalar_action:
+        if action in fold_actions:
+            constraint = fold_actions[action]
+            constraints = [constraint] if constraint else list(self.FOLD_CONSTRAINT_LABELS)
+            try:
+                for c in constraints:
+                    self.add_fold_constraint(feature_name, c)
+            except Exception as e:
+                logger.exception("Failed to add fold constraints")
+                QMessageBox.warning(
+                    self, "Fold Constraints", f"Cannot show the fold constraints:\n{e}"
+                )
+        elif action == add_scalar_action:
             self.add_scalar_field(feature_name)
         elif action == add_surface_action:
             self.add_surface(feature_name)
@@ -399,6 +418,76 @@ class FeatureListWidget(QWidget):
             name=f'{feature_name}_vector_field',
             source_feature=feature_name,
             source_type='feature_vector',
+        )
+
+    # Vectors used by the fold constraints in the DiscreteFoldInterpolator.
+    # direction: gradient . direction = 0 (fold orientation constraint)
+    # axis: gradient . axis = 0 (fold axis constraint)
+    # norm: gradient . norm = fold_norm (fold normalisation constraint)
+    FOLD_CONSTRAINT_LABELS = {
+        'direction': "Fold Direction",
+        'axis': "Fold Axis",
+        'norm': "Fold Norm Direction",
+    }
+    FOLD_CONSTRAINT_COLOURS = {
+        'direction': (0.2, 0.4, 1.0),
+        'axis': (1.0, 0.2, 0.2),
+        'norm': (0.1, 0.8, 0.2),
+    }
+
+    def _get_fold(self, feature_name):
+        try:
+            feature = self.model_manager.model[feature_name]
+        except Exception:
+            return None
+        fold = getattr(feature, 'fold', None)
+        if fold is None:
+            fold = getattr(getattr(feature, 'builder', None), 'fold', None)
+        return fold
+
+    def add_fold_constraint(self, feature_name, constraint):
+        """Add the vectors of one fold constraint of a folded feature to the viewer.
+
+        The vectors are evaluated on the model grid, in the same way as the
+        interpolator evaluates them on the element barycentres.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the folded feature.
+        constraint : str
+            One of 'direction', 'axis' or 'norm'.
+        """
+        fold = self._get_fold(feature_name)
+        if fold is None:
+            logger.info(f"Feature {feature_name} is not folded")
+            return
+        feature = self.model_manager.model[feature_name]
+        # make sure the fold rotation angles are fitted
+        feature.builder.up_to_date()
+        bounding_box = self.model_manager.model.bounding_box
+        points = bounding_box.reproject(bounding_box.cell_centres())
+        direction, axis, norm = fold.get_deformed_orientation(points)
+        vectors = np.array({'direction': direction, 'axis': axis, 'norm': norm}[constraint])
+        if vectors.shape != points.shape:
+            # some fold settings (e.g. invert_norm) return a subset of the vectors
+            logger.warning(
+                f"Fold {constraint} vectors do not match the grid points ({vectors.shape} != {points.shape})"
+            )
+            return
+        length = np.linalg.norm(vectors, axis=1)
+        mask = np.all(np.isfinite(vectors), axis=1) & (length > 0)
+        if not np.any(mask):
+            logger.warning(f"Fold {constraint} vectors for {feature_name} are not defined")
+            return
+        vectors = vectors[mask] / length[mask, None]
+        vector_points = VectorPoints(points[mask], vectors, f'{feature_name}_fold_{constraint}')
+        self.viewer.add_mesh_object(
+            vector_points.vtk(scale=self._get_vector_scale()),
+            name=f'{feature_name}_fold_{constraint}',
+            color=self.FOLD_CONSTRAINT_COLOURS[constraint],
+            source_feature=feature_name,
+            source_type=f'fold_constraint_{constraint}',
         )
 
     def add_data(self, feature_name):
@@ -1053,6 +1142,15 @@ class FeatureListWidget(QWidget):
                             continue
                         except Exception as e:
                             _log(f"Failed to re-add vector field for {feature_name}: {e}")
+
+                    if source_type and source_type.startswith('fold_constraint_'):
+                        try:
+                            self.add_fold_constraint(
+                                feature_name, source_type[len('fold_constraint_') :]
+                            )
+                            continue
+                        except Exception as e:
+                            _log(f"Failed to re-add fold constraint for {feature_name}: {e}")
 
                     if source_type in ('feature_points', 'feature_data'):
                         try:
