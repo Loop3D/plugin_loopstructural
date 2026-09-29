@@ -40,6 +40,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
     INPUT_FAULTS = 'FAULTS'
     INPUT_STRATI_COLUMN = 'STRATIGRAPHIC_COLUMN'
     INPUT_IGNORE_UNITS = 'IGNORE_UNITS'
+    INPUT_BASAL_OVERRIDE_UNITS = 'BASAL_OVERRIDE_UNITS'
     OUTPUT = "BASAL_CONTACTS"
     ALL_CONTACTS = "ALL_CONTACTS"
 
@@ -108,6 +109,15 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
         )
 
         self.addParameter(
+            QgsProcessingParameterMatrix(
+                self.INPUT_BASAL_OVERRIDE_UNITS,
+                "Basal contact override unit(s) (full boundary is the basal contact)",
+                headers=["Unit"],
+                optional=True,
+            )
+        )
+
+        self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
                 "Basal Contacts",
@@ -136,6 +146,13 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
         strati_order = []
         unit_colours = None
         ignore_units = self.parameterAsMatrix(parameters, self.INPUT_IGNORE_UNITS, context)
+        basal_override_units = [
+            str(unit).strip()
+            for unit in self.parameterAsMatrix(
+                parameters, self.INPUT_BASAL_OVERRIDE_UNITS, context
+            )
+            if unit is not None and str(unit).strip()
+        ]
 
         if isinstance(strati_column, QgsProcessingParameterMapLayer):
             raise QgsProcessingException("Invalid stratigraphic column layer")
@@ -173,6 +190,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
             updater=feedback.pushInfo,
             target_crs=geology.crs() if geology else None,
             unit_colours=unit_colours,
+            basal_override_units=basal_override_units,
         )
         basal_contacts = result['basal_contacts']
         all_contacts = result['all_contacts']

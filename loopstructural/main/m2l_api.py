@@ -182,6 +182,69 @@ def orient_order_by_structure(
     return agree, disagree
 
 
+def split_override_contacts(contacts, override_units, stratigraphic_order):
+    """Take the contacts of the override units out of the contacts.
+
+    The basal contact of an override unit (for example cover or an intrusion)
+    is its full boundary with all other units. It does not come from the
+    stratigraphic order. Thus each contact that touches an override unit is
+    a basal contact of that unit, and it is not given to the other unit.
+
+    Parameters
+    ----------
+    contacts : GeoDataFrame
+        All contacts, with 'UNITNAME_1' and 'UNITNAME_2' columns.
+    override_units : list
+        Names of the override units.
+    stratigraphic_order : list
+        Unit names, youngest first. If a contact is between two override
+        units, it is the basal contact of the younger unit. A unit that is
+        not in this list is younger than the units that are.
+
+    Returns
+    -------
+    tuple(GeoDataFrame, GeoDataFrame)
+        (the contacts that do not touch an override unit, the basal contacts
+        of the override units with 'ID', 'basal_unit', 'type' and 'geometry'
+        columns, as map2loop gives them)
+    """
+    import shapely
+
+    override_units = [str(unit).strip() for unit in override_units or [] if unit is not None]
+    override_units = [unit for unit in override_units if unit]
+    columns = ['ID', 'basal_unit', 'type', 'geometry']
+    if contacts is None:
+        return contacts, pd.DataFrame(columns=columns)
+    if not override_units or len(contacts) == 0:
+        return contacts, contacts.iloc[0:0].reindex(columns=columns)
+
+    unit_1 = contacts['UNITNAME_1'].astype(str).str.strip()
+    unit_2 = contacts['UNITNAME_2'].astype(str).str.strip()
+    touches = unit_1.isin(override_units) | unit_2.isin(override_units)
+    remaining = contacts[~touches].reset_index(drop=True)
+    overridden = contacts[touches].reset_index(drop=True)
+
+    order = [str(name).strip() for name in stratigraphic_order if name is not None]
+
+    def age_rank(unit):
+        return order.index(unit) if unit in order else -1
+
+    def owner(row):
+        a = str(row['UNITNAME_1']).strip()
+        b = str(row['UNITNAME_2']).strip()
+        if a in override_units and b in override_units:
+            return a if age_rank(a) <= age_rank(b) else b
+        return a if a in override_units else b
+
+    overridden['basal_unit'] = [owner(row) for _, row in overridden.iterrows()]
+    overridden['ID'] = [age_rank(unit) for unit in overridden['basal_unit']]
+    overridden['type'] = 'BASAL'
+    overridden['geometry'] = [
+        shapely.line_merge(shapely.snap(geo, geo, 1)) for geo in overridden['geometry']
+    ]
+    return remaining, overridden[columns]
+
+
 def extract_basal_contacts(
     geology,
     stratigraphic_order,
@@ -193,6 +256,7 @@ def extract_basal_contacts(
     debug_manager=None,
     target_crs=None,
     unit_colours=None,
+    basal_override_units=None,
 ):
     """Extract basal contacts from geological data.
 
@@ -221,6 +285,11 @@ def extract_basal_contacts(
         Mapping of unit name to colour. When given, a 'colour' column is
         added to the returned basal contacts, looked up by the 'basal_unit'
         each contact was extracted for.
+    basal_override_units : list, optional
+        Names of units (for example cover or an intrusion) whose basal contact
+        is their full boundary with all other units, not the contacts that the
+        stratigraphic order gives. These units do not have to be in the
+        stratigraphic column. See split_override_contacts.
 
     Returns
     -------
@@ -259,7 +328,12 @@ def extract_basal_contacts(
             str(name).strip() for name in stratigraphic_order if name is not None
         }
         ignored_names = {str(unit).strip() for unit in ignore_units if unit is not None}
-        missing_from_column = sorted(geology_unit_names - stratigraphic_names - ignored_names)
+        override_names = {
+            str(unit).strip() for unit in basal_override_units or [] if unit is not None
+        }
+        missing_from_column = sorted(
+            geology_unit_names - stratigraphic_names - ignored_names - override_names
+        )
         if missing_from_column:
             message = (
                 "The geology layer has unit(s) with no entry in the stratigraphic column: "
@@ -278,6 +352,7 @@ def extract_basal_contacts(
                 "ignore_units": ignore_units,
                 "unit_name_field": unit_name_field,
                 "all_contacts": all_contacts,
+                "basal_override_units": basal_override_units,
                 "geology": geology,
                 "faults": faults,
             },
@@ -304,14 +379,22 @@ def extract_basal_contacts(
 
     try:
         all_contacts_result = contact_extractor.extract_all_contacts()
+        column_contacts, override_contacts = split_override_contacts(
+            all_contacts_result, basal_override_units, stratigraphic_order
+        )
         # map2loop raises if a contact has a unit that is not in the column,
         # so give it only the contacts between units that are in the column.
         column_units = [name for name in stratigraphic_order if name is not None]
-        contact_extractor.contacts = all_contacts_result[
-            all_contacts_result['UNITNAME_1'].isin(column_units)
-            & all_contacts_result['UNITNAME_2'].isin(column_units)
+        contact_extractor.contacts = column_contacts[
+            column_contacts['UNITNAME_1'].isin(column_units)
+            & column_contacts['UNITNAME_2'].isin(column_units)
         ].reset_index(drop=True)
-        basal_contacts = contact_extractor.extract_basal_contacts(column_units)
+        if len(contact_extractor.contacts) > 0:
+            basal_contacts = contact_extractor.extract_basal_contacts(column_units)
+        else:
+            basal_contacts = override_contacts.iloc[0:0]
+        if len(override_contacts) > 0:
+            basal_contacts = pd.concat([basal_contacts, override_contacts], ignore_index=True)
         logger.debug(
             "Extracted contacts: all=%s basal=%s",
             all_contacts_result.shape,

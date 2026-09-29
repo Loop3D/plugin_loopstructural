@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 from qgis.core import (
+    QgsFeature,
+    QgsGeometry,
     QgsVectorLayer,
     QgsProcessingContext,
     QgsProcessingFeedback,
@@ -9,6 +11,7 @@ from qgis.core import (
     QgsApplication,
 )
 from qgis.testing import start_app
+from loopstructural.main.m2l_api import extract_basal_contacts
 from loopstructural.processing.algorithms.extract_basal_contacts import BasalContactsAlgorithm
 from loopstructural.processing.provider import Map2LoopProvider
 
@@ -148,6 +151,66 @@ class TestBasalContacts(unittest.TestCase):
             registry.removeProvider(cls.provider)
         except Exception:
             pass
+
+
+class TestBasalContactOverrides(unittest.TestCase):
+    """Units in basal_override_units get their full boundary as basal contact."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.qgs = start_app()
+
+    def _geology(self):
+        # A, B and C are layers from top to bottom (0 <= x <= 100). D is
+        # a unit on the right side (100 <= x <= 150) that touches all three.
+        layer = QgsVectorLayer("Polygon?crs=EPSG:28350&field=unitname:string", "geology", "memory")
+        polygons = {
+            'A': "POLYGON((0 200, 100 200, 100 300, 0 300, 0 200))",
+            'B': "POLYGON((0 100, 100 100, 100 200, 0 200, 0 100))",
+            'C': "POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))",
+            'D': "POLYGON((100 0, 150 0, 150 300, 100 300, 100 0))",
+        }
+        features = []
+        for name, wkt in polygons.items():
+            feature = QgsFeature(layer.fields())
+            feature.setAttribute('unitname', name)
+            feature.setGeometry(QgsGeometry.fromWkt(wkt))
+            features.append(feature)
+        layer.dataProvider().addFeatures(features)
+        return layer
+
+    def _extract(self, order, overrides=None):
+        return extract_basal_contacts(
+            geology=self._geology(),
+            stratigraphic_order=order,
+            ignore_units=[],
+            unit_name_field='unitname',
+            basal_override_units=overrides,
+        )['basal_contacts']
+
+    def _length(self, contacts, unit):
+        return contacts[contacts['basal_unit'] == unit].geometry.length.sum()
+
+    def test_cover_not_in_column(self):
+        contacts = self._extract(['A', 'B', 'C'])
+        self.assertNotIn('D', set(contacts['basal_unit']))
+
+        contacts = self._extract(['A', 'B', 'C'], overrides=['D'])
+        self.assertAlmostEqual(self._length(contacts, 'D'), 300, delta=10)
+        self.assertTrue((contacts[contacts['basal_unit'] == 'D']['type'] == 'BASAL').all())
+        # the other units keep their basal contacts
+        self.assertAlmostEqual(self._length(contacts, 'A'), 100, delta=5)
+        self.assertAlmostEqual(self._length(contacts, 'B'), 100, delta=5)
+
+    def test_intrusion_in_column(self):
+        # without the override, the contact of D with the younger unit A
+        # is given to A
+        contacts = self._extract(['A', 'D', 'B', 'C'])
+        self.assertLess(self._length(contacts, 'D'), 250)
+
+        contacts = self._extract(['A', 'D', 'B', 'C'], overrides=['D'])
+        self.assertAlmostEqual(self._length(contacts, 'D'), 300, delta=10)
+        self.assertAlmostEqual(self._length(contacts, 'A'), 100, delta=5)
 
 
 if __name__ == '__main__':

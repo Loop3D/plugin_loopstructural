@@ -161,6 +161,8 @@ class BasalContactsWidget(QWidget):
                 self.faultsLayerComboBox.setLayer(layer)
         if field := settings.get('unit_name_field'):
             self.unitNameFieldComboBox.setField(field)
+        if units := settings.get('basal_override_units'):
+            self.basalOverrideUnitsLineEdit.setText(', '.join(units))
 
     def _persist_selection(self):
         """Persist current selections into data manager."""
@@ -178,6 +180,7 @@ class BasalContactsWidget(QWidget):
                 else None
             ),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
+            'basal_override_units': self._units_from_line_edit(self.basalOverrideUnitsLineEdit),
         }
         self.data_manager.set_widget_settings('basal_contacts_widget', settings)
 
@@ -309,6 +312,11 @@ class BasalContactsWidget(QWidget):
             QMessageBox.critical(self, "Error", f"An error occurred: {summary}")
         self.task_failed.emit()
 
+    @staticmethod
+    def _units_from_line_edit(line_edit):
+        """Return the unit names in a comma-separated line edit."""
+        return [unit.strip() for unit in line_edit.text().split(',') if unit.strip()]
+
     def get_parameters(self):
         """Get current widget parameters.
 
@@ -317,17 +325,15 @@ class BasalContactsWidget(QWidget):
         dict
             Dictionary of current widget parameters.
         """
-        ignore_units = []
-        if self.ignoreUnitsLineEdit.text().strip():
-            ignore_units = [
-                unit.strip() for unit in self.ignoreUnitsLineEdit.text().split(',') if unit.strip()
-            ]
+        ignore_units = self._units_from_line_edit(self.ignoreUnitsLineEdit)
+        basal_override_units = self._units_from_line_edit(self.basalOverrideUnitsLineEdit)
 
         return {
             'geology_layer': self.geologyLayerComboBox.currentLayer(),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'faults_layer': self.faultsLayerComboBox.currentLayer(),
             'ignore_units': ignore_units,
+            'basal_override_units': basal_override_units,
             'all_contacts': self.allContactsCheckBox.isChecked(),
         }
 
@@ -345,6 +351,8 @@ class BasalContactsWidget(QWidget):
             self.faultsLayerComboBox.setLayer(params['faults_layer'])
         if params.get('ignore_units'):
             self.ignoreUnitsLineEdit.setText(', '.join(params['ignore_units']))
+        if params.get('basal_override_units'):
+            self.basalOverrideUnitsLineEdit.setText(', '.join(params['basal_override_units']))
         if 'all_contacts' in params:
             self.allContactsCheckBox.setChecked(params['all_contacts'])
 
@@ -361,11 +369,8 @@ class BasalContactsWidget(QWidget):
         `extract_basal_contacts()`; anything that touches the project or
         shows UI happens afterwards, in `_on_extractor_finished`.
         """
-        ignore_units = []
-        if self.ignoreUnitsLineEdit.text().strip():
-            ignore_units = [
-                unit.strip() for unit in self.ignoreUnitsLineEdit.text().split(',') if unit.strip()
-            ]
+        ignore_units = self._units_from_line_edit(self.ignoreUnitsLineEdit)
+        basal_override_units = self._units_from_line_edit(self.basalOverrideUnitsLineEdit)
         geology = self.geologyLayerComboBox.currentLayer()
         unit_name_field = self.unitNameFieldComboBox.currentField()
         faults = self.faultsLayerComboBox.currentLayer()
@@ -423,6 +428,7 @@ class BasalContactsWidget(QWidget):
                 debug_manager=self._debug,
                 target_crs=target_crs,
                 unit_colours=unit_colours,
+                basal_override_units=basal_override_units,
             )
             return result, all_contacts
 
