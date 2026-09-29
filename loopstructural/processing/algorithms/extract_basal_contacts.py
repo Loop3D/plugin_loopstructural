@@ -148,9 +148,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
         ignore_units = self.parameterAsMatrix(parameters, self.INPUT_IGNORE_UNITS, context)
         basal_override_units = [
             str(unit).strip()
-            for unit in self.parameterAsMatrix(
-                parameters, self.INPUT_BASAL_OVERRIDE_UNITS, context
-            )
+            for unit in self.parameterAsMatrix(parameters, self.INPUT_BASAL_OVERRIDE_UNITS, context)
             if unit is not None and str(unit).strip()
         ]
 
