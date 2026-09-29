@@ -742,4 +742,3 @@ class BaseFeatureDetailsPanel(QWidget):
                         obs()
                     except Exception:
                         pass
-
