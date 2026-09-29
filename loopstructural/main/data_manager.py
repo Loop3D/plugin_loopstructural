@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from typing import Optional
 
@@ -119,6 +120,13 @@ class ModellingDataManager:
         self._model_crs = None
         self._use_project_crs = True
         self.model_crs_callback = None
+        # layer id -> (layer, slots) for each input layer whose data this
+        # manager listens to; see `refresh_layer_watchers`.
+        self._watched_layers = {}
+        # ids of the watched layers whose data changed after the model
+        # data was last read from them
+        self._changed_layer_ids = set()
+        self._layer_data_changed_callbacks = []
 
     def onSaveProject(self):
         """Save project data."""
@@ -433,6 +441,7 @@ class ModellingDataManager:
             self.update_stratigraphy()
         if self.basal_contacts_callback:
             self.basal_contacts_callback(**self._basal_contacts)
+        self.refresh_layer_watchers()
 
     def calculate_unique_basal_units(self):
         if (
@@ -806,6 +815,156 @@ class ModellingDataManager:
             layers[role] = layer
         return layers
 
+    def _manual_foliation_layer_rows(self):
+        """Yield `(layer, layer_data)` for each input layer of the foliations
+        the user added (`GeologicalModelManager.manual_foliations`).
+
+        A foliation loaded from a state file has no QGIS layer object, so
+        its layer is found again by name.
+        """
+        if self._model_manager is None:
+            return
+        for spec in self._model_manager.manual_foliations.values():
+            for key, layer_data in spec['data'].items():
+                if layer_data.get('processed'):
+                    continue
+                layer = layer_data.get('layer')
+                if layer is None:
+                    layer = self.find_layer_by_name(layer_data.get('layer_name', key))
+                if layer is not None:
+                    yield layer, layer_data
+
+    def _layers_to_watch(self):
+        """Return {layer id: layer} for every layer the model reads data from."""
+        layers = list(self.get_input_layers().values())
+        for entries in self.feature_data.values():
+            for entry in entries.values():
+                if not entry.get('processed') and entry.get('layer') is not None:
+                    layers.append(entry['layer'])
+        layers.extend(layer for layer, _ in self._manual_foliation_layer_rows())
+        watched = {}
+        for layer in layers:
+            try:
+                if isinstance(layer, QgsVectorLayer) and layer.isValid():
+                    watched[layer.id()] = layer
+            except RuntimeError:
+                # underlying C++ layer was deleted
+                continue
+        return watched
+
+    def refresh_layer_watchers(self):
+        """Listen for data changes on each layer the model reads data from,
+        and stop listening to the layers it no longer uses.
+
+        An edit in the edit buffer, a commit, a new data source or a reload
+        flags the layer as changed, see `get_changed_layers`. A change
+        written straight to the data provider (not through the layer) emits
+        none of these signals.
+        """
+        wanted = self._layers_to_watch()
+        for layer_id in list(self._watched_layers):
+            if layer_id not in wanted:
+                self._unwatch_layer(layer_id)
+        for layer_id, layer in wanted.items():
+            if layer_id in self._watched_layers:
+                continue
+            on_changed = partial(self._on_layer_data_changed, layer_id)
+            on_deleted = partial(self._unwatch_layer, layer_id)
+            for signal in self._layer_change_signals(layer):
+                signal.connect(on_changed)
+            layer.willBeDeleted.connect(on_deleted)
+            self._watched_layers[layer_id] = (layer, on_changed, on_deleted)
+
+    @staticmethod
+    def _layer_change_signals(layer):
+        return (
+            layer.layerModified,
+            layer.afterCommitChanges,
+            layer.dataSourceChanged,
+            layer.dataChanged,
+        )
+
+    def _unwatch_layer(self, layer_id):
+        layer, on_changed, on_deleted = self._watched_layers.pop(layer_id)
+        if layer_id in self._changed_layer_ids:
+            self._changed_layer_ids.discard(layer_id)
+            self._notify_layer_data_changed()
+        try:
+            for signal in self._layer_change_signals(layer):
+                signal.disconnect(on_changed)
+            layer.willBeDeleted.disconnect(on_deleted)
+        except (RuntimeError, TypeError):
+            # the layer was deleted, or the slot was not connected
+            pass
+
+    def _on_layer_data_changed(self, layer_id):
+        self._changed_layer_ids.add(layer_id)
+        self._notify_layer_data_changed()
+
+    def _notify_layer_data_changed(self):
+        for callback in self._layer_data_changed_callbacks:
+            try:
+                callback()
+            except Exception as e:
+                self.logger(message=f"Error in layer data changed callback: {e}", log_level=2)
+
+    def add_layer_data_changed_callback(self, callback):
+        """Call `callback()` when a watched layer changes, and when the
+        changed layers are read again."""
+        self._layer_data_changed_callbacks.append(callback)
+
+    def get_changed_layers(self):
+        """Return the names of the input layers whose data changed after the
+        model data was last read from them."""
+        return sorted(self._watched_layers[i][0].name() for i in self._changed_layer_ids)
+
+    def reload_changed_layers(self):
+        """Read the model data again from the input layers that changed.
+
+        This only updates the data that the model manager holds (the
+        stratigraphy, the faults and the data of the foliations the user
+        added). Initialize Model uses this data, and
+        `GeologicalModelManager.refresh_feature_data` puts it into the
+        existing features.
+        """
+        changed = set(self._changed_layer_ids)
+        if not changed:
+            return
+
+        def is_changed(config):
+            layer = config.get('layer') if config else None
+            try:
+                return layer is not None and layer.id() in changed
+            except RuntimeError:
+                return False
+
+        if is_changed(self._basal_contacts):
+            self.calculate_unique_basal_units()
+        if is_changed(self._basal_contacts) or is_changed(self._structural_orientations):
+            self.update_stratigraphy()
+        if is_changed(self._fault_traces):
+            self.update_faults()
+        model_crs = self.get_model_crs()
+        for layer, layer_data in self._manual_foliation_layer_rows():
+            if layer.id() in changed:
+                layer_data['df'] = qgsLayerToGeoDataFrame(layer, target_crs=model_crs)
+        self._changed_layer_ids.clear()
+        self._notify_layer_data_changed()
+
+    def refresh_model_data(self):
+        """Read the changed input layers again and put their data into the
+        features already in the model, without Initialize Model.
+
+        Returns
+        -------
+        dict
+            See `GeologicalModelManager.refresh_feature_data`.
+        """
+        if self._model_manager is None:
+            raise RuntimeError("Model manager is not set.")
+        self.reload_changed_layers()
+        return self._model_manager.refresh_feature_data()
+
     def get_layers_outside_bounding_box(self):
         """Check which input layers do not overlap the bounding box in XY.
 
@@ -897,6 +1056,7 @@ class ModellingDataManager:
         self.update_faults()
         if self.fault_traces_callback:
             self.fault_traces_callback(**self._fault_traces)
+        self.refresh_layer_watchers()
 
     def get_fault_traces(self) -> Optional[FaultTracesConfig]:
         """Get the fault traces."""
@@ -922,6 +1082,7 @@ class ModellingDataManager:
         if self.structural_orientations_callback:
             self.structural_orientations_callback(**self._structural_orientations)
         self.update_stratigraphy()
+        self.refresh_layer_watchers()
 
     def get_structural_orientations(self) -> Optional[StructuralOrientationsConfig]:
         """Get the structural orientations."""
@@ -1140,6 +1301,9 @@ class ModellingDataManager:
             self._model_manager.update_bounding_box(self._bounding_box)
             self._model_manager.set_dem_function(self.dem_function)
 
+        self._changed_layer_ids.clear()
+        self.refresh_layer_watchers()
+
         self.logger(message="Application state reset.", log_level=3)
 
     def save_state(self, filepath):
@@ -1196,6 +1360,9 @@ class ModellingDataManager:
             # the pickled model already has these features; this lets
             # Initialize Model build them again
             self._model_manager.manual_foliations_from_dict(state.get('manual_foliations', {}))
+        # the data was just read from the layers
+        self._changed_layer_ids.clear()
+        self.refresh_layer_watchers()
 
         self.logger(message=f"Loaded application state from '{path}'.", log_level=3)
 
@@ -1471,6 +1638,7 @@ class ModellingDataManager:
             raise ValueError("feature_data must be a dictionary.")
         self.feature_data[feature_name][feature_data['layer_name']] = feature_data
         self.logger(message=f"Updated feature data for '{feature_name}'.")
+        self.refresh_layer_watchers()
 
     def set_widget_settings(self, widget_name: str, settings: dict):
         """Store widget settings for persistence."""
@@ -1510,5 +1678,6 @@ class ModellingDataManager:
                 restrict_to_stratigraphic_domain=restrict_to_stratigraphic_domain,
             )
             self.logger(message=f"Added foliation '{foliation_name}' to the model.")
+            self.refresh_layer_watchers()
         else:
             raise RuntimeError("Model manager is not set.")

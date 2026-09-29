@@ -203,6 +203,13 @@ class GeologicalModelManager(Observable):
         # parameter tweak, `update_all_features`/Solve Model can't pick them
         # up -- see `set_fault_topology`.
         self._topology_dirty = False
+        # True once `refresh_feature_data` found input data that it cannot
+        # put into the current features (a fault trace changed, or a group
+        # got or lost all of its data). Only Initialize Model applies that.
+        self._data_dirty = False
+        # fault name -> the fault data that the last `update_model` built
+        # the fault from; `refresh_feature_data` compares against it.
+        self._built_fault_data: Dict[str, pd.DataFrame] = {}
         # Set by request_cancel() and checked in _report_progress; lets a
         # running Initialize/Solve be stopped between fault/feature builds.
         self._cancel_requested = False
@@ -257,6 +264,8 @@ class GeologicalModelManager(Observable):
         self.manual_foliations = {}
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
+        self._data_dirty = False
+        self._built_fault_data = {}
         self._emit('model_updated')
         self._emit('model_update_finished')
 
@@ -288,6 +297,10 @@ class GeologicalModelManager(Observable):
             # topology edit against it yet, so don't carry over a stale flag
             # from whatever model was previously loaded.
             self._topology_dirty = False
+            self._data_dirty = False
+            # the data manager restores the fault data from the same state
+            # before it loads the model, so take that as the built data
+            self._built_fault_data = self._copy_fault_data()
         self._emit('model_updated')
         self._emit('model_update_finished')
 
@@ -869,31 +882,14 @@ class GeologicalModelManager(Observable):
             if qgisAttributeIsNone(group) is None:
                 self._debug_manager.log(f"Group {group.name} has no data, skipping.", log_level=2)
                 continue
-            data = []
             groupname = group.name
             stratigraphic_column[groupname] = {}
-            for u in group.units:
-                val = isovalues[u.name]['value']
-                unit_data = self.stratigraphy.get(u.name, None)
-                if unit_data is not None:
-                    if 'contact' in unit_data:
-                        contact = unit_data['contact']
-                        if not contact.empty:
-                            contact['val'] = val
-                            contact['feature_name'] = groupname
-                            data.append(contact)
-                    if 'orientations' in unit_data:
-                        orientations = unit_data['orientations']
-                        if not orientations.empty:
-                            orientations['val'] = np.nan
-                            orientations['feature_name'] = groupname
-                            data.append(orientations)
-            if len(data) == 0:
+            data = self._group_data(group, isovalues)
+            if data is None:
                 self._debug_manager.log(
                     f"No data found for group {groupname}, skipping.", log_level=2
                 )
                 continue
-            data = pd.concat(data, ignore_index=True)
             foliation = self.model.create_and_add_foliation(
                 groupname,
                 data=data,
@@ -910,6 +906,34 @@ class GeologicalModelManager(Observable):
         self.model.stratigraphic_column = self.stratigraphic_column
         # foliation features were rebuilt; let observers know
         self._emit('foliation_features_updated')
+
+    def _group_data(self, group, isovalues) -> Optional[pd.DataFrame]:
+        """Return the contact and orientation data of the units in `group`
+        as one data frame for its foliation, or None if there is no data.
+
+        `isovalues` is `stratigraphic_column.get_isovalues()`.
+        """
+        data = []
+        for u in group.units:
+            val = isovalues[u.name]['value']
+            unit_data = self.stratigraphy.get(u.name, None)
+            if unit_data is None:
+                continue
+            if 'contact' in unit_data:
+                contact = unit_data['contact']
+                if not contact.empty:
+                    contact['val'] = val
+                    contact['feature_name'] = group.name
+                    data.append(contact)
+            if 'orientations' in unit_data:
+                orientations = unit_data['orientations']
+                if not orientations.empty:
+                    orientations['val'] = np.nan
+                    orientations['feature_name'] = group.name
+                    data.append(orientations)
+        if len(data) == 0:
+            return None
+        return pd.concat(data, ignore_index=True)
 
     def _strip_spurious_regions_from_domain_faults(self):
         """Work around a LoopStructural core gap that corrupts a domain
@@ -1238,16 +1262,17 @@ class GeologicalModelManager(Observable):
     def model_state(self) -> str:
         """Coarse summary of the model's build state, for display in the GUI.
 
-        Returns 'empty' (no features yet), 'stale' (fault topology changed
-        since the last Initialize Model -- Solve Model alone can't apply
-        that, see `_on_fault_topology_changed`), 'initialized' (features
+        Returns 'empty' (no features yet), 'stale' (fault topology or input
+        data changed since the last Initialize Model in a way Solve Model
+        alone can't apply, see `_on_fault_topology_changed` and
+        `refresh_feature_data`), 'initialized' (features
         exist but at least one hasn't been solved) or 'solved' (everything is
         up to date).
         """
         features = [f for f in self.features() if not f.name.startswith('__')]
         if not features:
             return 'empty'
-        if getattr(self, '_topology_dirty', False):
+        if getattr(self, '_topology_dirty', False) or getattr(self, '_data_dirty', False):
             return 'stale'
         if all(self.is_feature_built(f) for f in features):
             return 'solved'
@@ -1317,6 +1342,7 @@ class GeologicalModelManager(Observable):
                 )
             except Exception:
                 pass
+        self._built_fault_data = self._copy_fault_data()
         try:
             # Update the model with stratigraphy
             self.update_fault_features()
@@ -1327,6 +1353,7 @@ class GeologicalModelManager(Observable):
             # fault topology (abutting/faulted/stratigraphy relationships) was
             # just re-applied above, so any pending topology edit is now current
             self._topology_dirty = False
+            self._data_dirty = False
         finally:
             self._progress_callback = None
         if dbg is not None:
@@ -1339,6 +1366,100 @@ class GeologicalModelManager(Observable):
         if notify_observers:
             self._emit('model_updated')
             self._emit('model_update_finished')
+
+    def _copy_fault_data(self) -> Dict[str, pd.DataFrame]:
+        """Return a copy of the data of each fault in `faults`."""
+        return {
+            name: fault_data['data'].copy()
+            for name, fault_data in self.faults.items()
+            if 'data' in fault_data
+        }
+
+    def refresh_feature_data(self) -> dict:
+        """Put the current input data into the features already in the model.
+
+        Unlike `update_model` (Initialize Model), this does not clear and
+        build the features again, so the changes the user made to a feature
+        (interpolator settings, a fold, a conversion to a structural frame,
+        the regions of a foliation) stay. A foliation whose data changed is
+        marked as not built, so Solve Model interpolates it again with the
+        new data.
+
+        Some changes cannot go into an existing feature: a changed fault
+        trace (the fault geometry comes from the trace when the fault is
+        created), or a group that got or lost all of its data. For these,
+        `model_state` becomes 'stale' until Initialize Model runs again.
+
+        Returns
+        -------
+        dict
+            'updated': names of the features that got new data;
+            'needs_initialize': names of the features that need Initialize
+            Model to use the new data.
+        """
+        updated = []
+        needs_initialize = []
+
+        def refresh(name, data):
+            feature = self._get_feature_by_name_or_none(name)
+            if data is None and feature is None:
+                return
+            if data is None or feature is None:
+                needs_initialize.append(name)
+                return
+            builder = getattr(feature, 'builder', None)
+            # a structural frame holds the original feature data in its
+            # first coordinate
+            target = builder.builders[0] if hasattr(builder, 'builders') else builder
+            if target is None or not hasattr(target, 'add_data_from_data_frame'):
+                needs_initialize.append(name)
+                return
+            data = self.model.prepare_data(data, include_feature_name=False)
+            current = getattr(target, 'data', None)
+            if isinstance(current, pd.DataFrame) and current.equals(data):
+                return
+            target.add_data_from_data_frame(data)
+            # add_data_from_data_frame does not reset this flag, and while
+            # it is set the builder keeps the constraints of the old data
+            target.data_added = False
+            builder.set_not_up_to_date(self)
+            updated.append(name)
+
+        if self.stratigraphic_column is not None:
+            isovalues = self.stratigraphic_column.get_isovalues()
+            for group in self.stratigraphic_column.get_groups():
+                if qgisAttributeIsNone(group) is None:
+                    continue
+                refresh(group.name, self._group_data(group, isovalues))
+
+        for name, spec in self.manual_foliations.items():
+            try:
+                data, _kwargs = self._foliation_data(
+                    name,
+                    spec['data'],
+                    spec.get('sampler', AllSampler()),
+                    spec.get('use_z_coordinate', False),
+                )
+            except Exception as e:
+                if self._debug_manager is not None:
+                    self._debug_manager.log(
+                        f"Could not read the data of foliation '{name}': {e}", log_level=2
+                    )
+                continue
+            refresh(name, data)
+
+        for name in set(self.faults) | set(self._built_fault_data):
+            new_data = self.faults.get(name, {}).get('data')
+            built_data = self._built_fault_data.get(name)
+            if new_data is None and built_data is None:
+                continue
+            if new_data is None or built_data is None or not new_data.equals(built_data):
+                needs_initialize.append(name)
+
+        if needs_initialize:
+            self._data_dirty = True
+        self._emit('model_updated')
+        return {'updated': updated, 'needs_initialize': needs_initialize}
 
     def update_feature(self, feature_name: str):
         """Update a specific feature in the geological model.
@@ -1612,6 +1733,16 @@ class GeologicalModelManager(Observable):
         restrict_to_stratigraphic_domain=True,
     ):
         """Create the foliation feature in the model; see `add_foliation`."""
+        data, kwargs = self._foliation_data(name, data, sampler, use_z_coordinate)
+        foliation = self.model.create_and_add_foliation(name, data=data, **kwargs)
+        if not restrict_to_stratigraphic_domain:
+            foliation.regions = [
+                r for r in foliation.regions if not isinstance(r, UnconformityFeature)
+            ]
+
+    def _foliation_data(self, name, data, sampler=AllSampler(), use_z_coordinate=False):
+        """Return the data frame and the extra `create_and_add_foliation`
+        arguments for the foliation `name` from its layer dicts `data`."""
         dfs = []
         kwargs = {}
         interface_offset = 0
@@ -1677,13 +1808,7 @@ class GeologicalModelManager(Observable):
                 kwargs['solver'] = 'admm'
             else:
                 raise ValueError(f"Unknown layer type: {layer_data['type']}")
-        foliation = self.model.create_and_add_foliation(
-            name, data=pd.concat(dfs, ignore_index=True), **kwargs
-        )
-        if not restrict_to_stratigraphic_domain:
-            foliation.regions = [
-                r for r in foliation.regions if not isinstance(r, UnconformityFeature)
-            ]
+        return pd.concat(dfs, ignore_index=True), kwargs
 
     def add_unconformity(
         self, foliation_name: str, value: float, type: FeatureType = FeatureType.UNCONFORMITY
