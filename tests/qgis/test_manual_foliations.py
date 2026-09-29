@@ -90,3 +90,49 @@ class TestManualFoliations:
         manager.reset()
 
         assert manager.manual_foliations == {}
+
+
+class TestManualFoliationsSerialisation:
+    def _round_trip(self, manager):
+        import json
+
+        return json.loads(json.dumps(manager.manual_foliations_to_dict()))
+
+    def test_round_trip_keeps_the_options(self, manager):
+        manager.add_foliation(
+            's1',
+            {'values': _value_layer()},
+            use_z_coordinate=True,
+            restrict_to_stratigraphic_domain=False,
+        )
+
+        other = GeologicalModelManager(debug_manager=_DebugManager())
+        other.manual_foliations_from_dict(self._round_trip(manager))
+
+        spec = other.manual_foliations['s1']
+        assert spec['use_z_coordinate'] is True
+        assert spec['restrict_to_stratigraphic_domain'] is False
+        layer = spec['data']['values']
+        assert layer['type'] == 'Value'
+        assert layer['value_field'] == 'value'
+        original = manager.manual_foliations['s1']['data']['values']['df']
+        assert list(layer['df']['value']) == list(original['value'])
+        assert all(g.has_z for g in layer['df'].geometry)
+
+    def test_qgis_layer_object_is_not_written(self, manager):
+        data = {'values': {**_value_layer(), 'layer': object()}}
+        manager.add_foliation('s1', data, use_z_coordinate=True)
+
+        written = self._round_trip(manager)
+
+        assert 'layer' not in written['s1']['data']['values']
+
+    def test_loaded_foliation_is_built_again_by_update_model(self, manager):
+        manager.add_foliation('s1', {'values': _value_layer()}, use_z_coordinate=True)
+        written = self._round_trip(manager)
+        manager.manual_foliations = {}
+
+        manager.manual_foliations_from_dict(written)
+        manager.update_model(notify_observers=False)
+
+        assert 's1' in _names(manager)

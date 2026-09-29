@@ -100,6 +100,39 @@ class AllSampler:
         return df
 
 
+def _json_value(value):
+    """Convert a column value to a type that `json.dump` can write."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, np.generic):
+        return value.item()
+    # QGIS NULL (a null QVariant)
+    is_null = getattr(value, 'isNull', None)
+    if callable(is_null) and is_null():
+        return None
+    return str(value)
+
+
+def _geodataframe_to_dict(gdf: Optional[gpd.GeoDataFrame]) -> Optional[dict]:
+    """Write `gdf` as WKT geometries (Z kept) and plain column values."""
+    if gdf is None:
+        return None
+    columns = [c for c in gdf.columns if c != gdf.geometry.name]
+    return {
+        'crs': gdf.crs.to_string() if gdf.crs is not None else None,
+        'geometry': [None if g is None else g.wkt for g in gdf.geometry],
+        'columns': {str(c): [_json_value(v) for v in gdf[c]] for c in columns},
+    }
+
+
+def _geodataframe_from_dict(data: Optional[dict]) -> Optional[gpd.GeoDataFrame]:
+    """Read a GeoDataFrame written by `_geodataframe_to_dict`."""
+    if data is None:
+        return None
+    geometry = gpd.GeoSeries.from_wkt(data['geometry'])
+    return gpd.GeoDataFrame(data['columns'], geometry=geometry, crs=data.get('crs'))
+
+
 def _form_line_tangent_vectors(df: pd.DataFrame) -> np.ndarray:
     """Per-vertex unit tangent (tx, ty, tz) along each digitised line in `df`.
 
@@ -1502,6 +1535,55 @@ class GeologicalModelManager(Observable):
         Does not remove the feature from the current model.
         """
         self.manual_foliations.pop(name, None)
+
+    def manual_foliations_to_dict(self) -> dict:
+        """Return `manual_foliations` in a form that `json.dump` can write.
+
+        Each layer's 'df' is written as WKT geometries and plain column
+        values, and the QGIS 'layer' object is left out (a rebuild uses only
+        'df'). The sampler is not kept: `manual_foliations_from_dict` always
+        uses `AllSampler`, which is the only sampler `add_foliation` gets.
+        """
+        result = {}
+        for name, spec in self.manual_foliations.items():
+            data = {}
+            for key, layer_data in spec['data'].items():
+                layer_dict = {k: v for k, v in layer_data.items() if k not in ('layer', 'df')}
+                layer_dict['df'] = _geodataframe_to_dict(layer_data.get('df'))
+                data[key] = layer_dict
+            result[name] = {
+                'data': data,
+                'folded_feature_name': spec.get('folded_feature_name'),
+                'use_z_coordinate': spec.get('use_z_coordinate', False),
+                'restrict_to_stratigraphic_domain': spec.get(
+                    'restrict_to_stratigraphic_domain', True
+                ),
+            }
+        return result
+
+    def manual_foliations_from_dict(self, manual_foliations: dict):
+        """Replace `manual_foliations` with the specs from
+        `manual_foliations_to_dict`.
+
+        Does not change the current model: `update_model` uses these specs
+        the next time it builds the model.
+        """
+        self.manual_foliations = {}
+        for name, spec in (manual_foliations or {}).items():
+            data = {}
+            for key, layer_dict in spec.get('data', {}).items():
+                layer_data = dict(layer_dict)
+                layer_data['df'] = _geodataframe_from_dict(layer_dict.get('df'))
+                data[key] = layer_data
+            self.manual_foliations[name] = {
+                'data': data,
+                'folded_feature_name': spec.get('folded_feature_name'),
+                'sampler': AllSampler(),
+                'use_z_coordinate': spec.get('use_z_coordinate', False),
+                'restrict_to_stratigraphic_domain': spec.get(
+                    'restrict_to_stratigraphic_domain', True
+                ),
+            }
 
     def _build_manual_foliations(self):
         """Build again every foliation added with `add_foliation`.

@@ -1163,6 +1163,7 @@ class ModellingDataManager:
             model_path = path.parent / f"{path.name}.model"
             self._model_manager.save_model(str(model_path))
             state['model_file'] = model_path.name
+            state['manual_foliations'] = self._model_manager.manual_foliations_to_dict()
 
         with open(path, 'w') as f:
             json.dump(state, f, indent=2)
@@ -1191,6 +1192,10 @@ class ModellingDataManager:
         if model_filename and self._model_manager is not None:
             model_path = path.parent / model_filename
             self._model_manager.load_model(str(model_path))
+        if self._model_manager is not None:
+            # the pickled model already has these features; this lets
+            # Initialize Model build them again
+            self._model_manager.manual_foliations_from_dict(state.get('manual_foliations', {}))
 
         self.logger(message=f"Loaded application state from '{path}'.", log_level=3)
 
