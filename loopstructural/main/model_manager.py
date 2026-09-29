@@ -824,7 +824,11 @@ class GeologicalModelManager(Observable):
         # counts the thickness of units with no digitised data, so an
         # unmapped unit does not shift the values of the units above it.
         isovalues = self.stratigraphic_column.get_isovalues()
-        for _i, group in enumerate(reversed(self.stratigraphic_column.get_groups())):
+        # Build the groups youngest first (the order `get_groups()` returns).
+        # LoopStructural treats each foliation added after an unconformity as
+        # older and crops it below that unconformity (`add_unconformity_above`),
+        # so building oldest first puts a younger group under an older one.
+        for _i, group in enumerate(self.stratigraphic_column.get_groups()):
             self._report_progress(f"Building stratigraphic group '{group.name}'")
             # check if the attribute is none, if its none we want so skip as it could be an
             # ambiguous attribute and cause multiple data assocaited with different features
