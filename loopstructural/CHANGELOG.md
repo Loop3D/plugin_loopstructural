@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.3.0...v0.4.0) (2026-09-29)
+
+
+### Features
+
+* add basal contact override functionality to handle full boundaries ([2f55f97](https://github.com/Loop3D/plugin_loopstructural/commit/2f55f97ffcb2461282deb02fedfea652ff4b5510))
+* add fold constraint functionality to feature list widget ([8cb5a3a](https://github.com/Loop3D/plugin_loopstructural/commit/8cb5a3a62bed577c3a5e15fab765a655a26213f9))
+* add Form Line constraint type for tangent/strike and interface data ([f6e60eb](https://github.com/Loop3D/plugin_loopstructural/commit/f6e60eb79facd9d575349156ed798bc6e46a2b0c))
+* add option to restrict a foliation to the stratigraphic domain ([0382ca7](https://github.com/Loop3D/plugin_loopstructural/commit/0382ca79357e777a084f5b8f281bb5838ca2252f))
+* auto-extract contacts from geology in stratigraphic sorter ([997690d](https://github.com/Loop3D/plugin_loopstructural/commit/997690de7cc397b27303072a3e538b448b6518d8))
+* replace sampled contacts layer with sampling frequency in thickness calculator ([cac4aa2](https://github.com/Loop3D/plugin_loopstructural/commit/cac4aa23c65994f0efe41cb72acc73af3924007b))
+* warn when no input layer overlaps the bounding box ([008ee1c](https://github.com/Loop3D/plugin_loopstructural/commit/008ee1c423199280d2af17221a4a98ab2befe35a))
+* warn when units have no colour before colouring topography ([6faf4d5](https://github.com/Loop3D/plugin_loopstructural/commit/6faf4d56469cb32e54c9facedc06a0ee2ac73655))
+
+
+### Bug Fixes
+
+* allow layers with the same name in the feature data table ([5a1b033](https://github.com/Loop3D/plugin_loopstructural/commit/5a1b0333efe8113d1121a0e850826fe759378380))
+* build the stratigraphic groups youngest first ([f0993b2](https://github.com/Loop3D/plugin_loopstructural/commit/f0993b24fe2b08c5117abf050762d7b0cc2962f2))
+* keep bounding box cells cubic when the extent changes ([87714cd](https://github.com/Loop3D/plugin_loopstructural/commit/87714cdcaf61a5ee42267659ceae8fb94c4b8542))
+* keep user-added foliations when the model is initialised again ([9070b02](https://github.com/Loop3D/plugin_loopstructural/commit/9070b02b89ba502b50961ea91676d72dae135bb4))
+* set the younging direction and repair cycles in the stratigraphic sorters ([2e6a714](https://github.com/Loop3D/plugin_loopstructural/commit/2e6a714d2dd931f275b27191576274a51638d486))
+* show the stratigraphic column youngest first ([0999828](https://github.com/Loop3D/plugin_loopstructural/commit/09998282da31b080d384b39548a568b9a1aac100))
+* skip geology units that are not in the column when extracting basal contacts ([b8d3c1d](https://github.com/Loop3D/plugin_loopstructural/commit/b8d3c1d8bd6856b4f4cc70eac2b6080a14183c28))
+* thickness calculator inputs ([4597e79](https://github.com/Loop3D/plugin_loopstructural/commit/4597e792fe45b5ee5dba8f5149a2be339acec2c3))
+* transform points to the DEM CRS before sampling the DEM ([c5a63fa](https://github.com/Loop3D/plugin_loopstructural/commit/c5a63fac48af136b32ea0550b399f2512033778c))
+* use get_isovalues for stratigraphic unit values ([0023abf](https://github.com/Loop3D/plugin_loopstructural/commit/0023abfd8a394c7309e7aaba415803b7eb575b5d))
+
 ## [0.3.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.2.0...v0.3.0) (2026-08-26)
 
 
