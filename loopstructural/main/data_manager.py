@@ -355,6 +355,26 @@ class ModellingDataManager:
         `dem_layer`, even when `use_dem` is True).
         """
         if self.use_dem and self.dem_layer is not None:
+            # Callers pass (x, y) in the model CRS, but `sample()` expects the
+            # DEM's own CRS. Cache the transform and rebuild it only when the
+            # model or DEM CRS changes, because this is called once per point.
+            cache = {'model_crs': None, 'dem_crs': None, 'transform': None}
+
+            def to_dem_crs(x, y):
+                model_crs = self.get_model_crs()
+                dem_crs = self.dem_layer.crs()
+                if (
+                    model_crs is None
+                    or not model_crs.isValid()
+                    or not dem_crs.isValid()
+                    or model_crs == dem_crs
+                ):
+                    return QgsPointXY(x, y)
+                if cache['model_crs'] != model_crs or cache['dem_crs'] != dem_crs:
+                    cache['model_crs'] = model_crs
+                    cache['dem_crs'] = dem_crs
+                    cache['transform'] = QgsCoordinateTransform(model_crs, dem_crs, self.project)
+                return cache['transform'].transform(QgsPointXY(x, y))
 
             def dem_function(x, y):
                 if not self.dem_layer.isValid():
@@ -363,7 +383,7 @@ class ModellingDataManager:
                         log_level=2,
                     )
                     return 0.0
-                value = self.dem_layer.dataProvider().sample(QgsPointXY(x, y), 1)[0]
+                value = self.dem_layer.dataProvider().sample(to_dem_crs(x, y), 1)[0]
                 # `sample()` returns NaN (not None) for points outside the
                 # raster's extent or on nodata cells, depending on provider.
                 if value is None or np.isnan(value):
