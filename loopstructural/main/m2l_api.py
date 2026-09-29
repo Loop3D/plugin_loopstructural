@@ -411,8 +411,8 @@ def extract_basal_contacts(
         ].reset_index(drop=True)
     if unit_colours and basal_contacts.empty is False and 'basal_unit' in basal_contacts.columns:
         colours_by_name = {str(name).strip(): colour for name, colour in unit_colours.items()}
-        basal_contacts['colour'] = basal_contacts['basal_unit'].astype(str).str.strip().map(
-            colours_by_name
+        basal_contacts['colour'] = (
+            basal_contacts['basal_unit'].astype(str).str.strip().map(colours_by_name)
         )
     if all_contacts:
         return {'basal_contacts': basal_contacts, 'all_contacts': all_contacts_result}
@@ -863,7 +863,9 @@ def calculate_thickness(
                     "contacts can be calculated from the geology layer."
                 )
             if updater:
-                updater("The basal contacts layer has no features; calculating them from geology...")
+                updater(
+                    "The basal contacts layer has no features; calculating them from geology..."
+                )
             basal_contacts_gdf = None
     if basal_contacts_gdf is None:
         # No basal contacts layer supplied -- derive it from the geology
@@ -899,7 +901,9 @@ def calculate_thickness(
 
     if updater:
         updater(f"Sampling basal contacts at spacing {sampling_frequency}...")
-    sampler = SamplerSpacing(spacing=sampling_frequency, dtm_data=dtm_gdal, geology_data=geology_gdf)
+    sampler = SamplerSpacing(
+        spacing=sampling_frequency, dtm_data=dtm_gdal, geology_data=geology_gdf
+    )
     sampled_contacts_gdf = sampler.sample(basal_contacts_gdf)
     if sampled_contacts_gdf is None or len(sampled_contacts_gdf) == 0:
         raise ValueError(

@@ -65,7 +65,7 @@ _MODEL_STATE_LABELS = {
     'empty': "Model status: not initialized",
     'initialized': "Model status: initialized (not solved)",
     'solved': "Model status: solved",
-    'stale': "Model status: fault topology changed — re-run Initialize Model",
+    'stale': "Model status: faults or input data changed — re-run Initialize Model",
 }
 
 # Solve Model only rebuilds interpolators for features that already exist; it
@@ -119,7 +119,7 @@ class GeologicalModelTab(QWidget):
 
         # Splitter for collapsible layout. Given all the stretch so the
         # button/status row above it never competes for space.
-        splitter = QSplitter(self)
+        splitter = self._splitter = QSplitter(self)
         mainLayout.addWidget(splitter, 1)
 
         # Feature list panel
@@ -169,6 +169,30 @@ class GeologicalModelTab(QWidget):
         # its contents need, leaving the rest of the tab to the feature list.
         buttonRowWidget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         mainLayout.insertWidget(0, buttonRowWidget, 0)
+
+        # Shown when an input layer changed after the model data was read
+        # from it. "Update Model Data" puts the new data into the existing
+        # features, so the changes made to them are kept (Initialize Model
+        # builds every feature again).
+        self.layerChangedLabel = QLabel()
+        self.layerChangedLabel.setWordWrap(True)
+        self.updateModelDataButton = QPushButton("Update Model Data")
+        self.updateModelDataButton.setToolTip(
+            "Read the changed layers again and put the new data into the current "
+            "features. Solve Model then uses the new data."
+        )
+        self.updateModelDataButton.clicked.connect(self.update_model_data)
+        layerChangedRow = QHBoxLayout()
+        layerChangedRow.setContentsMargins(0, 0, 0, 0)
+        layerChangedRow.addWidget(self.layerChangedLabel, 1)
+        layerChangedRow.addWidget(self.updateModelDataButton)
+        self.layerChangedWidget = QWidget()
+        self.layerChangedWidget.setLayout(layerChangedRow)
+        self.layerChangedWidget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        mainLayout.insertWidget(1, self.layerChangedWidget, 0)
+        self.layerChangedWidget.hide()
+        if self.data_manager is not None:
+            self.data_manager.add_layer_data_changed_callback(self._refresh_changed_layers)
 
         # Action buttons
 
@@ -257,6 +281,11 @@ class GeologicalModelTab(QWidget):
         if not self._confirm_bounding_box_contains_data():
             return
 
+        if self.data_manager is not None:
+            # build from the current layer data, not the data read before
+            # the layers changed
+            self.data_manager.reload_changed_layers()
+
         self._run_model_task(
             lambda progress_callback: self.model_manager.update_model(
                 notify_observers=False, progress_callback=progress_callback
@@ -264,6 +293,38 @@ class GeologicalModelTab(QWidget):
             title="Updating Model",
             initial_label="Updating geological model...",
         )
+
+    def update_model_data(self):
+        """Put the data of the changed input layers into the current
+        features, without Initialize Model."""
+        if self.data_manager is None or self.model_manager is None:
+            return
+        try:
+            result = self.data_manager.refresh_model_data()
+        except Exception as e:
+            QMessageBox.critical(self, "Update model data failed", str(e))
+            return
+        self._refresh_model_status()
+        if result['needs_initialize']:
+            names = "\n".join(f"  - {name}" for name in result['needs_initialize'])
+            QMessageBox.information(
+                self,
+                "Initialize Model needed",
+                "The new data for these features cannot be put into the current "
+                f"model:\n{names}\n\n"
+                "Run Initialize Model to use it. Initialize Model builds all "
+                "features again.",
+            )
+
+    def _refresh_changed_layers(self):
+        names = self.data_manager.get_changed_layers() if self.data_manager else []
+        if not names:
+            self.layerChangedWidget.hide()
+            return
+        self.layerChangedLabel.setText(
+            "Input layers changed after the model data was read: " + ", ".join(names)
+        )
+        self.layerChangedWidget.show()
 
     def solve_model(self):
         # Build/interpolate every feature already added to the model. Only
@@ -513,7 +574,7 @@ class GeologicalModelTab(QWidget):
             self.featureDetailsPanel = QWidget()  # Default empty panel
 
         # Dynamically replace the featureDetailsPanel widget
-        splitter = self.layout().itemAt(1).widget()
+        splitter = self._splitter
         splitter.widget(1).deleteLater()  # Remove the existing widget
         splitter.addWidget(self.featureDetailsPanel)  # Add the new widget
 

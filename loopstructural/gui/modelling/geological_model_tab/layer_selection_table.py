@@ -543,9 +543,7 @@ class LayerSelectionDialog(QDialog):
         dip_layout = QFormLayout(self.dip_group)
 
         self.constrain_dip_checkbox = QCheckBox("Also constrain dip (weak)")
-        self.constrain_dip_checkbox.setChecked(
-            self.existing_data.get('form_line_dip') is not None
-        )
+        self.constrain_dip_checkbox.setChecked(self.existing_data.get('form_line_dip') is not None)
         dip_layout.addRow(self.constrain_dip_checkbox)
 
         self.dip_spin = QDoubleSpinBox()
