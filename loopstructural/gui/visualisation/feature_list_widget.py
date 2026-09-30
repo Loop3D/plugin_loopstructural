@@ -38,7 +38,11 @@ from loopstructural.__about__ import DIR_PLUGIN_ROOT
 
 from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
-from .cross_section_utils import build_line_extrusion_mesh, build_plane_mesh
+from .cross_section_utils import (
+    build_block_model_mesh,
+    build_line_extrusion_mesh,
+    build_plane_mesh,
+)
 from .mesh_scalar_utils import stratigraphic_ids_to_rgb
 
 logger = logging.getLogger(__name__)
@@ -88,6 +92,7 @@ class FeatureListWidget(QWidget):
         self._topography_progress = None
 
         self._build_cross_section_controls()
+        self._build_block_model_controls()
 
         # A single row of icon-only actions, in workflow order, replaces the
         # previous stack of full-width text buttons.
@@ -97,6 +102,7 @@ class FeatureListWidget(QWidget):
         actionsRow.addWidget(self.addStratigraphicSurfacesButton)
         actionsRow.addWidget(self.addTopographyButton)
         actionsRow.addWidget(self.crossSectionButton)
+        actionsRow.addWidget(self.blockModelButton)
         actionsRow.addStretch(1)
         self.mainLayout.addLayout(actionsRow)
         self.mainLayout.addWidget(self.colourTopographyByStratigraphyCheckBox)
@@ -107,6 +113,12 @@ class FeatureListWidget(QWidget):
         self._cross_section_worker = None
         self._cross_section_progress = None
         self._pending_cross_section_name = None
+
+        # background task handles for the block model
+        self._block_model_thread = None
+        self._block_model_worker = None
+        self._block_model_progress = None
+        self._pending_block_model_name = None
         # Whether the user has hand-edited the plane's origin/normal/size --
         # while False, `update_feature_list` keeps re-syncing those fields to
         # the model's current bounding box (see
@@ -280,6 +292,79 @@ class FeatureListWidget(QWidget):
         closeButton = QPushButton("Close", self.crossSectionDialog)
         closeButton.clicked.connect(self.crossSectionDialog.close)
         dialogLayout.addWidget(closeButton)
+
+    def _build_block_model_controls(self):
+        """Build the "Block Model" icon button (added to the shared actions
+        row in __init__), which opens a dialog to set the number of blocks
+        along each axis. The block model fills the model bounding box and is
+        coloured by the stratigraphic column, like the cross sections.
+        """
+        self.blockModelButton = self._make_custom_icon_tool_button(
+            "block_model.svg", "Block Model..."
+        )
+        self.blockModelButton.clicked.connect(self._show_block_model_dialog)
+        self._block_model_resolution_initialised = False
+
+        self.blockModelDialog = QDialog(self)
+        self.blockModelDialog.setWindowTitle("Block Model")
+        dialogLayout = QVBoxLayout(self.blockModelDialog)
+        dialogLayout.addWidget(QLabel("Blocks fill the model bounding box"))
+        form = QFormLayout()
+
+        def make_cells_spinbox():
+            box = QSpinBox(self)
+            box.setRange(1, 1000)
+            box.setValue(50)
+            return box
+
+        self.blockModelNxSpinBox = make_cells_spinbox()
+        self.blockModelNySpinBox = make_cells_spinbox()
+        self.blockModelNzSpinBox = make_cells_spinbox()
+        form.addRow(
+            "Blocks (x, y, z)",
+            self._hbox(
+                self.blockModelNxSpinBox, self.blockModelNySpinBox, self.blockModelNzSpinBox
+            ),
+        )
+        self.blockModelUseModelResolutionButton = QPushButton("Use Model Resolution", self)
+        self.blockModelUseModelResolutionButton.setToolTip(
+            "Set the number of blocks to the model's interpolation grid"
+        )
+        self.blockModelUseModelResolutionButton.clicked.connect(self._reset_block_model_resolution)
+        form.addRow("", self.blockModelUseModelResolutionButton)
+        dialogLayout.addLayout(form)
+
+        self.addBlockModelButton = QPushButton("Add Block Model", self)
+        self.addBlockModelButton.clicked.connect(self.add_block_model)
+        dialogLayout.addWidget(self.addBlockModelButton)
+
+        closeButton = QPushButton("Close", self.blockModelDialog)
+        closeButton.clicked.connect(self.blockModelDialog.close)
+        dialogLayout.addWidget(closeButton)
+
+    def _show_block_model_dialog(self):
+        # Start from the model's own resolution the first time only, so the
+        # user's block counts are kept between openings of the dialog.
+        if not self._block_model_resolution_initialised:
+            self._reset_block_model_resolution()
+            self._block_model_resolution_initialised = True
+        self.blockModelDialog.show()
+        self.blockModelDialog.raise_()
+        self.blockModelDialog.activateWindow()
+
+    def _reset_block_model_resolution(self):
+        if not self.model_manager or self.model_manager.model is None:
+            return
+        try:
+            nsteps = np.asarray(self.model_manager.model.bounding_box.nsteps, dtype=int)
+        except Exception:
+            logger.info("Model bounding box has no resolution.")
+            return
+        for box, value in zip(
+            (self.blockModelNxSpinBox, self.blockModelNySpinBox, self.blockModelNzSpinBox),
+            nsteps,
+        ):
+            box.setValue(int(value))
 
     def _show_cross_section_dialog(self):
         self.crossSectionDialog.show()
@@ -949,6 +1034,97 @@ class FeatureListWidget(QWidget):
         self.addPlaneCrossSectionButton.setEnabled(True)
         self.addLineCrossSectionButton.setEnabled(True)
         logger.error(f"Failed to build cross section: {traceback_text}")
+
+    def add_block_model(self):
+        """Fill the model bounding box with blocks and colour each block by
+        the stratigraphic unit at its centre.
+
+        Evaluating the model at every block centre can be slow, so this runs
+        on a background thread (see `add_topography_surface`).
+        """
+        if not self.model_manager:
+            logger.info("Model manager is not set.")
+            return
+        if self.model_manager.model is None:
+            logger.info("No model available to build a block model.")
+            return
+        missing = self.model_manager.get_units_without_colour()
+        if missing:
+            QMessageBox.warning(
+                self,
+                "Missing unit colour",
+                "Cannot colour the block model by stratigraphy. These units have no "
+                "valid colour in the stratigraphic column:\n\n"
+                + "\n".join(missing)
+                + "\n\nSet a colour for each unit and try again.",
+            )
+            return
+
+        bb = self.model_manager.model.bounding_box
+        origin = np.asarray(bb.origin, dtype=float)
+        maximum = np.asarray(bb.maximum, dtype=float)
+        ncells = (
+            self.blockModelNxSpinBox.value(),
+            self.blockModelNySpinBox.value(),
+            self.blockModelNzSpinBox.value(),
+        )
+
+        def target(progress_callback):
+            progress_callback("Building block model grid...")
+            mesh = build_block_model_mesh(origin, maximum, ncells)
+            progress_callback("Evaluating stratigraphy on block model...")
+            ids = self.model_manager.evaluate_stratigraphy_on_points(mesh.cell_centers().points)
+            colours = self.model_manager.get_stratigraphic_column_colours()
+            return mesh, ids, colours
+
+        self._pending_block_model_name = self._unique_cross_section_name('block_model')
+        self.addBlockModelButton.setEnabled(False)
+        self._block_model_thread, self._block_model_worker, self._block_model_progress = (
+            start_background_task(
+                self,
+                target,
+                title="Block Model",
+                initial_label="Building block model grid...",
+                on_progress=self._on_block_model_progress,
+                on_finished=self._on_block_model_finished,
+                on_error=self._on_block_model_error,
+            )
+        )
+
+    def _on_block_model_progress(self, message):
+        try:
+            self._block_model_progress.setLabelText(message)
+        except Exception:
+            pass
+
+    def _on_block_model_finished(self, result):
+        finish_background_task(
+            self._block_model_thread, self._block_model_worker, self._block_model_progress
+        )
+        self.addBlockModelButton.setEnabled(True)
+
+        mesh, ids, colours = result
+        # Keep the unit ids on the mesh so the object properties panel can
+        # also colour or threshold the blocks by unit.
+        mesh.cell_data['stratigraphy'] = np.asarray(ids)
+        mesh.cell_data['colour'] = stratigraphic_ids_to_rgb(ids, colours)
+        self.viewer.add_mesh_object(
+            mesh,
+            name=self._pending_block_model_name,
+            scalars='colour',
+            rgb=True,
+            show_scalar_bar=False,
+            show_edges=False,
+            source_type='block_model',
+        )
+        logger.info(f"Added block model '{self._pending_block_model_name}'.")
+
+    def _on_block_model_error(self, traceback_text):
+        finish_background_task(
+            self._block_model_thread, self._block_model_worker, self._block_model_progress
+        )
+        self.addBlockModelButton.setEnabled(True)
+        logger.error(f"Failed to build block model: {traceback_text}")
 
     def _on_model_update(self, event: str, *args):
         """Called when the underlying model_manager notifies observers.
