@@ -184,13 +184,8 @@ class ObjectPropertiesWidget(QWidget):
                     pass
             # store in metadata
             if self.current_object_name in getattr(self.viewer, 'meshes', {}):
-                self.viewer.meshes[self.current_object_name].set(
-                    'kwargs',
-                    {
-                        **self.viewer.meshes[self.current_object_name].get('kwargs', {}),
-                        'opacity': value,
-                    },
-                )
+                entry = self.viewer.meshes[self.current_object_name]
+                entry['kwargs'] = {**(entry.get('kwargs') or {}), 'opacity': value}
         except Exception:
             pass
 
@@ -514,6 +509,7 @@ class ObjectPropertiesWidget(QWidget):
         opacity = old_kwargs.get('opacity', None)
         show_scalar_bar = self.scalar_bar_checkbox.isChecked()
 
+        source = self.viewer.get_source_metadata(self.current_object_name)
         try:
             self.viewer.remove_object(self.current_object_name)
         except Exception:
@@ -528,11 +524,12 @@ class ObjectPropertiesWidget(QWidget):
                 clim=clim,
                 opacity=opacity,
                 show_scalar_bar=show_scalar_bar,
+                **source,
             )
             self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
         except Exception:
             try:
-                self.viewer.add_mesh_object(mesh, name=self.current_object_name)
+                self.viewer.add_mesh_object(mesh, name=self.current_object_name, **source)
                 self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
             except Exception:
                 pass
@@ -645,6 +642,7 @@ class ObjectPropertiesWidget(QWidget):
             opacity = old_kwargs.get('opacity', None)
             show_scalar_bar = self.scalar_bar_checkbox.isChecked()
 
+            source = self.viewer.get_source_metadata(self.current_object_name)
             try:
                 self.viewer.remove_object(self.current_object_name)
             except Exception:
@@ -659,11 +657,12 @@ class ObjectPropertiesWidget(QWidget):
                     clim=clim,
                     opacity=opacity,
                     show_scalar_bar=show_scalar_bar,
+                    **source,
                 )
                 self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get('mesh')
             except Exception:
                 try:
-                    self.viewer.add_mesh_object(mesh, name=self.current_object_name)
+                    self.viewer.add_mesh_object(mesh, name=self.current_object_name, **source)
                     self.current_mesh = self.viewer.meshes.get(self.current_object_name, {}).get(
                         'mesh'
                     )

@@ -35,6 +35,7 @@ class ObjectListWidget(QWidget):
         self.setLayout(self.mainLayout)
         self.viewer = viewer
         self.viewer.objectAdded.connect(self.update_object_list)
+        self.viewer.outOfDateChanged.connect(self._on_out_of_date_changed)
         self.treeWidget.installEventFilter(self)
         self.treeWidget.itemSelectionChanged.connect(self.on_object_selected)
         self.treeWidget.itemDoubleClicked.connect(self.onDoubleClick)
@@ -94,6 +95,9 @@ class ObjectListWidget(QWidget):
             mesh = meshes[mesh_name]
             self.add_mesh_item(mesh_name, mesh)
 
+    def _on_out_of_date_changed(self):
+        self.update_object_list(None)
+
     def add_mesh_item(self, mesh_name, mesh):
         """Add a top-level tree item for a mesh and populate children for
         point/cell data arrays.
@@ -139,7 +143,13 @@ class ObjectListWidget(QWidget):
         itemLayout = QHBoxLayout(itemWidget)
         itemLayout.setContentsMargins(0, 0, 0, 0)
         itemLayout.addWidget(visibilityCheckbox)
-        itemLayout.addWidget(QLabel(mesh_name))
+        nameLabel = QLabel(mesh_name)
+        if isinstance(mesh, dict) and mesh.get('out_of_date'):
+            # the label text is the object name used elsewhere, so show the
+            # state with the style and tooltip only
+            nameLabel.setStyleSheet("color: gray; font-style: italic;")
+            nameLabel.setToolTip("Out of date: the model changed after this object was added")
+        itemLayout.addWidget(nameLabel)
         itemWidget.setLayout(itemLayout)
 
         self.treeWidget.setItemWidget(top, 0, itemWidget)

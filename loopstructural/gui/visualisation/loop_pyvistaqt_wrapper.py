@@ -6,6 +6,8 @@ from qgis.PyQt.QtCore import pyqtSignal
 
 class LoopPyVistaQTPlotter(QtInteractor):
     objectAdded = pyqtSignal(QtInteractor)  # Signal to request deletion
+    # emitted when objects are marked out of date, or brought up to date
+    outOfDateChanged = pyqtSignal()
 
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -42,6 +44,8 @@ class LoopPyVistaQTPlotter(QtInteractor):
         source_feature: Optional[str] = None,
         source_type: Optional[str] = None,
         isovalue: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        out_of_date: bool = False,
         **kwargs,
     ) -> None:
         """Add a mesh to the plotter.
@@ -73,6 +77,11 @@ class LoopPyVistaQTPlotter(QtInteractor):
         source_type : Optional[str]
             A short tag describing the kind of source (e.g. 'feature_surface',
             'fault_surface', 'bounding_box').
+        metadata : Optional[dict]
+            Extra values needed to build the mesh again from the model (for
+            example the number of blocks of a block model).
+        out_of_date : bool
+            True if the mesh no longer matches the model.
 
         Returns
         -------
@@ -125,8 +134,42 @@ class LoopPyVistaQTPlotter(QtInteractor):
             'source_feature': source_feature,
             'source_type': source_type,
             'isovalue': isovalue,
+            'metadata': dict(metadata or {}),
+            'out_of_date': out_of_date,
         }
         self.objectAdded.emit(self)
+
+    def get_source_metadata(self, name: str) -> Dict[str, Any]:
+        """Return the source values of an object as keyword arguments for
+        `add_mesh_object`, so that an object removed and added again (for
+        example to change its colour map) can still be built again from the
+        model.
+        """
+        entry = self.meshes.get(name)
+        if not entry:
+            return {}
+        return {
+            'source_feature': entry.get('source_feature'),
+            'source_type': entry.get('source_type'),
+            'isovalue': entry.get('isovalue'),
+            'metadata': entry.get('metadata'),
+            'out_of_date': bool(entry.get('out_of_date', False)),
+        }
+
+    def set_out_of_date(self, names, out_of_date: bool = True) -> None:
+        """Mark the named objects as out of date (or up to date)."""
+        changed = False
+        for name in names:
+            entry = self.meshes.get(name)
+            if entry is not None and bool(entry.get('out_of_date')) != out_of_date:
+                entry['out_of_date'] = out_of_date
+                changed = True
+        if changed:
+            self.outOfDateChanged.emit()
+
+    def out_of_date_objects(self):
+        """Return the names of the objects that are out of date."""
+        return [name for name, entry in self.meshes.items() if entry.get('out_of_date')]
 
     def remove_object(self, name: str) -> None:
         """Remove an object by name and clean up stored metadata.
@@ -157,6 +200,8 @@ class LoopPyVistaQTPlotter(QtInteractor):
             del self.meshes[name]
         except Exception:
             pass
+        if entry.get('out_of_date'):
+            self.outOfDateChanged.emit()
 
     def set_object_visibility(self, name: str, visibility):
         """Change the visibility of an object."""
