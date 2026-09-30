@@ -176,3 +176,68 @@ def apply_colormap_lut(mapper, cmap, clim=None, nan_color=(0.6, 0.6, 0.6, 1.0)):
                     pass
     except Exception:
         pass
+
+
+def filter_array_names(mesh):
+    """Return the names of the arrays of `mesh` that a threshold filter can
+    use: the single-component point arrays, and the single-component cell
+    arrays as `cell:<name>` (the same naming as `get_scalar_values`).
+    """
+    names = []
+    for prefix, data in (('', 'point_data'), ('cell:', 'cell_data')):
+        arrays = getattr(mesh, data, None) or {}
+        for key in sorted(arrays.keys()):
+            values = np.asarray(arrays[key])
+            if values.ndim == 1 and np.issubdtype(values.dtype, np.number):
+                names.append(f"{prefix}{key}")
+    return names
+
+
+def threshold_mesh(mesh, threshold):
+    """Return the part of `mesh` whose values pass a filter.
+
+    `threshold` is a dict with `scalars` (the array name, `cell:<name>` for
+    a cell array) and one of:
+
+    - `min`, `max`: keep the values in this range (the limits are
+      included); with `invert`, keep the values outside the range
+    - `values`: keep only these values (e.g. the ids of some units)
+
+    For a point array, a cell is kept only if all its points pass. Raises
+    KeyError if the array is not on the mesh.
+    """
+    name = threshold['scalars']
+    preference = 'point'
+    if name.startswith('cell:'):
+        name = name.split(':', 1)[1]
+        preference = 'cell'
+    data = mesh.cell_data if preference == 'cell' else mesh.point_data
+    if name not in data:
+        raise KeyError(f"The object has no {preference} array '{name}'")
+
+    if 'values' in threshold:
+        # threshold a 0/1 mask on a shallow copy, so the result has the same
+        # type as a range filter and the mesh of the caller does not change
+        mask = np.isin(np.asarray(data[name]), list(threshold['values'])).astype(float)
+        masked = mesh.copy(deep=False)
+        mask_data = masked.cell_data if preference == 'cell' else masked.point_data
+        mask_data['_filter_mask'] = mask
+        result = masked.threshold(
+            value=(0.5, 1.5),
+            scalars='_filter_mask',
+            preference=preference,
+            all_scalars=preference == 'point',
+        )
+        for arrays in (result.cell_data, result.point_data):
+            if '_filter_mask' in arrays:
+                del arrays['_filter_mask']
+        return result
+
+    low, high = sorted((float(threshold['min']), float(threshold['max'])))
+    return mesh.threshold(
+        value=(low, high),
+        scalars=name,
+        preference=preference,
+        invert=bool(threshold.get('invert', False)),
+        all_scalars=preference == 'point',
+    )

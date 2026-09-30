@@ -69,3 +69,30 @@ def build_line_extrusion_mesh(
     yy = np.tile(xy[:, 1][:, None], (1, z_resolution))
     zz = np.tile(z[None, :], (resolution, 1))
     return pv.StructuredGrid(xx, yy, zz)
+
+
+def build_block_model_mesh(origin, maximum, ncells) -> pv.ImageData:
+    """Build a regular voxel grid (block model) that fills a bounding box.
+
+    Parameters
+    ----------
+    origin, maximum : array_like
+        (3,) opposite corners of the box, in the model's coordinate system.
+    ncells : array_like
+        (3,) number of cells (blocks) along x, y and z.
+
+    Returns
+    -------
+    pv.ImageData
+        A grid with `prod(ncells)` cells. Callers evaluate the model at
+        `mesh.cell_centers().points` and store the result as cell data.
+    """
+    origin = np.asarray(origin, dtype=float)
+    maximum = np.asarray(maximum, dtype=float)
+    ncells = np.maximum(np.asarray(ncells, dtype=int), 1)
+    spacing = (maximum - origin) / ncells
+    return pv.ImageData(
+        dimensions=tuple(int(n) for n in ncells + 1),
+        spacing=tuple(float(s) for s in spacing),
+        origin=tuple(float(o) for o in origin),
+    )

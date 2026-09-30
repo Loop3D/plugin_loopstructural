@@ -38,7 +38,11 @@ from loopstructural.__about__ import DIR_PLUGIN_ROOT
 
 from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
-from .cross_section_utils import build_line_extrusion_mesh, build_plane_mesh
+from .cross_section_utils import (
+    build_block_model_mesh,
+    build_line_extrusion_mesh,
+    build_plane_mesh,
+)
 from .mesh_scalar_utils import stratigraphic_ids_to_rgb
 
 logger = logging.getLogger(__name__)
@@ -88,6 +92,7 @@ class FeatureListWidget(QWidget):
         self._topography_progress = None
 
         self._build_cross_section_controls()
+        self._build_block_model_controls()
 
         # A single row of icon-only actions, in workflow order, replaces the
         # previous stack of full-width text buttons.
@@ -97,9 +102,24 @@ class FeatureListWidget(QWidget):
         actionsRow.addWidget(self.addStratigraphicSurfacesButton)
         actionsRow.addWidget(self.addTopographyButton)
         actionsRow.addWidget(self.crossSectionButton)
+        actionsRow.addWidget(self.blockModelButton)
         actionsRow.addStretch(1)
         self.mainLayout.addLayout(actionsRow)
         self.mainLayout.addWidget(self.colourTopographyByStratigraphyCheckBox)
+
+        # Objects in the viewer are not rebuilt automatically when the model
+        # changes (that can re-solve the whole model after each small edit).
+        # They are marked out of date, and this button rebuilds them.
+        self.updateObjectsButton = QPushButton(self)
+        self.updateObjectsButton.setIcon(QgsApplication.getThemeIcon("mActionRefresh.svg"))
+        self.updateObjectsButton.clicked.connect(self.update_out_of_date_objects)
+        self.mainLayout.addWidget(self.updateObjectsButton)
+        self._update_objects_thread = None
+        self._update_objects_worker = None
+        self._update_objects_progress = None
+        if self.viewer is not None:
+            self.viewer.outOfDateChanged.connect(self._refresh_update_objects_button)
+        self._refresh_update_objects_button()
 
         # background task handles shared by the plane and line cross-section
         # actions (only one can run at a time)
@@ -107,6 +127,12 @@ class FeatureListWidget(QWidget):
         self._cross_section_worker = None
         self._cross_section_progress = None
         self._pending_cross_section_name = None
+
+        # background task handles for the block model
+        self._block_model_thread = None
+        self._block_model_worker = None
+        self._block_model_progress = None
+        self._pending_block_model_name = None
         # Whether the user has hand-edited the plane's origin/normal/size --
         # while False, `update_feature_list` keeps re-syncing those fields to
         # the model's current bounding box (see
@@ -128,8 +154,8 @@ class FeatureListWidget(QWidget):
                 self._disp_update = self.model_manager.attach(
                     lambda _obs, _event, *a, **k: self.update_feature_list(), 'model_updated'
                 )
-                # also listen for model and feature updates so visualisation can refresh
-                # forward event and args into the handler so it can act on specific surfaces
+                # also listen for model and feature updates so the viewer
+                # objects built from the model can be marked out of date
                 self._disp_feature = self.model_manager.attach(
                     lambda _obs, _event, *a, **k: self._on_model_update(_event, *a), 'model_updated'
                 )
@@ -281,6 +307,79 @@ class FeatureListWidget(QWidget):
         closeButton.clicked.connect(self.crossSectionDialog.close)
         dialogLayout.addWidget(closeButton)
 
+    def _build_block_model_controls(self):
+        """Build the "Block Model" icon button (added to the shared actions
+        row in __init__), which opens a dialog to set the number of blocks
+        along each axis. The block model fills the model bounding box and is
+        coloured by the stratigraphic column, like the cross sections.
+        """
+        self.blockModelButton = self._make_custom_icon_tool_button(
+            "block_model.svg", "Block Model..."
+        )
+        self.blockModelButton.clicked.connect(self._show_block_model_dialog)
+        self._block_model_resolution_initialised = False
+
+        self.blockModelDialog = QDialog(self)
+        self.blockModelDialog.setWindowTitle("Block Model")
+        dialogLayout = QVBoxLayout(self.blockModelDialog)
+        dialogLayout.addWidget(QLabel("Blocks fill the model bounding box"))
+        form = QFormLayout()
+
+        def make_cells_spinbox():
+            box = QSpinBox(self)
+            box.setRange(1, 1000)
+            box.setValue(50)
+            return box
+
+        self.blockModelNxSpinBox = make_cells_spinbox()
+        self.blockModelNySpinBox = make_cells_spinbox()
+        self.blockModelNzSpinBox = make_cells_spinbox()
+        form.addRow(
+            "Blocks (x, y, z)",
+            self._hbox(
+                self.blockModelNxSpinBox, self.blockModelNySpinBox, self.blockModelNzSpinBox
+            ),
+        )
+        self.blockModelUseModelResolutionButton = QPushButton("Use Model Resolution", self)
+        self.blockModelUseModelResolutionButton.setToolTip(
+            "Set the number of blocks to the model's interpolation grid"
+        )
+        self.blockModelUseModelResolutionButton.clicked.connect(self._reset_block_model_resolution)
+        form.addRow("", self.blockModelUseModelResolutionButton)
+        dialogLayout.addLayout(form)
+
+        self.addBlockModelButton = QPushButton("Add Block Model", self)
+        self.addBlockModelButton.clicked.connect(self.add_block_model)
+        dialogLayout.addWidget(self.addBlockModelButton)
+
+        closeButton = QPushButton("Close", self.blockModelDialog)
+        closeButton.clicked.connect(self.blockModelDialog.close)
+        dialogLayout.addWidget(closeButton)
+
+    def _show_block_model_dialog(self):
+        # Start from the model's own resolution the first time only, so the
+        # user's block counts are kept between openings of the dialog.
+        if not self._block_model_resolution_initialised:
+            self._reset_block_model_resolution()
+            self._block_model_resolution_initialised = True
+        self.blockModelDialog.show()
+        self.blockModelDialog.raise_()
+        self.blockModelDialog.activateWindow()
+
+    def _reset_block_model_resolution(self):
+        if not self.model_manager or self.model_manager.model is None:
+            return
+        try:
+            nsteps = np.asarray(self.model_manager.model.bounding_box.nsteps, dtype=int)
+        except Exception:
+            logger.info("Model bounding box has no resolution.")
+            return
+        for box, value in zip(
+            (self.blockModelNxSpinBox, self.blockModelNySpinBox, self.blockModelNzSpinBox),
+            nsteps,
+        ):
+            box.setValue(int(value))
+
     def _show_cross_section_dialog(self):
         self.crossSectionDialog.show()
         self.crossSectionDialog.raise_()
@@ -373,10 +472,12 @@ class FeatureListWidget(QWidget):
         elif action == add_data_action:
             self.add_data(feature_name)
 
+    def _build_scalar_field(self, feature_name):
+        return self.model_manager.model[feature_name].scalar_field().vtk()
+
     def add_scalar_field(self, feature_name):
-        scalar_field = self.model_manager.model[feature_name].scalar_field()
         self.viewer.add_mesh_object(
-            scalar_field.vtk(),
+            self._build_scalar_field(feature_name),
             name=f'{feature_name}_scalar_field',
             source_feature=feature_name,
             source_type='feature_scalar',
@@ -410,11 +511,20 @@ class FeatureListWidget(QWidget):
                 isovalue=isovalue,
             )
 
-    def add_vector_field(self, feature_name):
+    def _build_feature_surface(self, feature_name, isovalue):
+        feature = self.model_manager.model[feature_name]
+        surfaces = feature.surfaces(isovalue) if isovalue is not None else feature.surfaces()
+        if not surfaces:
+            raise ValueError(f"Feature '{feature_name}' has no surface at {isovalue}")
+        return surfaces[0].vtk()
+
+    def _build_vector_field(self, feature_name):
         vector_field = self.model_manager.model[feature_name].vector_field()
-        scale = self._get_vector_scale()
+        return vector_field.vtk(scale=self._get_vector_scale())
+
+    def add_vector_field(self, feature_name):
         self.viewer.add_mesh_object(
-            vector_field.vtk(scale=scale),
+            self._build_vector_field(feature_name),
             name=f'{feature_name}_vector_field',
             source_feature=feature_name,
             source_type='feature_vector',
@@ -445,23 +555,18 @@ class FeatureListWidget(QWidget):
             fold = getattr(getattr(feature, 'builder', None), 'fold', None)
         return fold
 
-    def add_fold_constraint(self, feature_name, constraint):
-        """Add the vectors of one fold constraint of a folded feature to the viewer.
+    def _build_fold_constraint(self, feature_name, constraint):
+        """Return the vectors of one fold constraint of a folded feature as
+        a mesh, or None if the feature is not folded or the vectors are not
+        defined.
 
         The vectors are evaluated on the model grid, in the same way as the
         interpolator evaluates them on the element barycentres.
-
-        Parameters
-        ----------
-        feature_name : str
-            Name of the folded feature.
-        constraint : str
-            One of 'direction', 'axis' or 'norm'.
         """
         fold = self._get_fold(feature_name)
         if fold is None:
             logger.info(f"Feature {feature_name} is not folded")
-            return
+            return None
         feature = self.model_manager.model[feature_name]
         # make sure the fold rotation angles are fitted
         feature.builder.up_to_date()
@@ -474,53 +579,75 @@ class FeatureListWidget(QWidget):
             logger.warning(
                 f"Fold {constraint} vectors do not match the grid points ({vectors.shape} != {points.shape})"
             )
-            return
+            return None
         length = np.linalg.norm(vectors, axis=1)
         mask = np.all(np.isfinite(vectors), axis=1) & (length > 0)
         if not np.any(mask):
             logger.warning(f"Fold {constraint} vectors for {feature_name} are not defined")
-            return
+            return None
         vectors = vectors[mask] / length[mask, None]
         vector_points = VectorPoints(points[mask], vectors, f'{feature_name}_fold_{constraint}')
+        return vector_points.vtk(scale=self._get_vector_scale())
+
+    def add_fold_constraint(self, feature_name, constraint):
+        """Add the vectors of one fold constraint of a folded feature to the viewer.
+
+        Parameters
+        ----------
+        feature_name : str
+            Name of the folded feature.
+        constraint : str
+            One of 'direction', 'axis' or 'norm'.
+        """
+        mesh = self._build_fold_constraint(feature_name, constraint)
+        if mesh is None:
+            return
         self.viewer.add_mesh_object(
-            vector_points.vtk(scale=self._get_vector_scale()),
+            mesh,
             name=f'{feature_name}_fold_{constraint}',
             color=self.FOLD_CONSTRAINT_COLOURS[constraint],
             source_feature=feature_name,
             source_type=f'fold_constraint_{constraint}',
         )
 
-    def add_data(self, feature_name):
-        data = self.model_manager.model[feature_name].get_data()
-        for d in data:
+    def _build_data_meshes(self, feature_name):
+        """Return (name, mesh, source_type) for each data set of a feature."""
+        meshes = []
+        for d in self.model_manager.model[feature_name].get_data():
             d.locations = self.model_manager.model.rescale(d.locations)
             if issubclass(type(d), VectorPoints):
-                scale = self._get_vector_scale()
                 # tolerance is None means all points are shown
-                self.viewer.add_mesh_object(
-                    d.vtk(scale=scale, tolerance=None),
-                    name=f'{feature_name}_{d.name}_points',
-                    source_feature=feature_name,
-                    source_type='feature_points',
+                meshes.append(
+                    (
+                        f'{feature_name}_{d.name}_points',
+                        d.vtk(scale=self._get_vector_scale(), tolerance=None),
+                        'feature_points',
+                    )
                 )
             else:
-                self.viewer.add_mesh_object(
-                    d.vtk(),
-                    name=f'{feature_name}_{d.name}',
-                    source_feature=feature_name,
-                    source_type='feature_data',
-                )
+                meshes.append((f'{feature_name}_{d.name}', d.vtk(), 'feature_data'))
+        return meshes
+
+    def add_data(self, feature_name):
+        for name, mesh, source_type in self._build_data_meshes(feature_name):
+            self.viewer.add_mesh_object(
+                mesh, name=name, source_feature=feature_name, source_type=source_type
+            )
         logger.info(f"Adding data to feature: {feature_name}")
+
+    def _build_bounding_box(self):
+        return self.model_manager.model.bounding_box.vtk().outline()
 
     def add_model_bounding_box(self):
         if not self.model_manager:
             logger.info("Model manager is not set.")
             return
-        bb = self.model_manager.model.bounding_box.vtk().outline()
         self.viewer.add_mesh_object(
-            bb, name='model_bounding_box', source_feature='__model__', source_type='bounding_box'
+            self._build_bounding_box(),
+            name='model_bounding_box',
+            source_feature='__model__',
+            source_type='bounding_box',
         )
-        # Logic for adding model bounding box
         logger.info("Adding model bounding box...")
 
     def add_fault_surfaces(self):
@@ -538,6 +665,18 @@ class FeatureListWidget(QWidget):
                 isovalue=0.0,
             )
         logger.info("Adding fault surfaces...")
+
+    def _find_fault_surface(self, name):
+        for surface in self.model_manager.model.get_fault_surfaces():
+            if str(surface.name) == str(name):
+                return surface
+        raise ValueError(f"Fault surface '{name}' is not in the model")
+
+    def _find_stratigraphic_surface(self, name):
+        for surface in self.model_manager.model.get_stratigraphic_surfaces():
+            if str(surface.name) == str(name):
+                return surface
+        raise ValueError(f"Stratigraphic surface '{name}' is not in the model")
 
     def add_stratigraphic_surfaces(self):
         if not self.model_manager:
@@ -619,6 +758,7 @@ class FeatureListWidget(QWidget):
             cmap='terrain',
             show_scalar_bar=True,
             source_type='topography_surface',
+            metadata={'coloured': False},
         )
         self.colourTopographyByStratigraphyCheckBox.setEnabled(True)
         if self.colourTopographyByStratigraphyCheckBox.isChecked():
@@ -649,6 +789,7 @@ class FeatureListWidget(QWidget):
                 cmap='terrain',
                 show_scalar_bar=True,
                 source_type='topography_surface',
+                metadata={'coloured': False},
             )
 
     def _colour_topography_surface(self):
@@ -704,11 +845,12 @@ class FeatureListWidget(QWidget):
 
         ids, colours = result
         mesh = self.viewer.meshes['topography_surface']['mesh']
-        rgb = stratigraphic_ids_to_rgb(ids, colours)
+        self._set_stratigraphy_arrays(mesh.point_data, ids, colours)
+        metadata = {'coloured': True, **self._stratigraphy_metadata(colours)}
         self.viewer.add_mesh_object(
             mesh,
             name='topography_surface',
-            scalars=rgb,
+            scalars='colour',
             rgb=True,
             show_scalar_bar=False,
             # Directional lighting shades the same colour differently depending
@@ -718,6 +860,7 @@ class FeatureListWidget(QWidget):
             # keeps it a true, direct colour-for-colour match.
             lighting=False,
             source_type='topography_surface',
+            metadata=metadata,
         )
         logger.info("Coloured topography surface by stratigraphic column.")
 
@@ -913,11 +1056,11 @@ class FeatureListWidget(QWidget):
 
     def _add_cross_section_mesh(self, result, source_type):
         mesh, ids, colours = result
-        rgb = stratigraphic_ids_to_rgb(ids, colours)
+        self._set_stratigraphy_arrays(mesh.point_data, ids, colours)
         self.viewer.add_mesh_object(
             mesh,
             name=self._pending_cross_section_name,
-            scalars=rgb,
+            scalars='colour',
             rgb=True,
             show_scalar_bar=False,
             # see `_on_topography_colour_finished` for why cross sections use
@@ -925,6 +1068,7 @@ class FeatureListWidget(QWidget):
             # of how the section plane/line happens to be oriented.
             lighting=False,
             source_type=source_type,
+            metadata=self._stratigraphy_metadata(colours),
         )
         logger.info(f"Added cross section '{self._pending_cross_section_name}'.")
 
@@ -950,244 +1094,389 @@ class FeatureListWidget(QWidget):
         self.addLineCrossSectionButton.setEnabled(True)
         logger.error(f"Failed to build cross section: {traceback_text}")
 
-    def _on_model_update(self, event: str, *args):
-        """Called when the underlying model_manager notifies observers.
+    def add_block_model(self):
+        """Fill the model bounding box with blocks and colour each block by
+        the stratigraphic unit at its centre.
 
-        We remove any meshes that were created from model features and re-add
-        them from the current model so visualisation follows model changes.
-
-        If the notification is for a specific feature (event == 'feature_updated')
-        and an isovalue is provided (either as second arg or stored in viewer
-        metadata), only the matching surface will be re-added. For generic
-        'model_updated' notifications the previous behaviour (re-add all
-        affected feature representations) is preserved.
+        Evaluating the model at every block centre can be slow, so this runs
+        on a background thread (see `add_topography_surface`).
         """
+        if not self.model_manager:
+            logger.info("Model manager is not set.")
+            return
+        if self.model_manager.model is None:
+            logger.info("No model available to build a block model.")
+            return
+        missing = self.model_manager.get_units_without_colour()
+        if missing:
+            QMessageBox.warning(
+                self,
+                "Missing unit colour",
+                "Cannot colour the block model by stratigraphy. These units have no "
+                "valid colour in the stratigraphic column:\n\n"
+                + "\n".join(missing)
+                + "\n\nSet a colour for each unit and try again.",
+            )
+            return
 
-        # Prefer the DebugManager for logging when available (it forwards to
-        # the plugin/toolbelt logger and handles debug mode). Fall back to the
-        # module logger if no debug manager is present.
-        def _log(msg, level=0):
-            try:
-                dbg = None
-                if getattr(self, 'model_manager', None) is not None:
-                    dbg = getattr(self.model_manager, '_debug_manager', None)
-                if dbg is not None and hasattr(dbg, 'log'):
-                    # DebugManager.log expects message and log_level keyword
-                    dbg.log(str(msg), log_level=level)
-                else:
-                    logger.info(str(msg))
-            except Exception:
-                try:
-                    logger.info(str(msg))
-                except Exception:
-                    pass
+        bb = self.model_manager.model.bounding_box
+        origin = np.asarray(bb.origin, dtype=float)
+        maximum = np.asarray(bb.maximum, dtype=float)
+        ncells = (
+            self.blockModelNxSpinBox.value(),
+            self.blockModelNySpinBox.value(),
+            self.blockModelNzSpinBox.value(),
+        )
 
-        _log(f"Model update event received: {event} with args: {args}")
+        def target(progress_callback):
+            progress_callback("Building block model grid...")
+            mesh = build_block_model_mesh(origin, maximum, ncells)
+            progress_callback("Evaluating stratigraphy on block model...")
+            ids = self.model_manager.evaluate_stratigraphy_on_points(mesh.cell_centers().points)
+            colours = self.model_manager.get_stratigraphic_column_colours()
+            return mesh, ids, colours
+
+        self._pending_block_model_name = self._unique_cross_section_name('block_model')
+        self.addBlockModelButton.setEnabled(False)
+        self._block_model_thread, self._block_model_worker, self._block_model_progress = (
+            start_background_task(
+                self,
+                target,
+                title="Block Model",
+                initial_label="Building block model grid...",
+                on_progress=self._on_block_model_progress,
+                on_finished=self._on_block_model_finished,
+                on_error=self._on_block_model_error,
+            )
+        )
+
+    def _on_block_model_progress(self, message):
         try:
-            _log([f"Mesh: {name}, Meta: {meta}" for name, meta in self.viewer.meshes.items()])
+            self._block_model_progress.setLabelText(message)
         except Exception:
-            _log("Model update: failed to enumerate viewer meshes")
+            pass
 
-        if not self.model_manager or not self.viewer:
+    def _on_block_model_finished(self, result):
+        finish_background_task(
+            self._block_model_thread, self._block_model_worker, self._block_model_progress
+        )
+        self.addBlockModelButton.setEnabled(True)
+
+        mesh, ids, colours = result
+        self._set_stratigraphy_arrays(mesh.cell_data, ids, colours)
+        self.viewer.add_mesh_object(
+            mesh,
+            name=self._pending_block_model_name,
+            scalars='colour',
+            rgb=True,
+            show_scalar_bar=False,
+            show_edges=False,
+            source_type='block_model',
+            metadata={
+                'ncells': [int(n) for n in np.asarray(mesh.dimensions) - 1],
+                **self._stratigraphy_metadata(colours),
+            },
+        )
+        logger.info(f"Added block model '{self._pending_block_model_name}'.")
+
+    def _on_block_model_error(self, traceback_text):
+        finish_background_task(
+            self._block_model_thread, self._block_model_worker, self._block_model_progress
+        )
+        self.addBlockModelButton.setEnabled(True)
+        logger.error(f"Failed to build block model: {traceback_text}")
+
+    @staticmethod
+    def _set_stratigraphy_arrays(data, ids, colours):
+        """Store the unit ids and their colours as the 'stratigraphy' and
+        'colour' arrays of `data` (a mesh's point_data or cell_data).
+
+        Named arrays (not an RGB array passed straight to the viewer) let the
+        object properties panel use the unit ids, and let
+        `update_out_of_date_objects` add the object again with the same
+        viewer settings.
+        """
+        data['stratigraphy'] = np.asarray(ids)
+        data['colour'] = stratigraphic_ids_to_rgb(ids, colours)
+
+    def _stratigraphy_metadata(self, colours):
+        """Unit names and colours, indexed by unit id, for the unit check
+        boxes of the object properties panel."""
+        return {
+            'unit_names': list(self.model_manager.get_stratigraphic_unit_names()),
+            'unit_colours': list(colours),
+        }
+
+    def _colour_by_stratigraphy(self, points, data, metadata):
+        """Colour a mesh by the stratigraphic unit at `points`, and store
+        the unit names and colours in `metadata`."""
+        ids = self.model_manager.evaluate_stratigraphy_on_points(points)
+        colours = self.model_manager.get_stratigraphic_column_colours()
+        self._set_stratigraphy_arrays(data, ids, colours)
+        metadata.update(self._stratigraphy_metadata(colours))
+
+    # Viewer objects that `_rebuild_object` can build again from the model,
+    # by `source_type` (fold constraints use the 'fold_constraint_' prefix).
+    REBUILDABLE_SOURCE_TYPES = {
+        'feature_scalar',
+        'feature_surface',
+        'feature_vector',
+        'feature_vectors',
+        'feature_points',
+        'feature_data',
+        'bounding_box',
+        'fault_surface',
+        'stratigraphic_surface',
+        'cross_section_plane',
+        'cross_section_line',
+        'block_model',
+        'topography_surface',
+    }
+    # Source types that are coloured by the stratigraphic column
+    STRATIGRAPHY_COLOURED_SOURCE_TYPES = {
+        'cross_section_plane',
+        'cross_section_line',
+        'block_model',
+    }
+    # Source types that are built from one feature of the model
+    FEATURE_SOURCE_TYPES = {
+        'feature_scalar',
+        'feature_surface',
+        'feature_vector',
+        'feature_vectors',
+        'feature_points',
+        'feature_data',
+    }
+
+    def _is_rebuildable(self, meta) -> bool:
+        source_type = meta.get('source_type') or ''
+        return source_type in self.REBUILDABLE_SOURCE_TYPES or source_type.startswith(
+            'fold_constraint_'
+        )
+
+    def _uses_stratigraphy_colours(self, spec) -> bool:
+        if spec['source_type'] in self.STRATIGRAPHY_COLOURED_SOURCE_TYPES:
+            return True
+        return spec['source_type'] == 'topography_surface' and bool(
+            spec['metadata'].get('coloured')
+        )
+
+    def _on_model_update(self, event: str, *args):
+        """Mark the viewer objects built from the model as out of date.
+
+        The objects are not rebuilt here: rebuilding can solve the model
+        again, which is slow after each small edit. The user rebuilds them
+        with the update button (see `update_out_of_date_objects`).
+        """
+        if not self.viewer:
             return
         if event not in ('model_updated', 'feature_updated'):
             return
-        feature_name = None
-        if event == 'feature_updated' and len(args) >= 1:
-            feature_name = args[0]
+        names = [
+            name for name, meta in list(self.viewer.meshes.items()) if self._is_rebuildable(meta)
+        ]
+        self.viewer.set_out_of_date(names, True)
 
-        # If the model was reset (None) or features referenced by viewer meshes
-        # no longer exist in the current model, remove the linkage from those
-        # meshes so they are not treated as feature-driven on subsequent updates.
-        try:
-            try:
-                current_features = {f.name for f in self.model_manager.features()}
-            except Exception:
-                current_features = set()
+    def _refresh_update_objects_button(self):
+        count = len(self.viewer.out_of_date_objects()) if self.viewer is not None else 0
+        if self._update_objects_thread is not None:
+            self.updateObjectsButton.setText("Updating Viewer Objects...")
+            self.updateObjectsButton.setEnabled(False)
+        elif count:
+            noun = "Object" if count == 1 else "Objects"
+            self.updateObjectsButton.setText(f"Update {count} Out-of-Date {noun}")
+            self.updateObjectsButton.setToolTip(
+                "The model changed after these objects were added to the viewer. "
+                "Build them again from the current model."
+            )
+            self.updateObjectsButton.setEnabled(True)
+        else:
+            self.updateObjectsButton.setText("Viewer Objects Up to Date")
+            self.updateObjectsButton.setToolTip("")
+            self.updateObjectsButton.setEnabled(False)
 
-            # If the model is None or a feature referenced by a mesh is missing,
-            # decouple that mesh from the feature so it remains visible but won't
-            # be auto-updated or re-added when the model changes.
-            for mesh_name, meta in list(self.viewer.meshes.items()):
-                sf = meta.get('source_feature', None)
-                if sf is None:
-                    continue
-                if self.model_manager.model is None or sf not in current_features:
-                    _log(f"Decoupling mesh '{mesh_name}' from missing feature '{sf}'")
-                    meta.pop('source_feature', None)
-                    meta.pop('source_type', None)
-                    meta.pop('isovalue', None)
-                    # mark as decoupled so other logic can detect it if needed
-                    meta['decoupled_from_feature'] = True
-        except Exception:
-            _log('Failed while decoupling meshes from features')
+    def update_out_of_date_objects(self):
+        """Build all out-of-date viewer objects again from the current model.
 
-        # Build a set of features that currently have viewer meshes
-        affected_features = set()
-        for _, meta in list(self.viewer.meshes.items()):
-            if feature_name is not None:
-                if meta.get('source_feature', None) == feature_name:
-                    affected_features.add(feature_name)
-                    _log(f"Updating visualisation for feature: {feature_name}")
-                    continue
+        The objects are built on a background thread (this can solve the
+        model), then added to the viewer again on the GUI thread with the
+        same name and viewer settings (see `_on_update_objects_finished`).
+        """
+        if not self.model_manager or self.viewer is None:
+            return
+        if self.model_manager.model is None:
+            logger.info("No model available to update the viewer objects.")
+            return
+        names = self.viewer.out_of_date_objects()
+        if not names:
+            return
+        specs = []
+        for name in names:
+            meta = self.viewer.meshes[name]
+            spec = {
+                'name': name,
+                'source_type': meta.get('source_type') or '',
+                'source_feature': meta.get('source_feature'),
+                'isovalue': meta.get('isovalue'),
+                'metadata': dict(meta.get('metadata') or {}),
+            }
+            if spec['source_type'] in ('cross_section_plane', 'cross_section_line'):
+                # the section geometry does not change; copy it so the
+                # background thread does not change the mesh on screen
+                spec['mesh'] = meta['mesh'].copy()
+            specs.append(spec)
 
-            sf = meta.get('source_feature', None)
+        if any(self._uses_stratigraphy_colours(spec) for spec in specs):
+            missing = self.model_manager.get_units_without_colour()
+            if missing:
+                QMessageBox.warning(
+                    self,
+                    "Missing unit colour",
+                    "Cannot update the objects coloured by stratigraphy. These units "
+                    "have no valid colour in the stratigraphic column:\n\n"
+                    + "\n".join(missing)
+                    + "\n\nSet a colour for each unit and try again.",
+                )
+                return
 
-            if sf is not None:
-                affected_features.add(sf)
-        _log(f"Affected features to update: {affected_features}")
-        # For each affected feature, only update existing meshes tied to that feature
-        for feature_name in affected_features:
-            # collect mesh names that belong to this feature (snapshot to avoid mutation while iterating)
-            meshes_for_feature = [
-                name
-                for name, meta in list(self.viewer.meshes.items())
-                if meta.get('source_feature') == feature_name
-            ]
-            _log(f"Re-adding meshes for feature: {feature_name}: {meshes_for_feature}")
-
-            for mesh_name in meshes_for_feature:
-                meta = self.viewer.meshes.get(mesh_name, {})
-                source_type = meta.get('source_type')
-                kwargs = meta.get('kwargs', {}) or {}
-                isovalue = meta.get('isovalue', None)
-
-                # remove existing actor/entry so add_mesh_object can recreate with same name
+        def target(progress_callback):
+            results = []
+            for i, spec in enumerate(specs):
+                progress_callback(f"Updating {spec['name']} ({i + 1} of {len(specs)})...")
                 try:
-                    self.viewer.remove_object(mesh_name)
-                    _log(f"Removed existing mesh: {mesh_name}")
-                except Exception:
-                    _log(f"Failed to remove existing mesh: {mesh_name}")
-
-                try:
-                    # Surfaces associated with individual features
-                    if source_type == 'feature_surface':
-                        surfaces = []
-                        try:
-                            if isovalue is not None:
-                                surfaces = self.model_manager.model[feature_name].surfaces(isovalue)
-                            else:
-                                surfaces = self.model_manager.model[feature_name].surfaces()
-
-                            if surfaces:
-                                add_name = mesh_name
-                                _log(
-                                    f"Re-adding surface for feature: {feature_name} with isovalue: {isovalue} and {kwargs}"
-                                )
-                                kwargs['isovalue'] = isovalue
-
-                                self.viewer.add_mesh_object(
-                                    surfaces[0].vtk(),
-                                    name=add_name,
-                                    source_feature=feature_name,
-                                    source_type='feature_surface',
-                                    isovalue=isovalue,
-                                    **kwargs,
-                                )
-                                continue
-                        except Exception as e:
-                            _log(
-                                f"Failed to find matching surface for feature: {feature_name} with isovalue: {isovalue}, trying all surfaces. Error: {e}"
-                            )
-
-                    # Fault surfaces (added via add_fault_surfaces)
-                    if source_type == 'fault_surface':
-                        try:
-                            fault_surfaces = self.model_manager.model.get_fault_surfaces()
-                            match = next(
-                                (s for s in fault_surfaces if str(s.name) == str(feature_name)),
-                                None,
-                            )
-                            if match is not None:
-                                _log(f"Re-adding fault surface for: {feature_name}")
-                                self.viewer.add_mesh_object(
-                                    match.vtk(),
-                                    name=mesh_name,
-                                    source_feature=feature_name,
-                                    source_type='fault_surface',
-                                    isovalue=meta.get('isovalue', 0.0),
-                                    **kwargs,
-                                )
-                                continue
-                        except Exception as e:
-                            _log(f"Failed to re-add fault surface for {feature_name}: {e}")
-
-                    # Stratigraphic surfaces (added via add_stratigraphic_surfaces)
-                    if source_type == 'stratigraphic_surface':
-                        try:
-                            strat_surfaces = self.model_manager.model.get_stratigraphic_surfaces()
-                            match = next(
-                                (s for s in strat_surfaces if str(s.name) == str(feature_name)),
-                                None,
-                            )
-                            if match is not None:
-                                _log(f"Re-adding stratigraphic surface for: {feature_name}")
-                                kwargs['color'] = getattr(match, 'colour', None)
-
-                                self.viewer.add_mesh_object(
-                                    match.vtk(),
-                                    name=mesh_name,
-                                    source_feature=feature_name,
-                                    source_type='stratigraphic_surface',
-                                    **kwargs,
-                                )
-                                continue
-                        except Exception as e:
-                            _log(f"Failed to re-add stratigraphic surface for {feature_name}: {e}")
-
-                    # Vectors, points, scalar fields and other feature related objects
-                    if source_type == 'feature_vector' or source_type == 'feature_vectors':
-                        try:
-                            self.add_vector_field(feature_name)
-                            continue
-                        except Exception as e:
-                            _log(f"Failed to re-add vector field for {feature_name}: {e}")
-
-                    if source_type and source_type.startswith('fold_constraint_'):
-                        try:
-                            self.add_fold_constraint(
-                                feature_name, source_type[len('fold_constraint_') :]
-                            )
-                            continue
-                        except Exception as e:
-                            _log(f"Failed to re-add fold constraint for {feature_name}: {e}")
-
-                    if source_type in ('feature_points', 'feature_data'):
-                        try:
-                            self.add_data(feature_name)
-                            continue
-                        except Exception as e:
-                            _log(f"Failed to re-add data for {feature_name}: {e}")
-
-                    if source_type == 'feature_scalar':
-                        try:
-                            self.add_scalar_field(feature_name)
-                            continue
-                        except Exception as e:
-                            _log(f"Failed to re-add scalar field for {feature_name}: {e}")
-
-                    if source_type == 'bounding_box' or mesh_name == 'model_bounding_box':
-                        try:
-                            self.add_model_bounding_box()
-                            continue
-                        except Exception as e:
-                            _log(f"Failed to re-add bounding box: {e}")
-
-                    # Fallback: if nothing matched, attempt to re-add by using viewer metadata
-                    # Many viewer entries store the vtk source under meta['vtk'] or similar; try best-effort
-                    try:
-                        vtk_src = meta.get('vtk')
-                        if vtk_src is not None:
-                            _log(f"Fallback re-add for mesh {mesh_name}")
-                            self.viewer.add_mesh_object(vtk_src, name=mesh_name, **kwargs)
-                    except Exception:
-                        pass
-
+                    mesh, overrides = self._rebuild_object(spec)
+                    results.append((spec['name'], mesh, overrides, spec['metadata'], None))
                 except Exception as e:
-                    _log(f"Failed to update visualisation for feature: {feature_name}. Error: {e}")
+                    results.append((spec['name'], None, {}, None, str(e)))
+            return results
 
-        # Refresh the viewer
+        self._update_objects_thread, self._update_objects_worker, self._update_objects_progress = (
+            start_background_task(
+                self,
+                target,
+                title="Update Viewer Objects",
+                initial_label="Updating viewer objects...",
+                on_progress=self._on_update_objects_progress,
+                on_finished=self._on_update_objects_finished,
+                on_error=self._on_update_objects_error,
+            )
+        )
+        self._refresh_update_objects_button()
+
+    def _rebuild_object(self, spec):
+        """Build one viewer object again from the current model.
+
+        Runs on a background thread, so it must not touch the viewer.
+        Returns (mesh, overrides), where overrides are viewer settings that
+        come from the model (e.g. a unit colour). `spec['metadata']` is
+        updated with new values from the model (e.g. the unit names). Raises
+        if the object cannot be built.
+        """
+        source_type = spec['source_type']
+        feature_name = spec['source_feature']
+        metadata = spec['metadata']
+        model = self.model_manager.model
+
+        if source_type in self.FEATURE_SOURCE_TYPES or source_type.startswith('fold_constraint_'):
+            if feature_name is None or model.get_feature_by_name(feature_name) is None:
+                raise ValueError(f"Feature '{feature_name}' is not in the model")
+
+        overrides = {}
+        if source_type == 'feature_scalar':
+            mesh = self._build_scalar_field(feature_name)
+        elif source_type == 'feature_surface':
+            mesh = self._build_feature_surface(feature_name, spec['isovalue'])
+        elif source_type in ('feature_vector', 'feature_vectors'):
+            mesh = self._build_vector_field(feature_name)
+        elif source_type.startswith('fold_constraint_'):
+            constraint = source_type[len('fold_constraint_') :]
+            mesh = self._build_fold_constraint(feature_name, constraint)
+            if mesh is None:
+                raise ValueError("The fold constraint vectors are not defined")
+        elif source_type in ('feature_points', 'feature_data'):
+            meshes = {name: m for name, m, _ in self._build_data_meshes(feature_name)}
+            if spec['name'] not in meshes:
+                raise ValueError(f"Feature '{feature_name}' has no data for this object")
+            mesh = meshes[spec['name']]
+        elif source_type == 'bounding_box':
+            mesh = self._build_bounding_box()
+        elif source_type == 'fault_surface':
+            mesh = self._find_fault_surface(feature_name).vtk()
+        elif source_type == 'stratigraphic_surface':
+            surface = self._find_stratigraphic_surface(feature_name)
+            mesh = surface.vtk()
+            overrides['color'] = surface.colour
+        elif source_type in ('cross_section_plane', 'cross_section_line'):
+            mesh = spec['mesh']
+            self._colour_by_stratigraphy(mesh.points, mesh.point_data, metadata)
+        elif source_type == 'block_model':
+            bb = model.bounding_box
+            mesh = build_block_model_mesh(bb.origin, bb.maximum, metadata['ncells'])
+            self._colour_by_stratigraphy(mesh.cell_centers().points, mesh.cell_data, metadata)
+        elif source_type == 'topography_surface':
+            xx, yy, zz = self.model_manager.sample_dem_grid()
+            mesh = pv.StructuredGrid(xx, yy, zz)
+            mesh['Elevation'] = mesh.points[:, 2]
+            if metadata.get('coloured'):
+                self._colour_by_stratigraphy(mesh.points, mesh.point_data, metadata)
+        else:
+            raise ValueError(f"Cannot update objects of type '{source_type}'")
+
+        if getattr(mesh, 'n_points', 1) == 0:
+            raise ValueError("The object has no geometry in the current model")
+        return mesh, overrides
+
+    def _on_update_objects_progress(self, message):
         try:
-            self.viewer.update()
+            self._update_objects_progress.setLabelText(message)
         except Exception:
             pass
+
+    def _finish_update_objects_task(self):
+        finish_background_task(
+            self._update_objects_thread, self._update_objects_worker, self._update_objects_progress
+        )
+        self._update_objects_thread = None
+        self._update_objects_worker = None
+        self._update_objects_progress = None
+
+    def _on_update_objects_finished(self, results):
+        self._finish_update_objects_task()
+        failed = []
+        for name, mesh, overrides, metadata, error in results:
+            entry = self.viewer.meshes.get(name)
+            if entry is None:
+                # removed from the viewer while the update ran
+                continue
+            if error is not None:
+                failed.append(f"{name}: {error}")
+                continue
+            try:
+                self.viewer.replace_mesh_object(
+                    name, mesh, overrides, out_of_date=False, metadata=metadata
+                )
+            except Exception as e:
+                logger.exception(f"Cannot add updated object '{name}' to the viewer")
+                failed.append(f"{name}: {e}")
+        try:
+            self.viewer.render()
+        except Exception:
+            pass
+        self._refresh_update_objects_button()
+        if failed:
+            logger.warning("Cannot update viewer objects:\n" + "\n".join(failed))
+            QMessageBox.warning(
+                self,
+                "Update Viewer Objects",
+                "These objects were not updated and are still out of date:\n\n" + "\n".join(failed),
+            )
+
+    def _on_update_objects_error(self, traceback_text):
+        self._finish_update_objects_task()
+        self._refresh_update_objects_button()
+        logger.error(f"Failed to update viewer objects: {traceback_text}")
+        QMessageBox.warning(
+            self,
+            "Update Viewer Objects",
+            "Cannot update the viewer objects. See the log for details.",
+        )
