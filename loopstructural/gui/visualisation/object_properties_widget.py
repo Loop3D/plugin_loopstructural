@@ -1,15 +1,22 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Add plotting imports for scalar histogram
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QColor, QIcon, QPixmap
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QDoubleSpinBox,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -17,7 +24,12 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from .mesh_scalar_utils import apply_colormap_lut, get_scalar_values, render_histogram
+from .mesh_scalar_utils import (
+    apply_colormap_lut,
+    filter_array_names,
+    get_scalar_values,
+    render_histogram,
+)
 
 
 class ObjectPropertiesWidget(QWidget):
@@ -109,6 +121,64 @@ class ObjectPropertiesWidget(QWidget):
         self.hist_ax = self.hist_fig.subplots()
         self.hist_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self.hist_canvas)
+
+        # Filter: show only the part of the object whose values are in a
+        # range, or (for the unit ids of a block model, cross section or
+        # topography) only the units that are checked
+        self.filter_group = QGroupBox("Filter (Threshold)")
+        filter_layout = QVBoxLayout(self.filter_group)
+        filter_layout.addWidget(QLabel("Array:"))
+        self.filter_array_combo = QComboBox()
+        self.filter_array_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.filter_array_combo.currentTextChanged.connect(self._on_filter_array_changed)
+        filter_layout.addWidget(self.filter_array_combo)
+        self.filter_range_widget = QWidget()
+        filter_range_widget_layout = QVBoxLayout(self.filter_range_widget)
+        filter_range_widget_layout.setContentsMargins(0, 0, 0, 0)
+        filter_range_layout = QHBoxLayout()
+        filter_range_layout.setSpacing(6)
+        filter_range_layout.addWidget(QLabel("Range:"))
+        self.filter_min = QDoubleSpinBox()
+        self.filter_max = QDoubleSpinBox()
+        for box in (self.filter_min, self.filter_max):
+            box.setRange(-1e12, 1e12)
+            box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            filter_range_layout.addWidget(box)
+        filter_range_widget_layout.addLayout(filter_range_layout)
+        self.filter_invert_checkbox = QCheckBox("Invert (show values outside the range)")
+        filter_range_widget_layout.addWidget(self.filter_invert_checkbox)
+        filter_layout.addWidget(self.filter_range_widget)
+
+        self.filter_units_widget = QWidget()
+        filter_units_layout = QVBoxLayout(self.filter_units_widget)
+        filter_units_layout.setContentsMargins(0, 0, 0, 0)
+        filter_units_layout.addWidget(QLabel("Units to show:"))
+        self.filter_units_list = QListWidget()
+        self.filter_units_list.setMaximumHeight(160)
+        self.filter_units_list.itemChanged.connect(self._on_unit_check_changed)
+        filter_units_layout.addWidget(self.filter_units_list)
+        filter_units_buttons_layout = QHBoxLayout()
+        check_all_button = QPushButton("Check All")
+        check_all_button.clicked.connect(lambda: self._set_all_units_checked(True))
+        uncheck_all_button = QPushButton("Uncheck All")
+        uncheck_all_button.clicked.connect(lambda: self._set_all_units_checked(False))
+        filter_units_buttons_layout.addWidget(check_all_button)
+        filter_units_buttons_layout.addWidget(uncheck_all_button)
+        filter_units_layout.addLayout(filter_units_buttons_layout)
+        self.filter_units_widget.setVisible(False)
+        filter_layout.addWidget(self.filter_units_widget)
+        filter_buttons_layout = QHBoxLayout()
+        self.filter_apply_button = QPushButton("Apply Filter")
+        self.filter_apply_button.clicked.connect(self.apply_filter)
+        self.filter_clear_button = QPushButton("Clear Filter")
+        self.filter_clear_button.clicked.connect(self.clear_filter)
+        filter_buttons_layout.addWidget(self.filter_apply_button)
+        filter_buttons_layout.addWidget(self.filter_clear_button)
+        filter_layout.addLayout(filter_buttons_layout)
+        self.filter_status_label = QLabel("")
+        filter_layout.addWidget(self.filter_status_label)
+        self.filter_group.setEnabled(False)
+        layout.addWidget(self.filter_group)
 
         # Surface Color
         surface_color_layout = QHBoxLayout()
@@ -451,6 +521,194 @@ class ObjectPropertiesWidget(QWidget):
             self._update_histogram(vals if self.color_with_scalar_checkbox.isChecked() else None)
         except Exception:
             self._update_histogram(None)
+
+        self._load_filter_state(mesh_entry)
+
+    def _load_filter_state(self, mesh_entry):
+        """Show the filter of the current object, or the full value range
+        of an array if the object has no filter."""
+        names = filter_array_names(self.current_mesh) if self.current_mesh is not None else []
+        threshold = mesh_entry.get('threshold') if isinstance(mesh_entry, dict) else None
+        self.filter_array_combo.blockSignals(True)
+        self.filter_array_combo.clear()
+        self.filter_array_combo.addItems(names)
+        self.filter_array_combo.blockSignals(False)
+        self.filter_group.setEnabled(bool(names))
+        if threshold and threshold.get('scalars') in names:
+            self.filter_array_combo.blockSignals(True)
+            self.filter_array_combo.setCurrentText(threshold['scalars'])
+            self.filter_array_combo.blockSignals(False)
+            self._set_filter_range_to_data(threshold['scalars'])
+            if 'min' in threshold:
+                self.filter_min.setValue(float(threshold['min']))
+                self.filter_max.setValue(float(threshold['max']))
+            self.filter_invert_checkbox.setChecked(bool(threshold.get('invert', False)))
+            self._update_filter_mode(threshold['scalars'], threshold)
+        elif names:
+            # the unit ids of a block model or cross section are the most
+            # likely array to filter on
+            if 'cell:stratigraphy' in names:
+                self.filter_array_combo.setCurrentText('cell:stratigraphy')
+            elif 'stratigraphy' in names:
+                self.filter_array_combo.setCurrentText('stratigraphy')
+            self._set_filter_range_to_data(self.filter_array_combo.currentText())
+            self.filter_invert_checkbox.setChecked(False)
+            self._update_filter_mode(self.filter_array_combo.currentText(), None)
+        self._update_filter_status()
+
+    def _on_filter_array_changed(self, array_name: str):
+        if array_name:
+            self._set_filter_range_to_data(array_name)
+            entry = self.viewer.meshes.get(self.current_object_name) if self.viewer else None
+            threshold = entry.get('threshold') if entry else None
+            self._update_filter_mode(array_name, threshold)
+
+    @staticmethod
+    def _is_unit_array(array_name: str) -> bool:
+        return array_name.split(':', 1)[-1] == 'stratigraphy'
+
+    def _update_filter_mode(self, array_name: str, threshold):
+        """Show unit check boxes for a unit id array, and the range controls
+        for any other array."""
+        unit_mode = self._is_unit_array(array_name)
+        self.filter_range_widget.setVisible(not unit_mode)
+        self.filter_apply_button.setVisible(not unit_mode)
+        self.filter_units_widget.setVisible(unit_mode)
+        if unit_mode:
+            self._populate_unit_list(array_name, threshold)
+
+    def _populate_unit_list(self, array_name: str, threshold):
+        """Fill the unit check boxes with the units that are in the array.
+
+        The unit names and colours come from the object's metadata (stored
+        when the object was coloured by the stratigraphic column), indexed
+        by unit id.
+        """
+        from matplotlib.colors import to_hex
+
+        entry = self.viewer.meshes.get(self.current_object_name, {}) if self.viewer else {}
+        metadata = entry.get('metadata') or {}
+        names = metadata.get('unit_names') or []
+        colours = metadata.get('unit_colours') or []
+        values = self._get_scalar_values(array_name)
+        ids = [int(v) for v in np.unique(values)] if values is not None else []
+        checked = None
+        if threshold and threshold.get('scalars') == array_name and 'values' in threshold:
+            checked = {int(v) for v in threshold['values']}
+
+        self.filter_units_list.blockSignals(True)
+        self.filter_units_list.clear()
+        for unit_id in ids:
+            if 0 <= unit_id < len(names):
+                label = str(names[unit_id])
+            elif unit_id < 0:
+                label = "Outside all units"
+            else:
+                label = f"Unit {unit_id}"
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, unit_id)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.Checked if checked is None or unit_id in checked else Qt.Unchecked
+            )
+            if 0 <= unit_id < len(colours):
+                try:
+                    swatch = QPixmap(12, 12)
+                    swatch.fill(QColor(to_hex(colours[unit_id])))
+                    item.setIcon(QIcon(swatch))
+                except Exception:
+                    pass
+            self.filter_units_list.addItem(item)
+        self.filter_units_list.blockSignals(False)
+
+    def _checked_unit_ids(self):
+        ids, total = [], self.filter_units_list.count()
+        for i in range(total):
+            item = self.filter_units_list.item(i)
+            if item.checkState() == Qt.Checked:
+                ids.append(int(item.data(Qt.UserRole)))
+        return ids, total
+
+    def _on_unit_check_changed(self, _item=None):
+        ids, total = self._checked_unit_ids()
+        if not ids:
+            # an object with no cells cannot be shown; keep the last filter
+            self.filter_status_label.setText("Check at least one unit to show")
+            return
+        if len(ids) == total:
+            self._set_threshold(None)
+        else:
+            self._set_threshold({'scalars': self.filter_array_combo.currentText(), 'values': ids})
+
+    def _set_all_units_checked(self, checked: bool):
+        self.filter_units_list.blockSignals(True)
+        for i in range(self.filter_units_list.count()):
+            self.filter_units_list.item(i).setCheckState(Qt.Checked if checked else Qt.Unchecked)
+        self.filter_units_list.blockSignals(False)
+        self._on_unit_check_changed()
+
+    def _set_filter_range_to_data(self, array_name: str):
+        """Set the filter range to the full range of values of the array."""
+        values = self._get_scalar_values(array_name)
+        if values is None:
+            return
+        values = np.asarray(values)
+        finite = values[np.isfinite(values)] if values.dtype.kind == 'f' else values
+        if finite.size == 0:
+            return
+        low, high = float(finite.min()), float(finite.max())
+        # show integer arrays (e.g. unit ids) without decimals
+        integer = values.dtype.kind in 'iub'
+        for box in (self.filter_min, self.filter_max):
+            box.setDecimals(0 if integer else 4)
+            box.setSingleStep(1.0 if integer else max((high - low) / 100.0, 1e-4))
+        self.filter_min.setValue(low)
+        self.filter_max.setValue(high)
+
+    def apply_filter(self):
+        array_name = self.filter_array_combo.currentText()
+        if not array_name:
+            return
+        self._set_threshold(
+            {
+                'scalars': array_name,
+                'min': self.filter_min.value(),
+                'max': self.filter_max.value(),
+                'invert': self.filter_invert_checkbox.isChecked(),
+            }
+        )
+
+    def clear_filter(self):
+        self._set_threshold(None)
+        if self.filter_units_list.count():
+            self.filter_units_list.blockSignals(True)
+            for i in range(self.filter_units_list.count()):
+                self.filter_units_list.item(i).setCheckState(Qt.Checked)
+            self.filter_units_list.blockSignals(False)
+
+    def _set_threshold(self, threshold):
+        name = self.current_object_name
+        if not name or self.viewer is None or name not in self.viewer.meshes:
+            return
+        try:
+            self.viewer.replace_mesh_object(name, threshold=threshold)
+        except Exception as e:
+            QMessageBox.warning(self, "Filter", f"Cannot apply the filter:\n{e}")
+            return
+        try:
+            self.viewer.render()
+        except Exception:
+            pass
+        self._update_filter_status()
+
+    def _update_filter_status(self):
+        entry = self.viewer.meshes.get(self.current_object_name) if self.viewer else None
+        if not entry or not entry.get('threshold'):
+            self.filter_status_label.setText("No filter")
+            return
+        total = getattr(entry.get('mesh'), 'n_cells', 0)
+        shown = getattr(entry.get('display_mesh'), 'n_cells', 0)
+        self.filter_status_label.setText(f"Showing {shown} of {total} cells")
 
     def _on_scalar_changed(self, scalar_name: str):
         # update histogram preview immediately

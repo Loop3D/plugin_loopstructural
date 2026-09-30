@@ -2000,6 +2000,19 @@ class GeologicalModelManager(Observable):
             colours.extend(unit.colour for unit in group.units)
         return colours
 
+    def get_stratigraphic_unit_names(self) -> list:
+        """Return unit names ordered to line up with `evaluate_model`'s ids.
+
+        `names[i]` is the name of whichever unit `evaluate_model` labels `i`
+        (see `get_stratigraphic_column_colours`).
+        """
+        if self.model is None or self.model.stratigraphic_column is None:
+            return []
+        names = []
+        for group in reversed(self.model.stratigraphic_column.get_groups()):
+            names.extend(unit.name for unit in group.units)
+        return names
+
     def get_units_without_colour(self) -> list:
         """Return the names of units whose colour is missing or invalid.
 

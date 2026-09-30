@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Tuple
 from pyvistaqt import QtInteractor
 from qgis.PyQt.QtCore import pyqtSignal
 
+from .mesh_scalar_utils import threshold_mesh
+
 
 class LoopPyVistaQTPlotter(QtInteractor):
     objectAdded = pyqtSignal(QtInteractor)  # Signal to request deletion
@@ -46,6 +48,7 @@ class LoopPyVistaQTPlotter(QtInteractor):
         isovalue: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None,
         out_of_date: bool = False,
+        threshold: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         """Add a mesh to the plotter.
@@ -82,6 +85,11 @@ class LoopPyVistaQTPlotter(QtInteractor):
             example the number of blocks of a block model).
         out_of_date : bool
             True if the mesh no longer matches the model.
+        threshold : Optional[dict]
+            Show only the part of the mesh whose values are in a range (see
+            `mesh_scalar_utils.threshold_mesh`). The full mesh is still
+            stored, so the filter can be changed or removed later. Raises
+            ValueError if no cells are in the range.
 
         Returns
         -------
@@ -122,8 +130,14 @@ class LoopPyVistaQTPlotter(QtInteractor):
         # merge any extra kwargs (allow caller to override default choices)
         add_kwargs.update(kwargs)
 
+        display_mesh = mesh
+        if threshold:
+            display_mesh = threshold_mesh(mesh, threshold)
+            if display_mesh.n_cells == 0:
+                raise ValueError("No cells are in the filter range")
+
         # attempt to add to the underlying pyvista plotter
-        actor = self.add_mesh(mesh, name=name, **add_kwargs)
+        actor = self.add_mesh(display_mesh, name=name, **add_kwargs)
 
         # store the mesh, actor and kwargs for future re-adds
         # persist source metadata so callers can find meshes created from model features
@@ -136,6 +150,9 @@ class LoopPyVistaQTPlotter(QtInteractor):
             'isovalue': isovalue,
             'metadata': dict(metadata or {}),
             'out_of_date': out_of_date,
+            'threshold': dict(threshold) if threshold else None,
+            # the mesh shown in the viewer (the filtered part of `mesh`)
+            'display_mesh': display_mesh,
         }
         self.objectAdded.emit(self)
 
@@ -154,7 +171,62 @@ class LoopPyVistaQTPlotter(QtInteractor):
             'isovalue': entry.get('isovalue'),
             'metadata': entry.get('metadata'),
             'out_of_date': bool(entry.get('out_of_date', False)),
+            'threshold': entry.get('threshold'),
         }
+
+    def replace_mesh_object(self, name: str, mesh=None, overrides=None, **source_updates) -> None:
+        """Add the object `name` again, and keep its source values, viewer
+        settings (colour map, opacity, colour picked by the user, ...) and
+        visibility.
+
+        Parameters
+        ----------
+        name : str
+            Name of an object in the viewer.
+        mesh : optional
+            A new mesh for the object (e.g. built again from the model). If
+            None, the current mesh is used.
+        overrides : Optional[dict]
+            Viewer settings that replace the stored ones (e.g. a new unit
+            colour). A colour picked by the user still has priority.
+        **source_updates
+            Source values to change, e.g. `threshold=...` or
+            `out_of_date=False`.
+
+        pyvista replaces the actor that has the same name, so if the new
+        object cannot be added, the old object stays and the error is raised.
+        """
+        entry = self.meshes[name]
+        if mesh is None:
+            mesh = entry['mesh']
+        source = self.get_source_metadata(name)
+        source.update(source_updates)
+        kwargs = {
+            key: value
+            for key, value in (entry.get('kwargs') or {}).items()
+            if key not in source and key != 'name'
+        }
+        kwargs.update(overrides or {})
+        user_colour = entry.get('color')
+        if user_colour is not None:
+            kwargs['color'] = user_colour
+        actor = entry.get('actor')
+        visible = bool(getattr(actor, 'visibility', True))
+
+        try:
+            self.add_mesh_object(mesh, name=name, **source, **kwargs)
+        except Exception:
+            # e.g. a scalar array selected in the properties panel that the
+            # new mesh does not have; add it with the default colouring
+            for key in ('scalars', 'cmap', 'clim', 'rgb'):
+                kwargs.pop(key, None)
+            self.add_mesh_object(mesh, name=name, **source, **kwargs)
+
+        new_entry = self.meshes[name]
+        if user_colour is not None:
+            new_entry['color'] = user_colour
+        if not visible and new_entry.get('actor') is not None:
+            new_entry['actor'].visibility = False
 
     def set_out_of_date(self, names, out_of_date: bool = True) -> None:
         """Mark the named objects as out of date (or up to date)."""

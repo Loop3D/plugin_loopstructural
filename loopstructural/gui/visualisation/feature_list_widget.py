@@ -846,6 +846,7 @@ class FeatureListWidget(QWidget):
         ids, colours = result
         mesh = self.viewer.meshes['topography_surface']['mesh']
         self._set_stratigraphy_arrays(mesh.point_data, ids, colours)
+        metadata = {'coloured': True, **self._stratigraphy_metadata(colours)}
         self.viewer.add_mesh_object(
             mesh,
             name='topography_surface',
@@ -859,7 +860,7 @@ class FeatureListWidget(QWidget):
             # keeps it a true, direct colour-for-colour match.
             lighting=False,
             source_type='topography_surface',
-            metadata={'coloured': True},
+            metadata=metadata,
         )
         logger.info("Coloured topography surface by stratigraphic column.")
 
@@ -1067,6 +1068,7 @@ class FeatureListWidget(QWidget):
             # of how the section plane/line happens to be oriented.
             lighting=False,
             source_type=source_type,
+            metadata=self._stratigraphy_metadata(colours),
         )
         logger.info(f"Added cross section '{self._pending_cross_section_name}'.")
 
@@ -1170,7 +1172,10 @@ class FeatureListWidget(QWidget):
             show_scalar_bar=False,
             show_edges=False,
             source_type='block_model',
-            metadata={'ncells': [int(n) for n in np.asarray(mesh.dimensions) - 1]},
+            metadata={
+                'ncells': [int(n) for n in np.asarray(mesh.dimensions) - 1],
+                **self._stratigraphy_metadata(colours),
+            },
         )
         logger.info(f"Added block model '{self._pending_block_model_name}'.")
 
@@ -1194,10 +1199,21 @@ class FeatureListWidget(QWidget):
         data['stratigraphy'] = np.asarray(ids)
         data['colour'] = stratigraphic_ids_to_rgb(ids, colours)
 
-    def _colour_by_stratigraphy(self, points, data):
+    def _stratigraphy_metadata(self, colours):
+        """Unit names and colours, indexed by unit id, for the unit check
+        boxes of the object properties panel."""
+        return {
+            'unit_names': list(self.model_manager.get_stratigraphic_unit_names()),
+            'unit_colours': list(colours),
+        }
+
+    def _colour_by_stratigraphy(self, points, data, metadata):
+        """Colour a mesh by the stratigraphic unit at `points`, and store
+        the unit names and colours in `metadata`."""
         ids = self.model_manager.evaluate_stratigraphy_on_points(points)
         colours = self.model_manager.get_stratigraphic_column_colours()
         self._set_stratigraphy_arrays(data, ids, colours)
+        metadata.update(self._stratigraphy_metadata(colours))
 
     # Viewer objects that `_rebuild_object` can build again from the model,
     # by `source_type` (fold constraints use the 'fold_constraint_' prefix).
@@ -1329,9 +1345,9 @@ class FeatureListWidget(QWidget):
                 progress_callback(f"Updating {spec['name']} ({i + 1} of {len(specs)})...")
                 try:
                     mesh, overrides = self._rebuild_object(spec)
-                    results.append((spec['name'], mesh, overrides, None))
+                    results.append((spec['name'], mesh, overrides, spec['metadata'], None))
                 except Exception as e:
-                    results.append((spec['name'], None, {}, str(e)))
+                    results.append((spec['name'], None, {}, None, str(e)))
             return results
 
         self._update_objects_thread, self._update_objects_worker, self._update_objects_progress = (
@@ -1352,8 +1368,9 @@ class FeatureListWidget(QWidget):
 
         Runs on a background thread, so it must not touch the viewer.
         Returns (mesh, overrides), where overrides are viewer settings that
-        come from the model (e.g. a unit colour). Raises if the object cannot
-        be built.
+        come from the model (e.g. a unit colour). `spec['metadata']` is
+        updated with new values from the model (e.g. the unit names). Raises
+        if the object cannot be built.
         """
         source_type = spec['source_type']
         feature_name = spec['source_feature']
@@ -1391,17 +1408,17 @@ class FeatureListWidget(QWidget):
             overrides['color'] = surface.colour
         elif source_type in ('cross_section_plane', 'cross_section_line'):
             mesh = spec['mesh']
-            self._colour_by_stratigraphy(mesh.points, mesh.point_data)
+            self._colour_by_stratigraphy(mesh.points, mesh.point_data, metadata)
         elif source_type == 'block_model':
             bb = model.bounding_box
             mesh = build_block_model_mesh(bb.origin, bb.maximum, metadata['ncells'])
-            self._colour_by_stratigraphy(mesh.cell_centers().points, mesh.cell_data)
+            self._colour_by_stratigraphy(mesh.cell_centers().points, mesh.cell_data, metadata)
         elif source_type == 'topography_surface':
             xx, yy, zz = self.model_manager.sample_dem_grid()
             mesh = pv.StructuredGrid(xx, yy, zz)
             mesh['Elevation'] = mesh.points[:, 2]
             if metadata.get('coloured'):
-                self._colour_by_stratigraphy(mesh.points, mesh.point_data)
+                self._colour_by_stratigraphy(mesh.points, mesh.point_data, metadata)
         else:
             raise ValueError(f"Cannot update objects of type '{source_type}'")
 
@@ -1426,7 +1443,7 @@ class FeatureListWidget(QWidget):
     def _on_update_objects_finished(self, results):
         self._finish_update_objects_task()
         failed = []
-        for name, mesh, overrides, error in results:
+        for name, mesh, overrides, metadata, error in results:
             entry = self.viewer.meshes.get(name)
             if entry is None:
                 # removed from the viewer while the update ran
@@ -1434,8 +1451,13 @@ class FeatureListWidget(QWidget):
             if error is not None:
                 failed.append(f"{name}: {error}")
                 continue
-            if not self._replace_viewer_object(name, entry, mesh, overrides):
-                failed.append(f"{name}: cannot add the new object to the viewer")
+            try:
+                self.viewer.replace_mesh_object(
+                    name, mesh, overrides, out_of_date=False, metadata=metadata
+                )
+            except Exception as e:
+                logger.exception(f"Cannot add updated object '{name}' to the viewer")
+                failed.append(f"{name}: {e}")
         try:
             self.viewer.render()
         except Exception:
@@ -1448,46 +1470,6 @@ class FeatureListWidget(QWidget):
                 "Update Viewer Objects",
                 "These objects were not updated and are still out of date:\n\n" + "\n".join(failed),
             )
-
-    def _replace_viewer_object(self, name, entry, mesh, overrides) -> bool:
-        """Put `mesh` in the viewer in place of the object `name`, with the
-        same source values, viewer settings and visibility."""
-        source = self.viewer.get_source_metadata(name)
-        source['out_of_date'] = False
-        kwargs = {
-            key: value
-            for key, value in (entry.get('kwargs') or {}).items()
-            if key not in source and key != 'name'
-        }
-        kwargs.update(overrides)
-        # a colour picked in the object properties panel has priority
-        user_colour = entry.get('color')
-        if user_colour is not None:
-            kwargs['color'] = user_colour
-        actor = entry.get('actor')
-        visible = bool(getattr(actor, 'visibility', True))
-
-        # pyvista replaces the actor with the same name, so the old object
-        # stays in the viewer if the new one cannot be added
-        try:
-            self.viewer.add_mesh_object(mesh, name=name, **source, **kwargs)
-        except Exception:
-            # e.g. a scalar array selected in the properties panel that the
-            # new mesh does not have; add it with the default colouring
-            for key in ('scalars', 'cmap', 'clim', 'rgb'):
-                kwargs.pop(key, None)
-            try:
-                self.viewer.add_mesh_object(mesh, name=name, **source, **kwargs)
-            except Exception:
-                logger.exception(f"Cannot add updated object '{name}' to the viewer")
-                return False
-
-        new_entry = self.viewer.meshes.get(name, {})
-        if user_colour is not None:
-            new_entry['color'] = user_colour
-        if not visible and new_entry.get('actor') is not None:
-            new_entry['actor'].visibility = False
-        return True
 
     def _on_update_objects_error(self, traceback_text):
         self._finish_update_objects_task()
