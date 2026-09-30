@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.4.0...v0.5.0) (2026-09-30)
+
+
+### Features
+
+* add block model to the visualisation ([37fe3cc](https://github.com/Loop3D/plugin_loopstructural/commit/37fe3cc1248bae95073864bdf971d444f83ae142))
+
 ## [0.4.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.3.0...v0.4.0) (2026-09-29)
 
 
