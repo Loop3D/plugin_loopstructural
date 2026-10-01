@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.5.0...v0.6.0) (2026-10-01)
+
+
+### Features
+
+* flip the polarity of fault-linked column boundaries ([4c7f90e](https://github.com/Loop3D/plugin_loopstructural/commit/4c7f90ef34e7f2fc5475d35411ccae57cc4f99a8))
+
+
+### Bug Fixes
+
+* keep the fold axis settings in the folded feature panel ([09d15f9](https://github.com/Loop3D/plugin_loopstructural/commit/09d15f924d27b22b32c208d6d56e3c3be5299f25))
+* keep the selected feature after the feature list is rebuilt ([8ba7857](https://github.com/Loop3D/plugin_loopstructural/commit/8ba78572eeecfb9d8ce88c3425981d4836430015))
+* qt6 compatibility for scoped enums and exec ([21a28f4](https://github.com/Loop3D/plugin_loopstructural/commit/21a28f459715d5277ddf1166561bc06f28f97e51))
+
 ## [0.5.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.4.0...v0.5.0) (2026-09-30)
 
 
