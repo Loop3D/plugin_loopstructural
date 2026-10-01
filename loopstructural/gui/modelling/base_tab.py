@@ -18,10 +18,14 @@ class BaseTab(QWidget):
             self.scroll_area.setWidget(self.container_widget)
             # Ensure the scroll area and its container widget can handle focus and mouse events
             self.scroll_area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)  # Remove any unnecessary frame
+            self.scroll_area.setFrameShape(
+                QScrollArea.Shape.NoFrame
+            )  # Remove any unnecessary frame
 
             # Explicitly set size policies to ensure proper interaction
-            self.scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.scroll_area.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             # Set up a layout for the container widget
             self.container_layout = QVBoxLayout(self.container_widget)
             # Set the main layout for the BaseTab
@@ -29,10 +33,14 @@ class BaseTab(QWidget):
             self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
             self.main_layout.addWidget(self.scroll_area)
 
-            self.container_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            self.container_widget.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
 
             # Ensure the container widget propagates mouse events properly
-            self.container_widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+            self.container_widget.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
+            )
 
             self.setLayout(self.main_layout)
         else:

@@ -235,7 +235,9 @@ class AutomaticConversionWidget(QWidget):
 
         self.sources_widget = QWidget()
         self.sources_layout = QFormLayout(self.sources_widget)
-        self.sources_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.sources_layout.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
         layout.addWidget(self.sources_widget)
         self._build_data_source_inputs()
         if self.project is not None:
@@ -834,7 +836,9 @@ class AutomaticConversionDialog(QDialog):
         self.widget.task_succeeded.connect(self.accept)
         self.widget.task_failed.connect(self._on_widget_task_failed)
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
+        )
         self.button_box.accepted.connect(self._run_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)

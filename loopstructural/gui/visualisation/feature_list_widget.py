@@ -283,7 +283,9 @@ class FeatureListWidget(QWidget):
         lineForm = QFormLayout()
 
         self.crossSectionLineLayerComboBox = QgsMapLayerComboBox(self)
-        configure_layer_combo(self.crossSectionLineLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer)
+        configure_layer_combo(
+            self.crossSectionLineLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer
+        )
         lineForm.addRow("Line layer", self.crossSectionLineLayerComboBox)
 
         self.crossSectionLineResolutionSpinBox = QSpinBox(self)

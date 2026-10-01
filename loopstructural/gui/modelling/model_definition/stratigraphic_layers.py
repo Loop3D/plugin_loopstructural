@@ -253,7 +253,9 @@ class StratigraphicLayersWidget(QWidget):
         if field := settings.get('structural_unit_field'):
             self.structuralDataUnitName.setField(field)
         if 'orientation_type' in settings:
-            idx = self.orientationType.findText(settings['orientation_type'], Qt.MatchFlag.MatchFixedString)
+            idx = self.orientationType.findText(
+                settings['orientation_type'], Qt.MatchFlag.MatchFixedString
+            )
             if idx >= 0:
                 self.orientationType.setCurrentIndex(idx)
         if 'use_basal_z' in settings:

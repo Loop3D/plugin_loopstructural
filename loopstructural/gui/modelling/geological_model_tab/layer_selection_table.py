@@ -407,7 +407,8 @@ class LayerSelectionDialog(QDialog):
 
         self.layer_combo = QgsMapLayerComboBox()
         configure_layer_combo(
-            self.layer_combo, QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer
+            self.layer_combo,
+            QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer,
         )
         layout.addWidget(self.layer_combo)
 
@@ -419,7 +420,9 @@ class LayerSelectionDialog(QDialog):
         self._setup_type_specific_fields(layout)
 
         # Dialog buttons
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         layout.addWidget(self.button_box)
 
         self.button_box.accepted.connect(self._on_accepted)

@@ -54,13 +54,17 @@ class ObjectPropertiesWidget(QWidget):
 
         # Color with Scalar checkbox
         self.color_with_scalar_checkbox = QCheckBox("Color with Scalar")
-        self.color_with_scalar_checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.color_with_scalar_checkbox.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         self.color_with_scalar_checkbox.toggled.connect(self._on_color_with_scalar_toggled)
         layout.addWidget(self.color_with_scalar_checkbox)
 
         # Scalar Bar
         self.scalar_bar_checkbox = QCheckBox("Show Scalar Bar")
-        self.scalar_bar_checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.scalar_bar_checkbox.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         layout.addWidget(self.scalar_bar_checkbox)
 
         # Colormap
@@ -83,7 +87,9 @@ class ObjectPropertiesWidget(QWidget):
 
         # Show Edges
         self.show_edges_checkbox = QCheckBox("Show Edges")
-        self.show_edges_checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.show_edges_checkbox.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         # call set_show_edges when toggled
         self.show_edges_checkbox.toggled.connect(self.set_show_edges)
         layout.addWidget(self.show_edges_checkbox)
@@ -129,7 +135,9 @@ class ObjectPropertiesWidget(QWidget):
         filter_layout = QVBoxLayout(self.filter_group)
         filter_layout.addWidget(QLabel("Array:"))
         self.filter_array_combo = QComboBox()
-        self.filter_array_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.filter_array_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self.filter_array_combo.currentTextChanged.connect(self._on_filter_array_changed)
         filter_layout.addWidget(self.filter_array_combo)
         self.filter_range_widget = QWidget()
@@ -609,7 +617,9 @@ class ObjectPropertiesWidget(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, unit_id)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(
-                Qt.CheckState.Checked if checked is None or unit_id in checked else Qt.CheckState.Unchecked
+                Qt.CheckState.Checked
+                if checked is None or unit_id in checked
+                else Qt.CheckState.Unchecked
             )
             if 0 <= unit_id < len(colours):
                 try:
@@ -643,7 +653,9 @@ class ObjectPropertiesWidget(QWidget):
     def _set_all_units_checked(self, checked: bool):
         self.filter_units_list.blockSignals(True)
         for i in range(self.filter_units_list.count()):
-            self.filter_units_list.item(i).setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            self.filter_units_list.item(i).setCheckState(
+                Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+            )
         self.filter_units_list.blockSignals(False)
         self._on_unit_check_changed()
 

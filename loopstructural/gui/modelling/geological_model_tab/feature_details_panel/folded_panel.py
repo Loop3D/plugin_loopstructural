@@ -166,9 +166,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
             and self.feature.builder.build_arguments.get('fold_axis', None) is None
         )
         style = _INVALID_SPINBOX_STYLE if not_set else ""
-        tooltip = (
-            "Fold axis not set. Change the plunge or azimuth to set it." if not_set else ""
-        )
+        tooltip = "Fold axis not set. Change the plunge or azimuth to set it." if not_set else ""
         for spinbox in (self.fold_plunge, self.fold_azimuth):
             spinbox.setStyleSheet(style)
             spinbox.setToolTip(tooltip)

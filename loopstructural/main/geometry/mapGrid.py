@@ -26,7 +26,9 @@ def createGrid(boundingBox, dtm):
         for i in range(X.shape[0]):
             for j in range(X.shape[1]):
                 p = QgsPointXY(X[i, j], Y[i, j])
-                z_value = dtm.dataProvider().identify(p, QgsRaster.IdentifyFormat.IdentifyFormatValue)
+                z_value = dtm.dataProvider().identify(
+                    p, QgsRaster.IdentifyFormat.IdentifyFormatValue
+                )
                 if z_value.isValid():
                     z_value = z_value.results()[1]
                 else:

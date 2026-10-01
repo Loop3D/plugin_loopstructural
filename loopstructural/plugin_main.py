@@ -283,20 +283,25 @@ class LoopstructuralPlugin:
                 self.tr("Loop - Modelling"), self.iface.mainWindow()
             )
             self.modelling_dockwidget.setWidget(self.loop_widget.get_modelling_widget())
-            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.modelling_dockwidget)
+            self.iface.addDockWidget(
+                Qt.DockWidgetArea.RightDockWidgetArea, self.modelling_dockwidget
+            )
 
             # Create visualisation dock
             self.visualisation_dockwidget = QDockWidget(
                 self.tr("Loop - Visualisation"), self.iface.mainWindow()
             )
             self.visualisation_dockwidget.setWidget(self.loop_widget.get_visualisation_widget())
-            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.visualisation_dockwidget)
+            self.iface.addDockWidget(
+                Qt.DockWidgetArea.RightDockWidgetArea, self.visualisation_dockwidget
+            )
 
             # Tab them with other right docks if available
             right_docks = [
                 d
                 for d in self.iface.mainWindow().findChildren(QDockWidget)
-                if self.iface.mainWindow().dockWidgetArea(d) == Qt.DockWidgetArea.RightDockWidgetArea
+                if self.iface.mainWindow().dockWidgetArea(d)
+                == Qt.DockWidgetArea.RightDockWidgetArea
             ]
             if right_docks:
                 for dock in right_docks:
@@ -340,7 +345,8 @@ class LoopstructuralPlugin:
             right_docks = [
                 d
                 for d in self.iface.mainWindow().findChildren(QDockWidget)
-                if self.iface.mainWindow().dockWidgetArea(d) == Qt.DockWidgetArea.RightDockWidgetArea
+                if self.iface.mainWindow().dockWidgetArea(d)
+                == Qt.DockWidgetArea.RightDockWidgetArea
             ]
             # If there are other dock widgets, tab this one with the first one found
             if right_docks:

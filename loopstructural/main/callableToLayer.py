@@ -50,7 +50,9 @@ def callableToLayer(callable, layer, dtm, name: str):
 
             if dtm is not None:
                 # Extract the value at the point
-                z_value = dtm.dataProvider().identify(p, QgsRaster.IdentifyFormat.IdentifyFormatValue)
+                z_value = dtm.dataProvider().identify(
+                    p, QgsRaster.IdentifyFormat.IdentifyFormatValue
+                )
                 if z_value.isValid():
                     z = z_value.results()[1]
             value = callable(np.array([[x, y, z]]))

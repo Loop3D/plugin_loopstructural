@@ -57,7 +57,10 @@ class StratigraphicUnitWidget(QWidget):
     def eventFilter(self, obj, event):
         if obj is self.dragHandle:
             event_type = event.type()
-            if event_type == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            if (
+                event_type == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
                 self._dragging_handle = True
                 self.dragHandlePressed.emit()
                 return True

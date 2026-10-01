@@ -538,7 +538,9 @@ class ObjectListWidget(QWidget):
         configure_layer_combo(layer_combo, QgsMapLayerProxyModel.Filter.PointLayer)
         layout.addWidget(layer_combo)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -555,7 +557,8 @@ class ObjectListWidget(QWidget):
         try:
             if (
                 layer.wkbType() != QgsWkbTypes.Type.Point
-                and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.GeometryType.PointGeometry
+                and QgsWkbTypes.geometryType(layer.wkbType())
+                != QgsWkbTypes.GeometryType.PointGeometry
             ):
                 # Some QGIS versions use different enums; allow via proxy filter primarily
                 # If the check fails, continue but warn

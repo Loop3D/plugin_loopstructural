@@ -54,7 +54,9 @@ class ThicknessCalculatorWidget(QWidget):
             self.basalContactsComboBox, QgsMapLayerProxyModel.Filter.LineLayer, allow_empty=True
         )
         configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.Filter.PointLayer)
-        configure_layer_combo(self.crossSectionLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer)
+        configure_layer_combo(
+            self.crossSectionLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer
+        )
 
         # Initialize calculator types
         self.calculator_types = ["InterpolatedStructure", "StructuralPoint", "AlongSection"]

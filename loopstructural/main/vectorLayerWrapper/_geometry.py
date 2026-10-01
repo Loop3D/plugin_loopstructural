@@ -174,7 +174,9 @@ def qgsLayerToDataFrame(src, dtm=None) -> Optional[pd.DataFrame]:
                 return -9999.0
         from qgis.core import QgsPointXY
 
-        ident = dtm.dataProvider().identify(QgsPointXY(x, y), QgsRaster.IdentifyFormat.IdentifyFormatValue)
+        ident = dtm.dataProvider().identify(
+            QgsPointXY(x, y), QgsRaster.IdentifyFormat.IdentifyFormatValue
+        )
         if not ident.isValid():
             return -9999.0
         res = ident.results()

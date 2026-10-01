@@ -34,7 +34,9 @@ class SPlotDialog(QDialog):
         self.plot_widget.setLabel('bottom', 'Fold frame coordinate')
         layout.addWidget(self.plot_widget)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)

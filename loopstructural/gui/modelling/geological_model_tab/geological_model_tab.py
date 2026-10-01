@@ -191,7 +191,9 @@ class GeologicalModelTab(QWidget):
         layerChangedRow.addWidget(self.updateModelDataButton)
         self.layerChangedWidget = QWidget()
         self.layerChangedWidget.setLayout(layerChangedRow)
-        self.layerChangedWidget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.layerChangedWidget.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         mainLayout.insertWidget(1, self.layerChangedWidget, 0)
         self.layerChangedWidget.hide()
         if self.data_manager is not None:
