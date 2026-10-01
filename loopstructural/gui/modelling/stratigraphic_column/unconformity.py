@@ -27,8 +27,11 @@ class UnconformityWidget(QWidget):
         self.uuid = uuid
         self.unconformity_type = 'erode'
         self.fault_name = None
+        self.flipped = False
         self.comboBoxUnconformityType.currentIndexChanged.connect(self._on_type_changed)
         self.comboBoxFaultName.currentIndexChanged.connect(self._on_fault_name_changed)
+        self.buttonFlipPolarity.toggled.connect(self._on_flip_toggled)
+        self._update_flip_button()
         # The row's combo box/buttons cover the whole widget, so a QListWidget's
         # built-in drag-and-drop can never see a mouse press to start a
         # reorder. Route presses on the dedicated grip label through here instead.
@@ -58,7 +61,7 @@ class UnconformityWidget(QWidget):
 
     def _on_type_changed(self, _index):
         self.unconformity_type = self.comboBoxUnconformityType.currentText()
-        self.comboBoxFaultName.setVisible(self.unconformity_type == 'fault')
+        self._update_fault_controls_visibility()
         if self.unconformity_type == 'fault':
             self.fault_name = self.comboBoxFaultName.currentText() or None
         else:
@@ -71,11 +74,46 @@ class UnconformityWidget(QWidget):
         self.fault_name = self.comboBoxFaultName.currentText() or None
         self.dataChanged.emit()
 
+    def _on_flip_toggled(self, checked):
+        self.flipped = bool(checked)
+        self._update_flip_button()
+        if self.unconformity_type != 'fault':
+            return
+        self.dataChanged.emit()
+
+    def _update_flip_button(self):
+        """Show on the button if the polarity of the fault boundary is inverted."""
+        if self.flipped:
+            self.buttonFlipPolarity.setText("⇅ Inverted")
+            self.buttonFlipPolarity.setStyleSheet(
+                "QToolButton { background-color: #e67e22; color: white; font-weight: bold; }"
+            )
+        else:
+            self.buttonFlipPolarity.setText("⇅ Normal")
+            self.buttonFlipPolarity.setStyleSheet("")
+
+    def _update_fault_controls_visibility(self):
+        is_fault = self.unconformity_type == 'fault'
+        self.comboBoxFaultName.setVisible(is_fault)
+        self.buttonFlipPolarity.setVisible(is_fault)
+
     def set_available_faults(self, fault_names):
         """Populate the fault-name picker, keeping the current selection if
         it is still available (e.g. after the fault trace layer changes).
         """
         fault_names = list(fault_names or [])
+        # A fault boundary needs a fault to link to. Without one the row
+        # would fall back to 'erode' when the data manager is updated, so
+        # do not offer the 'fault' type until a fault exists.
+        fault_index = self.comboBoxUnconformityType.findText('fault')
+        if fault_index >= 0:
+            fault_item = self.comboBoxUnconformityType.model().item(fault_index)
+            fault_item.setEnabled(bool(fault_names))
+            fault_item.setToolTip(
+                ""
+                if fault_names
+                else "Add a fault trace layer with at least one fault to use a fault boundary"
+            )
         if [
             self.comboBoxFaultName.itemText(i) for i in range(self.comboBoxFaultName.count())
         ] == fault_names:
@@ -96,33 +134,38 @@ class UnconformityWidget(QWidget):
         ----------
         data : dict or None
             Dictionary with an 'unconformity_type' key ('erode', 'onlap' or
-            'fault'), and a 'fault_name' key when the type is 'fault'. If
-            None, defaults are used.
+            'fault'), and 'fault_name' and 'flipped' keys when the type is
+            'fault'. If None, defaults are used.
         """
         self.unconformity_type = (data or {}).get("unconformity_type", "erode")
-        self.fault_name = (
-            (data or {}).get("fault_name") if self.unconformity_type == 'fault' else None
-        )
+        is_fault = self.unconformity_type == 'fault'
+        self.fault_name = (data or {}).get("fault_name") if is_fault else None
+        self.flipped = bool((data or {}).get("flipped", False)) if is_fault else False
 
         self.comboBoxUnconformityType.blockSignals(True)
         self.comboBoxFaultName.blockSignals(True)
+        self.buttonFlipPolarity.blockSignals(True)
         try:
             index = self.comboBoxUnconformityType.findText(self.unconformity_type)
             if index >= 0:
                 self.comboBoxUnconformityType.setCurrentIndex(index)
-            self.comboBoxFaultName.setVisible(self.unconformity_type == 'fault')
+            self._update_fault_controls_visibility()
             if self.fault_name:
                 self.comboBoxFaultName.setCurrentText(self.fault_name)
+            self.buttonFlipPolarity.setChecked(self.flipped)
+            self._update_flip_button()
         finally:
             self.comboBoxUnconformityType.blockSignals(False)
             self.comboBoxFaultName.blockSignals(False)
+            self.buttonFlipPolarity.blockSignals(False)
 
     def getData(self):
         """Return this row's data for the data manager: uuid, unconformity_type
-        and (when the boundary is fault-linked) fault_name.
+        and (when the boundary is fault-linked) fault_name and flipped.
         """
         return {
             'uuid': self.uuid,
             'unconformity_type': self.unconformity_type,
             'fault_name': self.fault_name,
+            'flipped': self.flipped,
         }

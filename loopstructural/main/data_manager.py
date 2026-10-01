@@ -103,6 +103,10 @@ class ModellingDataManager:
         # plugin-side concept for now; passed by reference to the model
         # manager the same way `_stratigraphic_column`/`_fault_topology` are.
         self._fault_boundaries: dict[str, str] = {}
+        # uuids of the fault-linked unconformities whose polarity is flipped,
+        # i.e. the other side of the fault is kept. Shared by reference with
+        # the model manager, same as `_fault_boundaries`.
+        self._flipped_fault_boundaries: set[str] = set()
         self._model_manager = None
         self.bounding_box_callback = None
         self.basal_contacts_callback = None
@@ -159,6 +163,7 @@ class ModellingDataManager:
         self._model_manager.set_stratigraphic_column(self._stratigraphic_column)
         self._model_manager.set_fault_topology(self._fault_topology)
         self._model_manager.set_fault_boundaries(self._fault_boundaries)
+        self._model_manager.set_flipped_fault_boundaries(self._flipped_fault_boundaries)
         self._model_manager.update_bounding_box(self._bounding_box)
 
     def set_bounding_box(
@@ -698,11 +703,12 @@ class ModellingDataManager:
         """Remove a unit or unconformity from the stratigraphic column."""
         self._stratigraphic_column.remove_unit(uuid=unit_uuid)
         self._fault_boundaries.pop(unit_uuid, None)
+        self._flipped_fault_boundaries.discard(unit_uuid)
         self.update_stratigraphy()
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
-    def set_fault_boundary(self, unconformity_uuid, fault_name):
+    def set_fault_boundary(self, unconformity_uuid, fault_name, *, flipped=False):
         """Mark a stratigraphic-column unconformity as realised by an
         existing fault instead of a flat isovalue surface.
 
@@ -714,20 +720,45 @@ class ModellingDataManager:
             Name of an existing fault (as known to `_fault_topology`) whose
             surface should be used as the domain boundary at this point in
             the column.
+        flipped : bool, optional
+            If True, reverse the polarity of the fault surface so that the
+            other side of the fault is kept, by default False.
         """
+        changed = self._fault_boundaries.get(unconformity_uuid) != fault_name or (
+            self.is_fault_boundary_flipped(unconformity_uuid) != bool(flipped)
+        )
         self._fault_boundaries[unconformity_uuid] = fault_name
+        if flipped:
+            self._flipped_fault_boundaries.add(unconformity_uuid)
+        else:
+            self._flipped_fault_boundaries.discard(unconformity_uuid)
+        if changed:
+            self._mark_column_changed()
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
     def clear_fault_boundary(self, unconformity_uuid):
         """Undo `set_fault_boundary`, reverting the unconformity to a plain isovalue boundary."""
+        self._flipped_fault_boundaries.discard(unconformity_uuid)
         if self._fault_boundaries.pop(unconformity_uuid, None) is not None:
+            self._mark_column_changed()
             if self.stratigraphic_column_callback:
                 self.stratigraphic_column_callback()
+
+    def _mark_column_changed(self):
+        """Tell the model manager that Initialize Model must run again to
+        apply a change to the boundaries of the stratigraphic column.
+        """
+        if self._model_manager is not None:
+            self._model_manager.mark_column_changed()
 
     def get_fault_boundary(self, unconformity_uuid):
         """Return the fault name linked to this unconformity, or None."""
         return self._fault_boundaries.get(unconformity_uuid)
+
+    def is_fault_boundary_flipped(self, unconformity_uuid):
+        """Return True if the polarity of this fault-linked unconformity is flipped."""
+        return unconformity_uuid in self._flipped_fault_boundaries
 
     def get_fault_boundaries(self):
         """Return the uuid -> fault_name mapping of all fault-linked boundaries."""
@@ -1434,6 +1465,7 @@ class ModellingDataManager:
                 self._stratigraphic_column.to_dict() if self._stratigraphic_column else None
             ),
             'fault_boundaries': dict(self._fault_boundaries),
+            'flipped_fault_boundaries': sorted(self._flipped_fault_boundaries),
             'dem_layer': dem_layer_name if self.dem_layer else None,
             'use_dem': self.use_dem,
             'elevation': self.elevation,
@@ -1481,6 +1513,9 @@ class ModellingDataManager:
         self._fault_boundaries.clear()
         if data.get('fault_boundaries'):
             self._fault_boundaries.update(data['fault_boundaries'])
+        self._flipped_fault_boundaries.clear()
+        if data.get('flipped_fault_boundaries'):
+            self._flipped_fault_boundaries.update(data['flipped_fault_boundaries'])
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']
 
@@ -1595,6 +1630,9 @@ class ModellingDataManager:
         self._fault_boundaries.clear()
         if data.get('fault_boundaries'):
             self._fault_boundaries.update(data['fault_boundaries'])
+        self._flipped_fault_boundaries.clear()
+        if data.get('flipped_fault_boundaries'):
+            self._flipped_fault_boundaries.update(data['flipped_fault_boundaries'])
 
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']

@@ -1,11 +1,11 @@
 """Regression tests for using a fault as a stratigraphic domain boundary.
 
-`GeologicalModelManager.update_foliation_features` normally closes each
-built stratigraphic group with a flat isovalue unconformity
-(`GeologicalModel.add_unconformity`). When the column boundary closing a
+`GeologicalModelManager.update_foliation_features` normally gives each
+built stratigraphic group a flat isovalue unconformity at its base
+(`GeologicalModel.add_unconformity`). When the column boundary below a
 group has been linked to a fault (via `fault_boundaries`, populated through
 `ModellingDataManager.set_fault_boundary`), the group should instead be
-capped by that fault's own surface -- a non-displacing domain split, built
+separated from the older group by that fault's own surface -- a non-displacing domain split, built
 with `GeologicalModel.create_and_add_domain_fault` -- and that fault must be
 skipped by the ordinary displacement-fault build loop
 (`update_fault_features`), since a domain fault and a displacement fault are
@@ -45,17 +45,23 @@ def _two_group_column():
 @pytest.fixture
 def manager(monkeypatch):
     manager = GeologicalModelManager()
-    calls = {'foliation': [], 'unconformity': [], 'domain_fault': [], 'fault': []}
+    calls = {'foliation': [], 'unconformity': [], 'domain_fault': [], 'fault': [], 'order': []}
+    foliations = {}
 
     def fake_create_and_add_foliation(name, data=None, **kwargs):
         calls['foliation'].append((name, data))
-        return object()
+        calls['order'].append(('foliation', name))
+        foliations[name] = object()
+        return foliations[name]
 
     def fake_add_unconformity(feature, value, **kwargs):
         calls['unconformity'].append((feature, value))
+        name = next(n for n, f in foliations.items() if f is feature)
+        calls['order'].append(('unconformity', name))
 
     def fake_create_and_add_domain_fault(fault_surface_data, **kwargs):
         calls['domain_fault'].append(fault_surface_data)
+        calls['order'].append(('domain_fault', fault_surface_data))
         return object()
 
     def fake_create_and_add_fault(fault_name, displacement, **kwargs):
@@ -84,9 +90,19 @@ class TestFaultDomainBoundary:
         manager.update_foliation_features()
 
         assert manager._calls['domain_fault'] == ['boundary_fault']
-        # Only the topmost group (nothing above it in the column) still
-        # falls back to a flat unconformity.
-        assert len(manager._calls['unconformity']) == 1
+        # The fault replaces the base of the younger (cover) group. Only the
+        # oldest group (nothing below it in the column) still gets a flat
+        # unconformity at its base.
+        # Groups are built youngest first, so the domain fault comes right
+        # after the cover group (it crops that group to one side) and before
+        # the basin group (which is then cropped to the other side).
+        cover, basin = (name for name, _data in manager._calls['foliation'])
+        assert manager._calls['order'] == [
+            ('foliation', cover),
+            ('domain_fault', 'boundary_fault'),
+            ('foliation', basin),
+            ('unconformity', basin),
+        ]
 
         registered = manager.model.data
         fault_rows = registered.loc[registered['feature_name'] == 'boundary_fault']
@@ -100,6 +116,34 @@ class TestFaultDomainBoundary:
         assert len(fault_rows) == 4
         assert len(fault_rows.loc[fault_rows['val'] == 0]) == 2
         assert fault_rows['val'].isna().sum() == 2
+
+    def test_flipped_boundary_reverses_domain_fault_normals(self, manager):
+        """Flipping the polarity of a fault boundary keeps the other side of
+        the fault, so the normals of the registered fault data must reverse.
+        """
+        normals = {}
+        for flipped in (False, True):
+            column, boundary = _two_group_column()
+            manager.stratigraphic_column = column
+            for name in ('basin_floor', 'basin_fill', 'cover_lower', 'cover_upper'):
+                manager.stratigraphy[name]['contact'] = _contact(name)
+            manager.faults['boundary_fault']['data'] = _fault_trace()
+            manager.fault_boundaries.clear()
+            manager.fault_boundaries[boundary.uuid] = 'boundary_fault'
+            manager.flipped_fault_boundaries.clear()
+            if flipped:
+                manager.flipped_fault_boundaries.add(boundary.uuid)
+
+            manager.update_foliation_features()
+
+            registered = manager.model.data
+            fault_rows = registered.loc[
+                (registered['feature_name'] == 'boundary_fault') & registered['val'].isna()
+            ]
+            normals[flipped] = fault_rows[['gx', 'gy', 'gz']].to_numpy()
+
+        assert len(normals[False]) == 2
+        np.testing.assert_allclose(normals[True], -normals[False])
 
     def test_group_boundary_without_fault_link_uses_flat_unconformity(self, manager):
         column, _boundary = _two_group_column()
@@ -209,6 +253,81 @@ class TestDomainFaultBuildsAndSolves:
             "domain fault scalar field is NaN somewhere in the model domain -- "
             "an unconformity region was incorrectly left on it"
         )
+
+    def test_domain_fault_separates_the_groups_on_each_side(self, monkeypatch):
+        """cover / erode unconformity / middle / fault boundary / basin: the
+        fault must put the middle group on one side and the basin group on
+        the other. The cover unconformity above the middle group is younger
+        than the fault, so the fault must not crop it or the cover group.
+        """
+        monkeypatch.setattr(PlgSettingsStructure, 'interpolator_nelements', 200)
+        manager = GeologicalModelManager()
+        manager.update_bounding_box(BoundingBox(origin=[0, 0, -50], maximum=[100, 100, 50]))
+        column = StratigraphicColumn()
+        column.clear(basement=False)
+        column.add_unit(name='basin_floor', thickness=50.0, where='top')
+        boundary = column.add_unconformity(name='fault_boundary', where='top')
+        column.add_unit(name='middle_lower', thickness=50.0, where='top')
+        column.add_unit(name='middle_upper', thickness=50.0, where='top')
+        column.add_unconformity(name='cover_unconformity', where='top')
+        column.add_unit(name='cover', thickness=50.0, where='top')
+        manager.stratigraphic_column = column
+        for name in ('basin_floor', 'middle_lower', 'middle_upper', 'cover'):
+            manager.stratigraphy[name]['contact'] = _contact(name)
+        manager.faults['boundary_fault']['data'] = pd.DataFrame(
+            {'X': [10.0, 90.0], 'Y': [10.0, 90.0], 'Z': [0.0, 0.0]}
+        )
+        manager.fault_boundaries[boundary.uuid] = 'boundary_fault'
+
+        manager.update_model(notify_observers=False)
+
+        cover_group, middle_group, basin_group = (g.name for g in column.get_groups())
+
+        def fault_region_signs(feature_name):
+            feature = manager.model.get_feature_by_name(feature_name)
+            return [
+                r.sign
+                for r in feature.regions
+                if getattr(r, 'name', None) == '__boundary_fault_unconformity'
+            ]
+
+        assert fault_region_signs(middle_group) == [False]
+        assert fault_region_signs(basin_group) == [True]
+        assert fault_region_signs(cover_group) == []
+        assert fault_region_signs(f'__{cover_group}_unconformity') == []
+
+    def test_flipped_domain_fault_reverses_the_kept_side(self, monkeypatch):
+        """With the polarity flipped, the domain fault's scalar field must
+        have the opposite sign, so the other side of the fault is kept.
+        """
+        monkeypatch.setattr(PlgSettingsStructure, 'interpolator_nelements', 200)
+        xs, ys = np.meshgrid(np.linspace(0, 100, 11), np.linspace(0, 100, 11))
+        pts = np.column_stack([xs.ravel(), ys.ravel(), np.zeros(xs.size)])
+        values = {}
+        for flipped in (False, True):
+            manager = GeologicalModelManager()
+            manager.update_bounding_box(BoundingBox(origin=[0, 0, -50], maximum=[100, 100, 50]))
+            column, boundary = _two_group_column()
+            manager.stratigraphic_column = column
+            for name in ('basin_floor', 'basin_fill', 'cover_lower', 'cover_upper'):
+                manager.stratigraphy[name]['contact'] = _contact(name)
+            manager.faults['boundary_fault']['data'] = pd.DataFrame(
+                {'X': [10.0, 90.0], 'Y': [10.0, 90.0], 'Z': [0.0, 0.0]}
+            )
+            manager.fault_boundaries[boundary.uuid] = 'boundary_fault'
+            if flipped:
+                manager.flipped_fault_boundaries.add(boundary.uuid)
+
+            manager.update_model(notify_observers=False)
+            manager.update_all_features(notify_observers=False)
+
+            domain_fault = manager.model.get_feature_by_name('boundary_fault')
+            values[flipped] = domain_fault.evaluate_value(pts)
+
+        # Compare only points clearly away from the fault surface.
+        away = np.abs(values[False]) > 1e-3 * np.abs(values[False]).max()
+        assert away.any()
+        assert np.all(np.sign(values[True][away]) == -np.sign(values[False][away]))
 
 
 class TestExtendFaultTraceToDomain:

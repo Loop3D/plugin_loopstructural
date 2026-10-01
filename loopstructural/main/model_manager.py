@@ -11,7 +11,7 @@ interaction with the LoopStructural model from the GUI code.
 
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import Callable, Dict, Optional, Union
+from typing import Callable, Dict, Optional, Set, Union
 
 import geopandas as gpd
 import numpy as np
@@ -185,6 +185,9 @@ class GeologicalModelManager(Observable):
         # fault name; see `set_fault_boundaries`. Shared by reference with
         # ModellingDataManager, same as stratigraphic_column/fault_topology.
         self.fault_boundaries: Dict[str, str] = {}
+        # uuids of the fault_boundaries whose polarity is flipped; see
+        # `set_flipped_fault_boundaries`.
+        self.flipped_fault_boundaries: Set[str] = set()
         # name -> add_foliation arguments for foliations added by the user
         # (not from the stratigraphic column). update_model clears the model
         # features, so it builds these again from here; see
@@ -207,6 +210,12 @@ class GeologicalModelManager(Observable):
         # put into the current features (a fault trace changed, or a group
         # got or lost all of its data). Only Initialize Model applies that.
         self._data_dirty = False
+        # True once the structure of the stratigraphic column (its
+        # unconformities, the order of its elements, or the fault links of
+        # its boundaries) has changed since the last Initialize Model. The
+        # groups and the boundaries between them are only built there; see
+        # `_on_stratigraphic_column_changed` and `mark_column_changed`.
+        self._column_dirty = False
         # fault name -> the fault data that the last `update_model` built
         # the fault from; `refresh_feature_data` compares against it.
         self._built_fault_data: Dict[str, pd.DataFrame] = {}
@@ -265,6 +274,7 @@ class GeologicalModelManager(Observable):
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
+        self._column_dirty = False
         self._built_fault_data = {}
         self._emit('model_updated')
         self._emit('model_update_finished')
@@ -298,6 +308,7 @@ class GeologicalModelManager(Observable):
             # from whatever model was previously loaded.
             self._topology_dirty = False
             self._data_dirty = False
+            self._column_dirty = False
             # the data manager restores the fault data from the same state
             # before it loads the model, so take that as the built data
             self._built_fault_data = self._copy_fault_data()
@@ -305,8 +316,23 @@ class GeologicalModelManager(Observable):
         self._emit('model_update_finished')
 
     def set_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
-        """Set the stratigraphic column for the geological model manager."""
+        """Set the stratigraphic column for the geological model manager.
+
+        Also attaches an observer so that a change to the structure of the
+        column marks the model as stale; see `_on_stratigraphic_column_changed`.
+        """
+        if self.stratigraphic_column is not None and (
+            self.stratigraphic_column is not stratigraphic_column
+        ):
+            try:
+                self.stratigraphic_column.detach(self._on_stratigraphic_column_changed)
+            except Exception:
+                pass
         self.stratigraphic_column = stratigraphic_column
+        try:
+            stratigraphic_column.attach(self._on_stratigraphic_column_changed)
+        except Exception:
+            pass
         # A column built via `add_element` (e.g. restored from a saved
         # project) never has each unit's min/max scalar-field range computed
         # -- only the interactive `add_unit` path does that as a side
@@ -339,6 +365,48 @@ class GeologicalModelManager(Observable):
         column boundaries (see `ModellingDataManager.set_fault_boundary`).
         """
         self.fault_boundaries = fault_boundaries
+
+    def set_flipped_fault_boundaries(self, flipped_fault_boundaries: Set[str]):
+        """Set the uuids of the fault-linked stratigraphic column boundaries
+        whose polarity is flipped, so the other side of the fault is kept
+        (see `ModellingDataManager.set_fault_boundary`).
+        """
+        self.flipped_fault_boundaries = flipped_fault_boundaries
+
+    # Stratigraphic column events that change the groups or the boundaries
+    # between them. Those are only built by Initialize Model
+    # (`update_foliation_features`), so Solve Model cannot apply them. A
+    # removed element can be an unconformity, and its type is not known
+    # after the removal, so every removal counts.
+    _COLUMN_EVENTS_REQUIRING_REINIT = {
+        'unconformity_added',
+        'unit_removed',
+        'order_updated',
+        'column_cleared',
+    }
+
+    def _on_stratigraphic_column_changed(self, _observable, event, *args, **kwargs):
+        """Mark the model as stale when the structure of the column changes.
+
+        A change to a unit only (its name, thickness or colour) does not
+        change the groups, so `refresh_feature_data` can apply it.
+        """
+        requires_reinit = event in self._COLUMN_EVENTS_REQUIRING_REINIT or (
+            event == 'element_updated'
+            and isinstance(kwargs.get('element'), StratigraphicUnconformity)
+        )
+        if requires_reinit:
+            self.mark_column_changed()
+
+    def mark_column_changed(self):
+        """Mark the model as stale because the structure of the stratigraphic
+        column changed, e.g. an unconformity or the fault link or polarity of
+        a boundary. Initialize Model must run again to apply the change.
+        """
+        if self._column_dirty:
+            return
+        self._column_dirty = True
+        self._emit('model_updated')
 
     # Topology events that change what actually feeds the interpolator (as
     # opposed to just which side of an already-solved fault gets cropped
@@ -630,28 +698,41 @@ class GeologicalModelManager(Observable):
     # def update_stratigraphic_unit(self, unit_data):
     #     self.data
 
-    def _closing_fault_boundary(self, group):
-        """Return the fault name that closes `group` from above, if any.
+    def _base_fault_boundary(self, group):
+        """Return the fault name that forms the base of `group`, if any.
 
-        The boundary "closing" a group off from the next (younger) group is
-        the first `StratigraphicUnconformity` above the group's youngest
-        unit in `stratigraphic_column.order`. If that boundary has been
-        linked to a fault (`ModellingDataManager.set_fault_boundary`), the
-        group should be capped by that fault's surface -- a non-displacing
-        domain split, see `create_and_add_domain_fault` -- instead of the
-        flat isovalue-0 surface `add_unconformity` uses.
+        The boundary between a group and the next (older) group is the base
+        of the younger group: `add_unconformity(foliation, 0)` builds it from
+        the group's own scalar field. It is the run of
+        `StratigraphicUnconformity` elements directly below the group's
+        oldest unit in `stratigraphic_column.order` (oldest first). If one of
+        them has been linked to a fault (`ModellingDataManager.
+        set_fault_boundary`), that fault's surface -- a non-displacing domain
+        split, see `create_and_add_domain_fault` -- is built in place of the
+        flat base. The domain fault then crops this group to one side
+        (`add_domain_fault_below`), and the older groups built after it to
+        the other side (`add_domain_fault_above`).
+
+        Returns
+        -------
+        tuple of (str or None, bool)
+            The fault name (None if the boundary is not fault-linked) and
+            whether the polarity of that boundary is flipped.
         """
         if not group.units or not self.fault_boundaries or self.stratigraphic_column is None:
-            return None
+            return None, False
         order = self.stratigraphic_column.order
-        youngest_uuid = group.units[0].uuid
-        start = next((i for i, e in enumerate(order) if e.uuid == youngest_uuid), None)
+        oldest_uuid = group.units[-1].uuid
+        start = next((i for i, e in enumerate(order) if e.uuid == oldest_uuid), None)
         if start is None:
-            return None
-        for element in order[start + 1 :]:
-            if isinstance(element, StratigraphicUnconformity):
-                return self.fault_boundaries.get(element.uuid)
-        return None
+            return None, False
+        for element in reversed(order[:start]):
+            if not isinstance(element, StratigraphicUnconformity):
+                break
+            fault_name = self.fault_boundaries.get(element.uuid)
+            if fault_name:
+                return fault_name, element.uuid in self.flipped_fault_boundaries
+        return None, False
 
     def _clip_line_to_bounding_box(self, centroid, direction):
         """Return the (t_min, t_max) range along `centroid + t*direction`
@@ -788,8 +869,13 @@ class GeologicalModelManager(Observable):
                 return float(dip_values.mean())
         return 90.0
 
-    def _build_domain_fault_boundary(self, fault_name, groupname):
+    def _build_domain_fault_boundary(self, fault_name, groupname, flipped=False):
         """Build `fault_name` as a domain-fault boundary in place of a flat unconformity.
+
+        The side of the fault that is kept is set by the sign of the fault's
+        scalar field, which comes from its orientation normals. If `flipped`
+        is True, the normals are reversed (polarity -1, see
+        `GeologicalModel.prepare_data`) so that the other side is kept.
 
         `GeologicalModel.create_and_add_domain_fault` (unlike
         `create_and_add_fault`/`create_and_add_foliation`) has no `data=`
@@ -822,6 +908,7 @@ class GeologicalModelManager(Observable):
         data_for_fault = value_rows
         if not orientation_rows.empty:
             orientation_rows['dip'] = self._domain_fault_dip(fault_entry)
+            orientation_rows['polarity'] = -1.0 if flipped else 1.0
             orientation_rows['feature_name'] = fault_name
             orientation_rows['val'] = np.nan
             data_for_fault = pd.concat([value_rows, orientation_rows], ignore_index=True)
@@ -899,8 +986,10 @@ class GeologicalModelManager(Observable):
                 cpw=PlgSettingsStructure.interpolator_cpw,
                 regularisation=PlgSettingsStructure.interpolator_regularisation,
             )
-            fault_name = self._closing_fault_boundary(group)
-            if fault_name is None or not self._build_domain_fault_boundary(fault_name, groupname):
+            fault_name, flipped = self._base_fault_boundary(group)
+            if fault_name is None or not self._build_domain_fault_boundary(
+                fault_name, groupname, flipped
+            ):
                 self.model.add_unconformity(foliation, 0)
         self._strip_spurious_regions_from_domain_faults()
         self.model.stratigraphic_column = self.stratigraphic_column
@@ -1272,7 +1361,11 @@ class GeologicalModelManager(Observable):
         features = [f for f in self.features() if not f.name.startswith('__')]
         if not features:
             return 'empty'
-        if getattr(self, '_topology_dirty', False) or getattr(self, '_data_dirty', False):
+        if (
+            getattr(self, '_topology_dirty', False)
+            or getattr(self, '_data_dirty', False)
+            or getattr(self, '_column_dirty', False)
+        ):
             return 'stale'
         if all(self.is_feature_built(f) for f in features):
             return 'solved'
@@ -1352,6 +1445,7 @@ class GeologicalModelManager(Observable):
             # just re-applied above, so any pending topology edit is now current
             self._topology_dirty = False
             self._data_dirty = False
+            self._column_dirty = False
         finally:
             self._progress_callback = None
         if dbg is not None:

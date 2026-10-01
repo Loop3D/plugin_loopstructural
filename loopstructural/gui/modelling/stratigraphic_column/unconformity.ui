@@ -85,6 +85,22 @@
      </property>
     </widget>
    </item>
+   <item row="1" column="3">
+    <widget class="QToolButton" name="buttonFlipPolarity">
+     <property name="toolTip">
+      <string>Flip which side of the fault is kept (the polarity of the fault boundary)</string>
+     </property>
+     <property name="text">
+      <string>⇅</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <resources/>

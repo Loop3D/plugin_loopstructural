@@ -179,6 +179,20 @@ class StratColumnWidget(QWidget):
         # Update display from data manager
         self.update_display()
         self.data_manager.set_stratigraphic_column_callback(self.update_display)
+        self.data_manager._fault_topology.attach(self._on_fault_topology_changed)
+
+    def _on_fault_topology_changed(self, observable, event, *args, **kwargs):
+        """Refresh the fault-name picker of each unconformity row when faults
+        are added or removed (e.g. a new fault trace layer is selected).
+        """
+        fault_names = self._get_available_fault_names()
+        for widget, _ in list(self._widget_cache.values()):
+            if isinstance(widget, UnconformityWidget):
+                try:
+                    widget.set_available_faults(fault_names)
+                except RuntimeError:
+                    # Widget was deleted
+                    pass
 
     def _make_tool_button(self, theme_icon_name: str, tooltip: str) -> QToolButton:
         """Build a small icon-only tool button using a QGIS theme icon, with
@@ -320,6 +334,9 @@ class StratColumnWidget(QWidget):
             unconformity_data = dict(unconformity_data)
             unconformity_data['unconformity_type'] = 'fault'
             unconformity_data['fault_name'] = fault_name
+            unconformity_data['flipped'] = self.data_manager.is_fault_boundary_flipped(
+                unconformity_data.get('uuid')
+            )
         return unconformity_data
 
     def _get_available_fault_names(self):
@@ -707,6 +724,7 @@ class StratColumnWidget(QWidget):
             unit_data = unit_widget.getData()
             if isinstance(unit_widget, UnconformityWidget):
                 fault_name = unit_data.pop('fault_name', None)
+                flipped = unit_data.pop('flipped', False)
                 is_fault_boundary = unit_data.get('unconformity_type') == 'fault'
                 if is_fault_boundary:
                     # The core stratigraphic column only knows erode/onlap --
@@ -715,8 +733,14 @@ class StratColumnWidget(QWidget):
                     # erosional boundary here.
                     unit_data['unconformity_type'] = 'erode'
                 if is_fault_boundary and fault_name:
-                    self.data_manager.set_fault_boundary(unit_widget.uuid, fault_name)
-                    if not self.data_manager.fault_spans_model_domain(fault_name):
+                    previous_fault_name = self.data_manager.get_fault_boundary(unit_widget.uuid)
+                    self.data_manager.set_fault_boundary(
+                        unit_widget.uuid, fault_name, flipped=flipped
+                    )
+                    # Only warn when the fault changes, not on a polarity flip.
+                    if fault_name != previous_fault_name and (
+                        not self.data_manager.fault_spans_model_domain(fault_name)
+                    ):
                         QMessageBox.information(
                             self,
                             "Fault Domain Boundary",
