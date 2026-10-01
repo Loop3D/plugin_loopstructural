@@ -96,7 +96,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterRasterLayer(
                 self.INPUT_DTM,
                 "DTM (InterpolatedStructure)",
-                [QgsProcessing.TypeRaster],
+                [QgsProcessing.SourceType.TypeRaster],
                 optional=True,
             )
         )
@@ -133,7 +133,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_BASAL_CONTACTS,
                 "Basal Contacts",
-                [QgsProcessing.TypeVectorLine],
+                [QgsProcessing.SourceType.TypeVectorLine],
                 defaultValue='Basal Contacts',
             )
         )
@@ -141,7 +141,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_GEOLOGY,
                 "GEOLOGY",
-                [QgsProcessing.TypeVectorPolygon],
+                [QgsProcessing.SourceType.TypeVectorPolygon],
             )
         )
 
@@ -150,7 +150,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
                 'UNIT_NAME_FIELD',
                 'Unit Name Field e.g. Formation',
                 parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.String,
+                type=QgsProcessingParameterField.DataType.String,
                 defaultValue='Formation',
             )
         )
@@ -159,7 +159,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 'STRATIGRAPHIC_COLUMN_LAYER',
                 'Stratigraphic Column Layer (from sorter)',
-                [QgsProcessing.TypeVector],
+                [QgsProcessing.SourceType.TypeVector],
                 optional=True,
             )
         )
@@ -180,14 +180,14 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_SAMPLED_CONTACTS,
                 "Sampled Contacts",
-                [QgsProcessing.TypeVectorPoint],
+                [QgsProcessing.SourceType.TypeVectorPoint],
             )
         )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT_STRUCTURE_DATA,
                 "Orientation Data",
-                [QgsProcessing.TypeVectorPoint],
+                [QgsProcessing.SourceType.TypeVectorPoint],
             )
         )
         self.addParameter(
@@ -203,7 +203,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_DIPDIR_FIELD,
                 "Dip Direction Column",
                 parentLayerParameterName=self.INPUT_STRUCTURE_DATA,
-                type=QgsProcessingParameterField.Numeric,
+                type=QgsProcessingParameterField.DataType.Numeric,
                 defaultValue='DIPDIR',
             )
         )
@@ -212,7 +212,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_DIP_FIELD,
                 "Dip Column",
                 parentLayerParameterName=self.INPUT_STRUCTURE_DATA,
-                type=QgsProcessingParameterField.Numeric,
+                type=QgsProcessingParameterField.DataType.Numeric,
                 defaultValue='DIP',
             )
         )
@@ -222,7 +222,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_STRUCTURE_UNIT_FIELD,
                 "Structure Unit Name Field",
                 parentLayerParameterName=self.INPUT_STRUCTURE_DATA,
-                type=QgsProcessingParameterField.String,
+                type=QgsProcessingParameterField.DataType.String,
                 defaultValue='unit_name',
                 optional=True,
             )

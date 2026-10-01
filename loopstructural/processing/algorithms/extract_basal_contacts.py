@@ -67,7 +67,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_GEOLOGY,
                 "GEOLOGY",
-                [QgsProcessing.TypeVectorPolygon],
+                [QgsProcessing.SourceType.TypeVectorPolygon],
             )
         )
         self.addParameter(
@@ -75,7 +75,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
                 'UNIT_NAME_FIELD',
                 'Unit Name Field',
                 parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.String,
+                type=QgsProcessingParameterField.DataType.String,
                 defaultValue='unitname',
             )
         )
@@ -84,7 +84,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_FAULTS,
                 "FAULTS",
-                [QgsProcessing.TypeVectorLine],
+                [QgsProcessing.SourceType.TypeVectorLine],
                 optional=True,
             )
         )
@@ -92,7 +92,7 @@ class BasalContactsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_STRATI_COLUMN,
                 "Stratigraphic Order",
-                [QgsProcessing.TypeVector],
+                [QgsProcessing.SourceType.TypeVector],
                 defaultValue='formation',
             )
         )

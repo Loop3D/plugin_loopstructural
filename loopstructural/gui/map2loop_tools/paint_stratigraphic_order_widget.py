@@ -38,7 +38,7 @@ class PaintStratigraphicOrderWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically
-        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer)
         # stratigraphic column layer removed from UI
 
         # Initialize paint modes

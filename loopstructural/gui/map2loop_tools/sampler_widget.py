@@ -48,11 +48,11 @@ class SamplerWidget(QWidget):
 
         # Configure layer filters programmatically (avoid QgsMapLayerProxyModel in .ui)
         # DTM should show raster layers, geology polygons
-        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
-        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.Filter.RasterLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer)
         configure_layer_combo(
             self.spatialDataLayerComboBox,
-            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer,
+            QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer,
         )
         # spatialData can be any type, leave default
 
@@ -189,7 +189,7 @@ class SamplerWidget(QWidget):
 
             geom_type = layer.geometryType()
             # QgsWkbTypes: PointGeometry = 0, LineGeometry = 1, PolygonGeometry = 2
-            if geom_type == QgsWkbTypes.PointGeometry:
+            if geom_type == QgsWkbTypes.GeometryType.PointGeometry:
                 # Use Decimator for point sets
                 try:
                     idx = self.sampler_types.index("Decimator")
@@ -198,7 +198,7 @@ class SamplerWidget(QWidget):
                     print(e)
                 self.samplerTypeComboBox.setEnabled(False)
                 self.runButton.setEnabled(True)
-            elif geom_type == QgsWkbTypes.LineGeometry:
+            elif geom_type == QgsWkbTypes.GeometryType.LineGeometry:
                 # Line geometry is not allowed
                 try:
                     idx = self.sampler_types.index("Spacing")

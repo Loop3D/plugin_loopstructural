@@ -14,7 +14,7 @@ class DEMWidget(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "dem.ui")
         uic.loadUi(ui_path, self)
-        configure_layer_combo(self.demLayerQgsMapLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
+        configure_layer_combo(self.demLayerQgsMapLayerComboBox, QgsMapLayerProxyModel.Filter.RasterLayer)
         self.useDEMCheckBox.stateChanged.connect(self.onUseDEMClicked)
         self.elevationQgsDoubleSpinBox.valueChanged.connect(self.onElevationChanged)
         self.demLayerQgsMapLayerComboBox.layerChanged.connect(self._sync_dem_layer)

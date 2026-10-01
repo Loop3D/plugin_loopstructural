@@ -47,7 +47,7 @@ class VisualisationWidget(QWidget):
         )
 
         # Modify layout to stack object list and feature list vertically
-        sidebarSplitter = QSplitter(Qt.Vertical, self)
+        sidebarSplitter = QSplitter(Qt.Orientation.Vertical, self)
         sidebarSplitter.addWidget(self.objectList)
 
         # Create the feature list widget

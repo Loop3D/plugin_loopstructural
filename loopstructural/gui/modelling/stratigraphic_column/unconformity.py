@@ -33,20 +33,20 @@ class UnconformityWidget(QWidget):
         # built-in drag-and-drop can never see a mouse press to start a
         # reorder. Route presses on the dedicated grip label through here instead.
         self._dragging_handle = False
-        self.dragHandle.setCursor(Qt.SizeVerCursor)
+        self.dragHandle.setCursor(Qt.CursorShape.SizeVerCursor)
         self.dragHandle.installEventFilter(self)
 
     def eventFilter(self, obj, event):
         if obj is self.dragHandle:
             event_type = event.type()
-            if event_type == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            if event_type == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
                 self._dragging_handle = True
                 self.dragHandlePressed.emit()
                 return True
-            elif event_type == QEvent.MouseMove and self._dragging_handle:
+            elif event_type == QEvent.Type.MouseMove and self._dragging_handle:
                 self.dragHandleMoved.emit(event_global_pos(event))
                 return True
-            elif event_type == QEvent.MouseButtonRelease and self._dragging_handle:
+            elif event_type == QEvent.Type.MouseButtonRelease and self._dragging_handle:
                 self._dragging_handle = False
                 self.dragHandleReleased.emit()
                 return True

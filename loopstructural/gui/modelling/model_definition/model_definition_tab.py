@@ -30,7 +30,7 @@ class ModelDefinitionTab(BaseTab):
 
         # Set uniform size policy for all widgets
         for widget in [self.bounding_box, self.fault_layers, self.dem, self.stratigraphy_layers]:
-            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         actions_widget = QWidget(self)
         actions_layout = QHBoxLayout(actions_widget)
@@ -103,10 +103,10 @@ class ModelDefinitionTab(BaseTab):
             "Load Application State",
             "Loading a saved state will replace all currently loaded data and "
             "the geological model. This cannot be undone.\n\nContinue?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             self.data_manager.load_state(filepath)
@@ -123,8 +123,8 @@ class ModelDefinitionTab(BaseTab):
             "This will clear all loaded data, the stratigraphic column, fault "
             "topology and the geological model. This cannot be undone.\n\n"
             "Continue?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self.data_manager.reset()

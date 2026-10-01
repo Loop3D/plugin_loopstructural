@@ -541,7 +541,7 @@ class ModellingDataManager:
             if unit.element_type != StratigraphicColumnElementType.UNIT:
                 continue
             symbol = QgsSymbol.defaultSymbol(layer.geometryType())
-            if layer.geometryType() == QgsWkbTypes.LineGeometry:
+            if layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
                 # default line symbols are thin (~0.26mm) and hard to tell
                 # apart by colour at a glance -- widen so per-unit basal
                 # contact colours are easy to distinguish on the map canvas.

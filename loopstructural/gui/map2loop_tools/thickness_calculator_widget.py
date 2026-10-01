@@ -48,13 +48,13 @@ class ThicknessCalculatorWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid enum values in .ui)
-        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
-        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.Filter.RasterLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer)
         configure_layer_combo(
-            self.basalContactsComboBox, QgsMapLayerProxyModel.LineLayer, allow_empty=True
+            self.basalContactsComboBox, QgsMapLayerProxyModel.Filter.LineLayer, allow_empty=True
         )
-        configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.PointLayer)
-        configure_layer_combo(self.crossSectionLayerComboBox, QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.Filter.PointLayer)
+        configure_layer_combo(self.crossSectionLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer)
 
         # Initialize calculator types
         self.calculator_types = ["InterpolatedStructure", "StructuralPoint", "AlongSection"]

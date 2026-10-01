@@ -89,14 +89,14 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         average_fold_axis_checkbox.setChecked(False)
         average_fold_axis_checkbox.stateChanged.connect(
             lambda state: self.feature.builder.update_build_arguments(
-                {'av_fold_axis': state != Qt.Checked}
+                {'av_fold_axis': state != Qt.CheckState.Checked}
             )
         )
         average_fold_axis_checkbox.stateChanged.connect(
-            lambda state: self.fold_azimuth.setEnabled(state != Qt.Checked)
+            lambda state: self.fold_azimuth.setEnabled(state != Qt.CheckState.Checked)
         )
         average_fold_axis_checkbox.stateChanged.connect(
-            lambda state: self.fold_plunge.setEnabled(state != Qt.Checked)
+            lambda state: self.fold_plunge.setEnabled(state != Qt.CheckState.Checked)
         )
         self.fold_plunge = QDoubleSpinBox()
         self.fold_plunge.setRange(0, 90)
@@ -129,7 +129,7 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
             model_manager=self.model_manager,
             feature_name=self.feature.name,
         )
-        if dialog.exec_() == dialog.Accepted:
+        if dialog.exec() == dialog.Accepted:
             pass
 
     def remove_fold_frame(self):

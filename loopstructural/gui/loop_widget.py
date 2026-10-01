@@ -37,7 +37,7 @@ class LoopWidget(QWidget):
         mainLayout = QVBoxLayout(self)
         self.setLayout(mainLayout)
         tabWidget = QTabWidget(self)
-        tabWidget.setTabPosition(QTabWidget.South)
+        tabWidget.setTabPosition(QTabWidget.TabPosition.South)
         mainLayout.addWidget(tabWidget)
         self.modelling_widget = ModellingWidget(
             self,

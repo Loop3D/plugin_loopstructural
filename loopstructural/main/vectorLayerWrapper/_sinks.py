@@ -119,9 +119,9 @@ def GeoDataFrameToQgsLayer(
             base = "LineString"
 
         fam = {
-            "Point": QgsWkbTypes.Point,
-            "LineString": QgsWkbTypes.LineString,
-            "Polygon": QgsWkbTypes.Polygon,
+            "Point": QgsWkbTypes.Type.Point,
+            "LineString": QgsWkbTypes.Type.LineString,
+            "Polygon": QgsWkbTypes.Type.Polygon,
         }[base]
 
         if any_multi:
@@ -222,7 +222,7 @@ def GeoDataFrameToQgsLayer(
         except Exception:
             f.setGeometry(QgsGeometry.fromWkt(geom.wkt))
 
-        sink.addFeature(f, QgsFeatureSink.FastInsert)
+        sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
 
         if total:
             feedback.setProgress(int(100.0 * (i + 1) / total))
@@ -382,13 +382,13 @@ def dataframeToQgsLayer(
     has_z = z_col is not None and z_col in df.columns
     has_m = m_col is not None and m_col in df.columns
     if has_z and has_m:
-        wkb = QgsWkbTypes.PointZM
+        wkb = QgsWkbTypes.Type.PointZM
     elif has_z:
-        wkb = QgsWkbTypes.PointZ
+        wkb = QgsWkbTypes.Type.PointZ
     elif has_m:
-        wkb = QgsWkbTypes.PointM
+        wkb = QgsWkbTypes.Type.PointM
     else:
-        wkb = QgsWkbTypes.Point
+        wkb = QgsWkbTypes.Type.Point
 
     # Create the sink
     sink, sink_id = algorithm.parameterAsSink(
@@ -458,7 +458,7 @@ def dataframeToQgsLayer(
             attrs.append(val)
         feat.setAttributes(attrs)
 
-        sink.addFeature(feat, QgsFeature.FastInsert)
+        sink.addFeature(feat, QgsFeatureSink.Flag.FastInsert)
 
         if i % 1000 == 0:
             feedback.setProgress(int(100.0 * i / max(total, 1)))
@@ -545,7 +545,7 @@ def dataframeToQgsTable(self, df, parameters, context, feedback, param_name):
     )
 
     sink, dest_id = self.parameterAsSink(
-        parameters, param_name, context, fields, QgsWkbTypes.NoGeometry, crs
+        parameters, param_name, context, fields, QgsWkbTypes.Type.NoGeometry, crs
     )
     if sink is None:
         raise QgsProcessingException("Canot create output table (sink=None).")
@@ -627,9 +627,9 @@ def geodataframeToMemoryLayer(geodataframe, layer_name: str = "GeoDataFrame Laye
             base = "LineString"
 
         fam = {
-            "Point": QgsWkbTypes.Point,
-            "LineString": QgsWkbTypes.LineString,
-            "Polygon": QgsWkbTypes.Polygon,
+            "Point": QgsWkbTypes.Type.Point,
+            "LineString": QgsWkbTypes.Type.LineString,
+            "Polygon": QgsWkbTypes.Type.Polygon,
         }[base]
 
         if any_multi:

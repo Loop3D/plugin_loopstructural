@@ -86,7 +86,7 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterRasterLayer(
                 self.INPUT_DTM,
                 "DTM",
-                [QgsProcessing.TypeRaster],
+                [QgsProcessing.SourceType.TypeRaster],
                 optional=True,
             )
         )
@@ -95,7 +95,7 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_GEOLOGY,
                 "GEOLOGY",
-                [QgsProcessing.TypeVectorPolygon],
+                [QgsProcessing.SourceType.TypeVectorPolygon],
                 optional=True,
             )
         )
@@ -104,7 +104,7 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_SPATIAL_DATA,
                 "SPATIAL_DATA",
-                [QgsProcessing.TypeVectorAnyGeometry],
+                [QgsProcessing.SourceType.TypeVectorAnyGeometry],
                 optional=True,
             )
         )
@@ -113,7 +113,7 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.INPUT_DECIMATION,
                 "DECIMATION (Point Geometry Data)",
-                QgsProcessingParameterNumber.Integer,
+                QgsProcessingParameterNumber.Type.Integer,
                 defaultValue=1,
                 optional=True,
             )
@@ -123,7 +123,7 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.INPUT_SPACING,
                 "SPACING (Line Geometry Data)",
-                QgsProcessingParameterNumber.Double,
+                QgsProcessingParameterNumber.Type.Double,
                 defaultValue=200.0,
                 optional=True,
             )
@@ -194,9 +194,9 @@ class SamplerAlgorithm(QgsProcessingAlgorithm):
             context,
             fields,
             (
-                QgsWkbTypes.PointZ
+                QgsWkbTypes.Type.PointZ
                 if 'Z' in (samples.columns if samples is not None else [])
-                else QgsWkbTypes.Point
+                else QgsWkbTypes.Type.Point
             ),
             crs,
         )

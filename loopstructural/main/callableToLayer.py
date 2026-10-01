@@ -37,10 +37,10 @@ def callableToLayer(callable, layer, dtm, name: str):
         geom = feature.geometry()
         points = []
         if geom.isMultipart():
-            if geom.type() == QgsWkbTypes.PointGeometry:
+            if geom.type() == QgsWkbTypes.GeometryType.PointGeometry:
                 points = geom.asMultiPoint()
         else:
-            if geom.type() == QgsWkbTypes.PointGeometry:
+            if geom.type() == QgsWkbTypes.GeometryType.PointGeometry:
                 points = [geom.asPoint()]
 
         for p in points:
@@ -50,7 +50,7 @@ def callableToLayer(callable, layer, dtm, name: str):
 
             if dtm is not None:
                 # Extract the value at the point
-                z_value = dtm.dataProvider().identify(p, QgsRaster.IdentifyFormatValue)
+                z_value = dtm.dataProvider().identify(p, QgsRaster.IdentifyFormat.IdentifyFormatValue)
                 if z_value.isValid():
                     z = z_value.results()[1]
             value = callable(np.array([[x, y, z]]))

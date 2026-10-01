@@ -16,12 +16,12 @@ class FaultLayersWidget(QWidget):
         uic.loadUi(ui_path, self)
         configure_layer_combo(
             self.faultTraceLayer,
-            QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer,
+            QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer,
             allow_empty=True,
         )
-        self.faultDipField.setFilters(QgsFieldProxyModel.Numeric)
+        self.faultDipField.setFilters(QgsFieldProxyModel.Filter.Numeric)
         # fault displacement field can only be double or int
-        self.faultDisplacementField.setFilters(QgsFieldProxyModel.Numeric)
+        self.faultDisplacementField.setFilters(QgsFieldProxyModel.Filter.Numeric)
         self.faultTraceLayer.layerChanged.connect(self.onFaultTraceLayerChanged)
         self.faultNameField.fieldChanged.connect(self.onFaultFieldChanged)
         self.faultDipField.fieldChanged.connect(self.onFaultFieldChanged)
@@ -61,7 +61,7 @@ class FaultLayersWidget(QWidget):
         if fault_displacement_field:
             self.faultDisplacementField.setField(fault_displacement_field)
         if layer is not None and layer.isValid():
-            if layer.wkbType() != QgsWkbTypes.Unknown:
+            if layer.wkbType() != QgsWkbTypes.Type.Unknown:
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
                 self.enableZCheckbox(has_z)
                 self.useZCoordinateCheckBox.setChecked(use_z_coordinate)
@@ -74,7 +74,7 @@ class FaultLayersWidget(QWidget):
         self.faultDipField.setLayer(layer)
         self.faultDisplacementField.setLayer(layer)
         if layer is not None and layer.isValid():
-            if layer.wkbType() != QgsWkbTypes.Unknown:
+            if layer.wkbType() != QgsWkbTypes.Type.Unknown:
 
                 has_z = QgsWkbTypes.hasZ(layer.wkbType())
                 self.enableZCheckbox(has_z)

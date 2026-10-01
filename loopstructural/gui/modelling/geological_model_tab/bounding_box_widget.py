@@ -39,9 +39,9 @@ class BoundingBoxWidget(QWidget):
 
         # header row: blank, X, Y, Z
         grid.addWidget(QLabel(""), 0, 0)
-        grid.addWidget(QLabel("X"), 0, 1, alignment=Qt.AlignCenter)
-        grid.addWidget(QLabel("Y"), 0, 2, alignment=Qt.AlignCenter)
-        grid.addWidget(QLabel("Z"), 0, 3, alignment=Qt.AlignCenter)
+        grid.addWidget(QLabel("X"), 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(QLabel("Y"), 0, 2, alignment=Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(QLabel("Z"), 0, 3, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Nsteps row
         grid.addWidget(QLabel("Nsteps:"), 1, 0)
@@ -52,7 +52,7 @@ class BoundingBoxWidget(QWidget):
             sb.setRange(1, 1_000_000)
             sb.setDecimals(0)
             sb.setSingleStep(1)
-            sb.setAlignment(Qt.AlignRight)
+            sb.setAlignment(Qt.AlignmentFlag.AlignRight)
         grid.addWidget(self.nsteps_x, 1, 1)
         grid.addWidget(self.nsteps_y, 1, 2)
         grid.addWidget(self.nsteps_z, 1, 3)
@@ -63,7 +63,7 @@ class BoundingBoxWidget(QWidget):
         self.nelements.setRange(1, 1_000_000_000)
         self.nelements.setDecimals(0)
         self.nelements.setSingleStep(100)
-        self.nelements.setAlignment(Qt.AlignRight)
+        self.nelements.setAlignment(Qt.AlignmentFlag.AlignRight)
         grid.addWidget(self.nelements, 2, 1, 1, 3)
 
         inner_layout.addLayout(grid)

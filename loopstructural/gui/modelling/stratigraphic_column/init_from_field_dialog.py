@@ -19,7 +19,7 @@ class InitFromLayerFieldDialog(QDialog):
 
         self.layerComboBox = QgsMapLayerComboBox()
         configure_layer_combo(
-            self.layerComboBox, QgsMapLayerProxyModel.PolygonLayer, allow_empty=True
+            self.layerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer, allow_empty=True
         )
         self.layerComboBox.setCurrentIndex(-1)
         form_layout.addRow("Layer:", self.layerComboBox)
@@ -30,7 +30,7 @@ class InitFromLayerFieldDialog(QDialog):
 
         layout.addLayout(form_layout)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self._on_accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)

@@ -235,7 +235,7 @@ class AutomaticConversionWidget(QWidget):
 
         self.sources_widget = QWidget()
         self.sources_layout = QFormLayout(self.sources_widget)
-        self.sources_layout.setLabelAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.sources_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self.sources_widget)
         self._build_data_source_inputs()
         if self.project is not None:
@@ -452,14 +452,14 @@ class AutomaticConversionWidget(QWidget):
     def _layer_filter_for_data_type(self, data_type: Datatype | str) -> int:
         key = self._target_key_for_data_type(data_type).upper()
         if key == "GEOLOGY":
-            return QgsMapLayerProxyModel.PolygonLayer
+            return QgsMapLayerProxyModel.Filter.PolygonLayer
         if key == "FAULT":
-            return QgsMapLayerProxyModel.LineLayer
+            return QgsMapLayerProxyModel.Filter.LineLayer
         if key == "STRUCTURE":
-            return QgsMapLayerProxyModel.PointLayer
+            return QgsMapLayerProxyModel.Filter.PointLayer
         if key == "FOLD":
-            return QgsMapLayerProxyModel.LineLayer
-        return QgsMapLayerProxyModel.VectorLayer
+            return QgsMapLayerProxyModel.Filter.LineLayer
+        return QgsMapLayerProxyModel.Filter.VectorLayer
 
     def _collect_data_sources(self) -> Dict[Datatype | str, str]:
         data_sources: Dict[Datatype | str, str] = {}
@@ -834,7 +834,7 @@ class AutomaticConversionDialog(QDialog):
         self.widget.task_succeeded.connect(self.accept)
         self.widget.task_failed.connect(self._on_widget_task_failed)
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
         self.button_box.accepted.connect(self._run_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)

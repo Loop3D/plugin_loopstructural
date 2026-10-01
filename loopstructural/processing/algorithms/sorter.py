@@ -149,7 +149,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_GEOLOGY,
                 "Geology polygons",
-                [QgsProcessing.TypeVectorPolygon],
+                [QgsProcessing.SourceType.TypeVectorPolygon],
                 optional=True,
             )
         )
@@ -159,7 +159,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 'UNIT_NAME_FIELD',
                 'Unit Name Field',
                 parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.Any,
+                type=QgsProcessingParameterField.DataType.Any,
                 defaultValue='UNITNAME',
                 optional=True,
             )
@@ -170,7 +170,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 'MIN_AGE_FIELD',
                 'Minimum Age Field',
                 parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.Any,
+                type=QgsProcessingParameterField.DataType.Any,
                 defaultValue='MIN_AGE',
                 optional=True,
             )
@@ -181,7 +181,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 'MAX_AGE_FIELD',
                 'Maximum Age Field',
                 parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.Any,
+                type=QgsProcessingParameterField.DataType.Any,
                 defaultValue='MAX_AGE',
                 optional=True,
             )
@@ -192,7 +192,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 'GROUP_FIELD',
                 'Group Field',
                 parentLayerParameterName=self.INPUT_GEOLOGY,
-                type=QgsProcessingParameterField.Any,
+                type=QgsProcessingParameterField.DataType.Any,
                 defaultValue='GROUP',
                 optional=True,
             )
@@ -202,7 +202,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT_STRUCTURE,
                 "Structure",
-                [QgsProcessing.TypeVectorPoint],
+                [QgsProcessing.SourceType.TypeVectorPoint],
                 optional=True,
             )
         )
@@ -212,7 +212,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 'DIP_FIELD',
                 'Dip Field',
                 parentLayerParameterName=self.INPUT_STRUCTURE,
-                type=QgsProcessingParameterField.Any,
+                type=QgsProcessingParameterField.DataType.Any,
                 defaultValue='DIP',
                 optional=True,
             )
@@ -222,7 +222,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
                 'DIPDIR_FIELD',
                 'Dip Direction Field',
                 parentLayerParameterName=self.INPUT_STRUCTURE,
-                type=QgsProcessingParameterField.Any,
+                type=QgsProcessingParameterField.DataType.Any,
                 defaultValue='DIPDIR',
                 optional=True,
             )
@@ -249,7 +249,7 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 "CONTACTS_LAYER",
                 "Contacts Layer",
-                [QgsProcessing.TypeVectorLine],
+                [QgsProcessing.SourceType.TypeVectorLine],
                 optional=False,
             )
         )
@@ -347,14 +347,14 @@ class StratigraphySorterAlgorithm(QgsProcessingAlgorithm):
             self.OUTPUT,
             context,
             sink_fields,
-            QgsWkbTypes.NoGeometry,
+            QgsWkbTypes.Type.NoGeometry,
             in_layer.sourceCrs() if in_layer else None,
         )
 
         for pos, name in enumerate(order, start=1):
             f = QgsFeature(sink_fields)
             f.setAttributes([pos, name])
-            sink.addFeature(f, QgsFeatureSink.FastInsert)
+            sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
         try:
             with open(output_file, 'w') as f:
                 json.dump(order, f)

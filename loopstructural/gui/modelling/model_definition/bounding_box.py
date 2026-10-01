@@ -150,7 +150,7 @@ class BoundingBoxWidget(QWidget):
             return
 
         if self._bounding_box_rubber_band is None:
-            rubber_band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+            rubber_band = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
             rubber_band.setColor(QColor(255, 0, 0, 60))
             rubber_band.setStrokeColor(QColor(255, 0, 0, 200))
             rubber_band.setWidth(2)

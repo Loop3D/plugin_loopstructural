@@ -90,7 +90,7 @@ def start_background_task(
     the thread is running, the thread is destroyed with it.
     """
     progress_dialog = QProgressDialog(initial_label, "Cancel", 0, 0, widget)
-    progress_dialog.setWindowModality(Qt.NonModal)
+    progress_dialog.setWindowModality(Qt.WindowModality.NonModal)
     progress_dialog.setWindowTitle(title)
     progress_dialog.setCancelButton(None)
     progress_dialog.setMinimumDuration(0)

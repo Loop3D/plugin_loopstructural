@@ -283,7 +283,7 @@ class FeatureListWidget(QWidget):
         lineForm = QFormLayout()
 
         self.crossSectionLineLayerComboBox = QgsMapLayerComboBox(self)
-        configure_layer_combo(self.crossSectionLineLayerComboBox, QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.crossSectionLineLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer)
         lineForm.addRow("Line layer", self.crossSectionLineLayerComboBox)
 
         self.crossSectionLineResolutionSpinBox = QSpinBox(self)
@@ -445,7 +445,7 @@ class FeatureListWidget(QWidget):
             fold_menu.addSeparator()
             fold_actions[fold_menu.addAction("All")] = None
 
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec(self.mapToGlobal(event.pos()))
 
         if not selected_items:
             return

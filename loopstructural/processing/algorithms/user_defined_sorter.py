@@ -79,7 +79,7 @@ class UserDefinedStratigraphyAlgorithm(QgsProcessingAlgorithm):
             else QgsCoordinateReferenceSystem()
         )
         sink, dest_id = self.parameterAsSink(
-            parameters, self.OUTPUT, context, sink_fields, QgsWkbTypes.NoGeometry, crs
+            parameters, self.OUTPUT, context, sink_fields, QgsWkbTypes.Type.NoGeometry, crs
         )
 
         # 4) Insert features
@@ -87,7 +87,7 @@ class UserDefinedStratigraphyAlgorithm(QgsProcessingAlgorithm):
             f = QgsFeature(sink_fields)
             # Ensure correct types: int for "order", str for "unit_name"
             f.setAttributes([int(pos), str(unit_name)])
-            ok = sink.addFeature(f, QgsFeatureSink.FastInsert)
+            ok = sink.addFeature(f, QgsFeatureSink.Flag.FastInsert)
             if not ok:
                 feedback.reportError(f"Failed to add feature for unit '{unit_name}' (order={pos}).")
 

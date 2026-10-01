@@ -69,7 +69,7 @@ class StratColumnWidget(QWidget):
 
         # Main list widget
         self.unitList = QListWidget()
-        self.unitList.setDragDropMode(QAbstractItemView.InternalMove)
+        self.unitList.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.unitList.model().rowsMoved.connect(self.update_order)
         layout.addWidget(self.unitList)
 
@@ -128,7 +128,7 @@ class StratColumnWidget(QWidget):
         layerRow = QHBoxLayout()
         self.unitsLayerComboBox = QgsMapLayerComboBox()
         configure_layer_combo(
-            self.unitsLayerComboBox, QgsMapLayerProxyModel.PolygonLayer, allow_empty=True
+            self.unitsLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer, allow_empty=True
         )
         self.unitsLayerComboBox.setCurrentIndex(-1)
         self.unitsLayerFieldComboBox = QgsFieldComboBox()
@@ -340,7 +340,7 @@ class StratColumnWidget(QWidget):
             print("Error: Data manager is not initialized.")
             return
         dialog = InitFromLayerFieldDialog(self)
-        if dialog.exec_() != QDialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         layer = dialog.selected_layer()
         field_name = dialog.selected_field()

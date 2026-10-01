@@ -283,20 +283,20 @@ class LoopstructuralPlugin:
                 self.tr("Loop - Modelling"), self.iface.mainWindow()
             )
             self.modelling_dockwidget.setWidget(self.loop_widget.get_modelling_widget())
-            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.modelling_dockwidget)
+            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.modelling_dockwidget)
 
             # Create visualisation dock
             self.visualisation_dockwidget = QDockWidget(
                 self.tr("Loop - Visualisation"), self.iface.mainWindow()
             )
             self.visualisation_dockwidget.setWidget(self.loop_widget.get_visualisation_widget())
-            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.visualisation_dockwidget)
+            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.visualisation_dockwidget)
 
             # Tab them with other right docks if available
             right_docks = [
                 d
                 for d in self.iface.mainWindow().findChildren(QDockWidget)
-                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+                if self.iface.mainWindow().dockWidgetArea(d) == Qt.DockWidgetArea.RightDockWidgetArea
             ]
             if right_docks:
                 for dock in right_docks:
@@ -336,11 +336,11 @@ class LoopstructuralPlugin:
             )
 
             self.loop_dockwidget.setWidget(self.loop_widget)
-            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.loop_dockwidget)
+            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.loop_dockwidget)
             right_docks = [
                 d
                 for d in self.iface.mainWindow().findChildren(QDockWidget)
-                if self.iface.mainWindow().dockWidgetArea(d) == Qt.RightDockWidgetArea
+                if self.iface.mainWindow().dockWidgetArea(d) == Qt.DockWidgetArea.RightDockWidgetArea
             ]
             # If there are other dock widgets, tab this one with the first one found
             if right_docks:
@@ -370,7 +370,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_data_conversion_dialog(self):
         """Show the data conversion dialog."""
@@ -380,7 +380,7 @@ class LoopstructuralPlugin:
             self.iface.mainWindow(),
             project=self.data_manager.project if self.data_manager else None,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_sorter_dialog(self):
         """Show the automatic stratigraphic sorter dialog."""
@@ -391,7 +391,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_user_sorter_dialog(self):
         """Show the user-defined stratigraphic column dialog."""
@@ -402,7 +402,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_basal_contacts_dialog(self):
         """Show the basal contacts extractor dialog."""
@@ -413,7 +413,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_thickness_dialog(self):
         """Show the thickness calculator dialog."""
@@ -424,7 +424,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_paint_strat_order_dialog(self):
         """Show the paint stratigraphic order dialog."""
@@ -435,7 +435,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def show_fault_topology_dialog(self):
         """Show the fault topology calculator dialog."""
@@ -446,7 +446,7 @@ class LoopstructuralPlugin:
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec_()
+        dialog.exec()
 
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.

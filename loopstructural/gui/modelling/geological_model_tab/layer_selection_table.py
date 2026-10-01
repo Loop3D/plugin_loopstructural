@@ -194,7 +194,7 @@ class LayerSelectionTable(QWidget):
                 existing_data=self._get_existing_data_for_button(btn),
             )
 
-            if dialog.exec_() == QDialog.Accepted:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
                 layer_data = dialog.get_layer_data()
                 if layer_data:
                     self._update_button_with_selection(btn, layer_data)
@@ -407,7 +407,7 @@ class LayerSelectionDialog(QDialog):
 
         self.layer_combo = QgsMapLayerComboBox()
         configure_layer_combo(
-            self.layer_combo, QgsMapLayerProxyModel.LineLayer | QgsMapLayerProxyModel.PointLayer
+            self.layer_combo, QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer
         )
         layout.addWidget(self.layer_combo)
 
@@ -419,7 +419,7 @@ class LayerSelectionDialog(QDialog):
         self._setup_type_specific_fields(layout)
 
         # Dialog buttons
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         layout.addWidget(self.button_box)
 
         self.button_box.accepted.connect(self._on_accepted)
@@ -649,16 +649,16 @@ class LayerSelectionDialog(QDialog):
         """Validate the current layer selection."""
         layer = self.layer_combo.currentLayer()
         if layer is None:
-            self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
+            self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
             return False
 
         # Compare layer objects, not names: different layers may share a name.
         if any(entry.get('layer') is layer for entry in self._other_entries().values()):
             self.data_manager.logger("Layer already selected.", log_level=2)
-            self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
+            self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
             return False
 
-        self.button_box.button(QDialogButtonBox.Ok).setEnabled(True)
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
         return True
 
     def _on_accepted(self):

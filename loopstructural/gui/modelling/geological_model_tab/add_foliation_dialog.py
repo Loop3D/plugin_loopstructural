@@ -55,7 +55,7 @@ class AddFoliationDialog(QDialog):
                 self.name_valid = True
 
             # Enable/disable the OK button based on validation
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.name_valid)
+            self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(self.name_valid)
 
             # If the name changes, update the data manager key and reinitialize table
             if old_name != new_name and old_name in self.data_manager.feature_data:

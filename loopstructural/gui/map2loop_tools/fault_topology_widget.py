@@ -21,7 +21,7 @@ class FaultTopologyWidget(QDialog):
         ui_path = os.path.join(os.path.dirname(__file__), "fault_topology_widget.ui")
         uic.loadUi(ui_path, self)
         # Set filter for fault layer selection
-        configure_layer_combo(self.faultLayerComboBox, QgsMapLayerProxyModel.LineLayer)
+        configure_layer_combo(self.faultLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer)
         self.faultLayerComboBox.layerChanged.connect(self._on_fault_layer_changed)
         # react to field changes so we can update the modelling widget via the data manager
         try:

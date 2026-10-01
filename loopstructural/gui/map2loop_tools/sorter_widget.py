@@ -52,9 +52,9 @@ class SorterWidget(QWidget):
         uic.loadUi(ui_path, self)
 
         # Configure layer filters programmatically (avoid QGIS enums in UI)
-        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
-        configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.PointLayer)
-        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.RasterLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer)
+        configure_layer_combo(self.structureLayerComboBox, QgsMapLayerProxyModel.Filter.PointLayer)
+        configure_layer_combo(self.dtmLayerComboBox, QgsMapLayerProxyModel.Filter.RasterLayer)
 
         # Initialize sorting algorithms
         self.sorting_algorithms = list(SORTER_LIST.keys())

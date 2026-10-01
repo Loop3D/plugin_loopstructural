@@ -36,20 +36,20 @@ def _build_status_icon(color: str, *, filled: bool, mark: str = None) -> QIcon:
     """
     size = 14
     pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
+    pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     if filled:
         painter.setBrush(QColor(color))
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
     else:
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor(color), 1.5))
     painter.drawEllipse(1, 1, size - 2, size - 2)
     if mark:
         pen = QPen(QColor('white'), 2)
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
         if mark == 'check':
             painter.drawLine(4, 7, 6, 10)
@@ -127,13 +127,13 @@ class GeologicalModelTab(QWidget):
         self.featureList = QTreeWidget()
         self.featureList.setHeaderLabel("Geological Features")
         # Enable right-click context menu on feature items
-        self.featureList.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.featureList.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.featureList.customContextMenuRequested.connect(self.show_feature_context_menu)
         side_panel = QVBoxLayout()
         side_panel.addWidget(self.featureList)
         add_feature_button = QPushButton("Add Feature")
 
-        add_feature_button.setContextMenuPolicy(Qt.CustomContextMenu)
+        add_feature_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         add_feature_button.customContextMenuRequested.connect(self.show_add_feature_menu)
         add_feature_button.clicked.connect(self.show_add_feature_menu)
         side_panel.addWidget(add_feature_button)
@@ -148,7 +148,7 @@ class GeologicalModelTab(QWidget):
         # Limit feature details panel expansion
         splitter.setStretchFactor(0, 1)  # Feature list panel
         splitter.setStretchFactor(1, 0)  # Feature details panel
-        splitter.setOrientation(Qt.Horizontal)  # Add horizontal slider
+        splitter.setOrientation(Qt.Orientation.Horizontal)  # Add horizontal slider
 
         # Initialize / Solve Model buttons + a status summary of where the
         # model currently is: empty -> initialized (unsolved) -> solved.
@@ -167,7 +167,7 @@ class GeologicalModelTab(QWidget):
         buttonRowWidget.setLayout(buttonRow)
         # Fixed vertical size policy so this row only ever takes the height
         # its contents need, leaving the rest of the tab to the feature list.
-        buttonRowWidget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        buttonRowWidget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         mainLayout.insertWidget(0, buttonRowWidget, 0)
 
         # Shown when an input layer changed after the model data was read
@@ -188,7 +188,7 @@ class GeologicalModelTab(QWidget):
         layerChangedRow.addWidget(self.updateModelDataButton)
         self.layerChangedWidget = QWidget()
         self.layerChangedWidget.setLayout(layerChangedRow)
-        self.layerChangedWidget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.layerChangedWidget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         mainLayout.insertWidget(1, self.layerChangedWidget, 0)
         self.layerChangedWidget.hide()
         if self.data_manager is not None:
@@ -224,7 +224,7 @@ class GeologicalModelTab(QWidget):
         add_foliaton = menu.addAction("Add Foliation")
         add_unconformity = menu.addAction("Add Unconformity")
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
-        action = menu.exec_(buttonPosition)
+        action = menu.exec(buttonPosition)
 
         if action == add_foliaton:
             self.open_add_foliation_dialog()
@@ -235,14 +235,14 @@ class GeologicalModelTab(QWidget):
         dialog = AddFoliationDialog(
             self, data_manager=self.data_manager, model_manager=self.model_manager
         )
-        if dialog.exec_() == dialog.Accepted:
+        if dialog.exec() == dialog.Accepted:
             pass
 
     def open_add_unconformity_dialog(self):
         dialog = AddUnconformityDialog(
             self, data_manager=self.data_manager, model_manager=self.model_manager
         )
-        if dialog.exec_() == dialog.Accepted:
+        if dialog.exec() == dialog.Accepted:
             pass
 
     def initialize_model(self):
@@ -368,10 +368,10 @@ class GeologicalModelTab(QWidget):
             "The model will solve, but no surfaces will appear. Check that the "
             "bounding box in the Model Definition tab is correct.\n\n"
             "Do you want to continue anyway?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        return reply == QMessageBox.Yes
+        return reply == QMessageBox.StandardButton.Yes
 
     def _run_model_task(self, target, *, title, initial_label):
         """Run `target(progress_callback)` on a background QThread with a
@@ -390,7 +390,7 @@ class GeologicalModelTab(QWidget):
         despite the work already being on a background QThread.
         """
         progress = QProgressDialog(initial_label, "Cancel", 0, 0, self)
-        progress.setWindowModality(Qt.NonModal)
+        progress.setWindowModality(Qt.WindowModality.NonModal)
         progress.setWindowTitle(title)
         progress.setMinimumDuration(0)
         progress.canceled.connect(self._on_task_cancel_requested)
@@ -481,12 +481,12 @@ class GeologicalModelTab(QWidget):
     def _on_task_error(self, reason, tb):
         try:
             box = QMessageBox(self)
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setWindowTitle(f"{self._task_title} failed")
             box.setText(f"Model update stopped: {reason}")
             box.setInformativeText("Click 'Show Details...' for the full error trace.")
             box.setDetailedText(tb)
-            box.exec_()
+            box.exec()
         except Exception:
             pass
         self._finish_task()
@@ -591,7 +591,7 @@ class GeologicalModelTab(QWidget):
                     "Updating geological model...", None, 0, 0, self
                 )
                 self._progress_dialog.setWindowTitle("Updating Model")
-                self._progress_dialog.setWindowModality(Qt.NonModal)
+                self._progress_dialog.setWindowModality(Qt.WindowModality.NonModal)
                 self._progress_dialog.setCancelButton(None)
                 self._progress_dialog.setMinimumDuration(0)
             self._progress_dialog.show()
@@ -621,7 +621,7 @@ class GeologicalModelTab(QWidget):
             return
         menu = QMenu(self)
         delete_action = menu.addAction("Delete Feature")
-        action = menu.exec_(self.featureList.mapToGlobal(pos))
+        action = menu.exec(self.featureList.mapToGlobal(pos))
         if action == delete_action:
             self.delete_feature(item)
 

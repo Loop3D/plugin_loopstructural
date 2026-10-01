@@ -49,10 +49,10 @@ class BasalContactsWidget(QWidget):
         # can cause import errors outside QGIS). Set filters programmatically
         # and preserve the allowEmptyLayer setting for the faults combobox.
         # geology layer should only show polygon layers
-        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.PolygonLayer)
+        configure_layer_combo(self.geologyLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer)
         # faults should show line layers and allow empty selection (as set in .ui)
         configure_layer_combo(
-            self.faultsLayerComboBox, QgsMapLayerProxyModel.LineLayer, allow_empty=True
+            self.faultsLayerComboBox, QgsMapLayerProxyModel.Filter.LineLayer, allow_empty=True
         )
 
         # Connect signals
@@ -82,7 +82,7 @@ class BasalContactsWidget(QWidget):
                 QgsProject.instance().transformContext(),
                 options,
             )
-            if res[0] == QgsVectorFileWriter.NoError:
+            if res[0] == QgsVectorFileWriter.WriterError.NoError:
                 return str(out_path)
         except Exception as err:
             self._debug.plugin.log(

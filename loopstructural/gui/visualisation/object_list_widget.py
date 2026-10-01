@@ -25,10 +25,10 @@ class ObjectListWidget(QWidget):
         self.mainLayout = QVBoxLayout(self)
         self.treeWidget = QTreeWidget(self)
         self.treeWidget.setHeaderHidden(True)  # Hide the header
-        self.treeWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.treeWidget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.mainLayout.addWidget(self.treeWidget)
         addButton = QPushButton("Add Object", self)
-        addButton.setContextMenuPolicy(Qt.CustomContextMenu)
+        addButton.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         addButton.clicked.connect(self.show_add_object_menu)
         self.mainLayout.addWidget(addButton)
         self.properties_widget = properties_widget
@@ -119,7 +119,7 @@ class ObjectListWidget(QWidget):
 
         # Connect checkbox: prefer viewer APIs, fallback to mesh attribute
         def _on_vis(state, name=mesh_name, m=mesh):
-            checked = state == Qt.Checked
+            checked = state == Qt.CheckState.Checked
             if hasattr(self.viewer, 'actors') and name in getattr(self.viewer, 'actors', {}):
                 self.set_object_visibility(name, checked)
                 return
@@ -203,7 +203,7 @@ class ObjectListWidget(QWidget):
 
         # Connect checkbox to toggle visibility. Prefer using viewer APIs if available.
         def _on_visibility_change(state, name=object_name, inst=instance):
-            checked = state == Qt.Checked
+            checked = state == Qt.CheckState.Checked
             # If there's an actor for this name, delegate to set_object_visibility
             if hasattr(self.viewer, 'actors') and name in getattr(self.viewer, 'actors', {}):
                 self.set_object_visibility(name, checked)
@@ -246,7 +246,7 @@ class ObjectListWidget(QWidget):
         visibilityCheckbox.setChecked(self.viewer.actors[actor_name].visibility)
         visibilityCheckbox.stateChanged.connect(
             lambda state, name=self.viewer.actors[actor_name].name: self.set_object_visibility(
-                name, state == Qt.Checked
+                name, state == Qt.CheckState.Checked
             )
         )
 
@@ -285,7 +285,7 @@ class ObjectListWidget(QWidget):
         menu.addSeparator()
         remove_action = menu.addAction("Remove Selected" if multiple else "Remove Object")
 
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec(self.mapToGlobal(event.pos()))
 
         if action is None:
             return
@@ -490,7 +490,7 @@ class ObjectListWidget(QWidget):
         addQgsLayerAction = menu.addAction("Add from QGIS layer")
 
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
-        action = menu.exec_(buttonPosition)
+        action = menu.exec(buttonPosition)
 
         if action == addFeatureAction:
             self.add_feature_from_geological_model()
@@ -535,15 +535,15 @@ class ObjectListWidget(QWidget):
         layout.addWidget(QLabel("Select point layer:"))
         layer_combo = QgsMapLayerComboBox(dialog)
         # Restrict to point layers only
-        configure_layer_combo(layer_combo, QgsMapLayerProxyModel.PointLayer)
+        configure_layer_combo(layer_combo, QgsMapLayerProxyModel.Filter.PointLayer)
         layout.addWidget(layer_combo)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
 
-        if dialog.exec_() != QDialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
         layer = layer_combo.currentLayer()
@@ -554,8 +554,8 @@ class ObjectListWidget(QWidget):
         # Basic geometry check - ensure the layer contains point geometry
         try:
             if (
-                layer.wkbType() != QgsWkbTypes.Point
-                and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.PointGeometry
+                layer.wkbType() != QgsWkbTypes.Type.Point
+                and QgsWkbTypes.geometryType(layer.wkbType()) != QgsWkbTypes.GeometryType.PointGeometry
             ):
                 # Some QGIS versions use different enums; allow via proxy filter primarily
                 # If the check fails, continue but warn
@@ -653,18 +653,18 @@ class ObjectListWidget(QWidget):
 
     def eventFilter(self, source, event):
         if source == self.treeWidget and event.type() == event.KeyPress:
-            if event.key() == Qt.Key_Space:
+            if event.key() == Qt.Key.Key_Space:
                 self._toggle_selected_visibility()
                 return True
-            elif event.key() == Qt.Key_Delete:
+            elif event.key() == Qt.Key.Key_Delete:
                 self.remove_selected_object()
                 return True
         return super().eventFilter(source, event)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Space:
+        if event.key() == Qt.Key.Key_Space:
             self._toggle_selected_visibility()
-        elif event.key() == Qt.Key_Delete:
+        elif event.key() == Qt.Key.Key_Delete:
             self.remove_selected_object()
         else:
             super().keyPressEvent(event)

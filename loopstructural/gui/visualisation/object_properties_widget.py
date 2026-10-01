@@ -42,59 +42,59 @@ class ObjectPropertiesWidget(QWidget):
 
         # Title / currently selected object
         self.title_label = QLabel("No object selected")
-        self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.title_label)
 
         # Scalar selection
         layout.addWidget(QLabel("Active Scalar:"))
         self.scalar_combo = QComboBox()
-        self.scalar_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.scalar_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.scalar_combo.currentTextChanged.connect(self._on_scalar_changed)
         layout.addWidget(self.scalar_combo)
 
         # Color with Scalar checkbox
         self.color_with_scalar_checkbox = QCheckBox("Color with Scalar")
-        self.color_with_scalar_checkbox.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.color_with_scalar_checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.color_with_scalar_checkbox.toggled.connect(self._on_color_with_scalar_toggled)
         layout.addWidget(self.color_with_scalar_checkbox)
 
         # Scalar Bar
         self.scalar_bar_checkbox = QCheckBox("Show Scalar Bar")
-        self.scalar_bar_checkbox.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.scalar_bar_checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.scalar_bar_checkbox)
 
         # Colormap
         layout.addWidget(QLabel("Colormap:"))
         self.colormap_combo = QComboBox()
         self.colormap_combo.addItems(["viridis", "plasma", "inferno", "magma", "greys"])
-        self.colormap_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.colormap_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         # apply colormap changes when user selects a different cmap
         self.colormap_combo.currentTextChanged.connect(self._on_colormap_changed)
         layout.addWidget(self.colormap_combo)
 
         # Opacity
         layout.addWidget(QLabel("Opacity:"))
-        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setValue(100)
-        self.opacity_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.opacity_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.opacity_slider.valueChanged.connect(lambda val: self.set_opacity(val / 100.0))
         layout.addWidget(self.opacity_slider)
 
         # Show Edges
         self.show_edges_checkbox = QCheckBox("Show Edges")
-        self.show_edges_checkbox.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.show_edges_checkbox.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         # call set_show_edges when toggled
         self.show_edges_checkbox.toggled.connect(self.set_show_edges)
         layout.addWidget(self.show_edges_checkbox)
 
         # Line Width
         layout.addWidget(QLabel("Line Width:"))
-        self.line_width_slider = QSlider(Qt.Horizontal)
+        self.line_width_slider = QSlider(Qt.Orientation.Horizontal)
         # allow 0..20, interpreted as float line width
         self.line_width_slider.setRange(0, 20)
         self.line_width_slider.setValue(1)
-        self.line_width_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.line_width_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.line_width_slider.valueChanged.connect(lambda val: self.set_line_width(val))
         layout.addWidget(self.line_width_slider)
 
@@ -105,11 +105,11 @@ class ObjectPropertiesWidget(QWidget):
         self.range_min = QLineEdit()
         self.range_min.setPlaceholderText("Min")
         self.range_min.setMaximumWidth(120)
-        self.range_min.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.range_min.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.range_max = QLineEdit()
         self.range_max.setPlaceholderText("Max")
         self.range_max.setMaximumWidth(120)
-        self.range_max.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.range_max.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         range_layout.addWidget(self.range_min)
         range_layout.addWidget(self.range_max)
         layout.addLayout(range_layout)
@@ -119,7 +119,7 @@ class ObjectPropertiesWidget(QWidget):
         self.hist_fig = plt.Figure(figsize=(4, 2))
         self.hist_canvas = FigureCanvas(self.hist_fig)
         self.hist_ax = self.hist_fig.subplots()
-        self.hist_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.hist_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.hist_canvas)
 
         # Filter: show only the part of the object whose values are in a
@@ -129,7 +129,7 @@ class ObjectPropertiesWidget(QWidget):
         filter_layout = QVBoxLayout(self.filter_group)
         filter_layout.addWidget(QLabel("Array:"))
         self.filter_array_combo = QComboBox()
-        self.filter_array_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.filter_array_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.filter_array_combo.currentTextChanged.connect(self._on_filter_array_changed)
         filter_layout.addWidget(self.filter_array_combo)
         self.filter_range_widget = QWidget()
@@ -142,7 +142,7 @@ class ObjectPropertiesWidget(QWidget):
         self.filter_max = QDoubleSpinBox()
         for box in (self.filter_min, self.filter_max):
             box.setRange(-1e12, 1e12)
-            box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             filter_range_layout.addWidget(box)
         filter_range_widget_layout.addLayout(filter_range_layout)
         self.filter_invert_checkbox = QCheckBox("Invert (show values outside the range)")
@@ -185,7 +185,7 @@ class ObjectPropertiesWidget(QWidget):
         surface_color_layout.setSpacing(6)
         surface_color_layout.addWidget(QLabel("Surface Color:"))
         self.color_button = QPushButton("Choose Color")
-        self.color_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.color_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         surface_color_layout.addWidget(self.color_button)
         layout.addLayout(surface_color_layout)
 
@@ -606,10 +606,10 @@ class ObjectPropertiesWidget(QWidget):
             else:
                 label = f"Unit {unit_id}"
             item = QListWidgetItem(label)
-            item.setData(Qt.UserRole, unit_id)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setData(Qt.ItemDataRole.UserRole, unit_id)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(
-                Qt.Checked if checked is None or unit_id in checked else Qt.Unchecked
+                Qt.CheckState.Checked if checked is None or unit_id in checked else Qt.CheckState.Unchecked
             )
             if 0 <= unit_id < len(colours):
                 try:
@@ -625,8 +625,8 @@ class ObjectPropertiesWidget(QWidget):
         ids, total = [], self.filter_units_list.count()
         for i in range(total):
             item = self.filter_units_list.item(i)
-            if item.checkState() == Qt.Checked:
-                ids.append(int(item.data(Qt.UserRole)))
+            if item.checkState() == Qt.CheckState.Checked:
+                ids.append(int(item.data(Qt.ItemDataRole.UserRole)))
         return ids, total
 
     def _on_unit_check_changed(self, _item=None):
@@ -643,7 +643,7 @@ class ObjectPropertiesWidget(QWidget):
     def _set_all_units_checked(self, checked: bool):
         self.filter_units_list.blockSignals(True)
         for i in range(self.filter_units_list.count()):
-            self.filter_units_list.item(i).setCheckState(Qt.Checked if checked else Qt.Unchecked)
+            self.filter_units_list.item(i).setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
         self.filter_units_list.blockSignals(False)
         self._on_unit_check_changed()
 
@@ -683,7 +683,7 @@ class ObjectPropertiesWidget(QWidget):
         if self.filter_units_list.count():
             self.filter_units_list.blockSignals(True)
             for i in range(self.filter_units_list.count()):
-                self.filter_units_list.item(i).setCheckState(Qt.Checked)
+                self.filter_units_list.item(i).setCheckState(Qt.CheckState.Checked)
             self.filter_units_list.blockSignals(False)
 
     def _set_threshold(self, threshold):

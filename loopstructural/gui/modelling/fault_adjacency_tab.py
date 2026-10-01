@@ -132,7 +132,7 @@ class FaultAdjacencyTab(BaseTab):
                 if row == col:
                     # If it's the same fault, set a label instead of a button
                     item = QTableWidgetItem(faults[row])
-                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                    item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
                     self.table.setItem(row, col, item)
                 else:
                     button = QPushButton()

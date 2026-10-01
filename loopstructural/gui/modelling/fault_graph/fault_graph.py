@@ -101,7 +101,7 @@ class TopologyEdge(QtWidgets.QGraphicsLineItem):
         menu = QtWidgets.QMenu()
         edit_action = menu.addAction("Edit Edge")
         delete_action = menu.addAction("Delete Edge")
-        selected_action = menu.exec_(event.screenPos())
+        selected_action = menu.exec(event.screenPos())
 
         if selected_action == edit_action:
             self.edit_edge()
@@ -272,7 +272,7 @@ class FaultGraph(QtWidgets.QWidget):
         unconformity_action.triggered.connect(lambda: self.add_node("unconformity"))
 
         # Show the menu below the button
-        menu.exec_(self.add_button.mapToGlobal(QtCore.QPoint(0, self.add_button.height())))
+        menu.exec(self.add_button.mapToGlobal(QtCore.QPoint(0, self.add_button.height())))
 
     def add_node(self, node_type):
         """Add a new node of the specified type to the scene."""

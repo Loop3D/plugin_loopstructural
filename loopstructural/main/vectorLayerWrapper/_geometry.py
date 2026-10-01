@@ -174,7 +174,7 @@ def qgsLayerToDataFrame(src, dtm=None) -> Optional[pd.DataFrame]:
                 return -9999.0
         from qgis.core import QgsPointXY
 
-        ident = dtm.dataProvider().identify(QgsPointXY(x, y), QgsRaster.IdentifyFormatValue)
+        ident = dtm.dataProvider().identify(QgsPointXY(x, y), QgsRaster.IdentifyFormat.IdentifyFormatValue)
         if not ident.isValid():
             return -9999.0
         res = ident.results()
@@ -194,13 +194,13 @@ def qgsLayerToDataFrame(src, dtm=None) -> Optional[pd.DataFrame]:
         gtype = QgsWkbTypes.geometryType(geom.wkbType())
         is_multi = QgsWkbTypes.isMultiType(geom.wkbType())
 
-        if gtype == QgsWkbTypes.PointGeometry:
+        if gtype == QgsWkbTypes.GeometryType.PointGeometry:
             if is_multi:
                 return list(geom.asMultiPoint())
             else:
                 return [geom.asPoint()]
 
-        elif gtype == QgsWkbTypes.LineGeometry:
+        elif gtype == QgsWkbTypes.GeometryType.LineGeometry:
             pts = []
             if is_multi:
                 for line in geom.asMultiPolyline():
@@ -209,7 +209,7 @@ def qgsLayerToDataFrame(src, dtm=None) -> Optional[pd.DataFrame]:
                 pts.extend(geom.asPolyline())
             return pts
 
-        elif gtype == QgsWkbTypes.PolygonGeometry:
+        elif gtype == QgsWkbTypes.GeometryType.PolygonGeometry:
             pts = []
             if is_multi:
                 mpoly = geom.asMultiPolygon()
@@ -315,7 +315,7 @@ def _infer_wkb_type_from_geoms(geoms) -> QgsWkbTypes.Type:
         qgs_geom = _geometry_from_value(geom)
         if qgs_geom is not None and not qgs_geom.isEmpty():
             return qgs_geom.wkbType()
-    return QgsWkbTypes.Point
+    return QgsWkbTypes.Type.Point
 
 
 def _crs_from_geodataframe_crs(crs_info) -> QgsCoordinateReferenceSystem:
