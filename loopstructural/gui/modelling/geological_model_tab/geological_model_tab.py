@@ -65,7 +65,10 @@ _MODEL_STATE_LABELS = {
     'empty': "Model status: not initialized",
     'initialized': "Model status: initialized (not solved)",
     'solved': "Model status: solved",
-    'stale': "Model status: faults or input data changed — re-run Initialize Model",
+    'stale': (
+        "Model status: faults, stratigraphic column or input data changed — "
+        "re-run Initialize Model"
+    ),
 }
 
 # Solve Model only rebuilds interpolators for features that already exist; it
@@ -517,7 +520,9 @@ class GeologicalModelTab(QWidget):
             pass
 
     def update_feature_list(self, *args, **kwargs):
+        selected_name = getattr(self, '_displayed_feature_name', None)
         self.featureList.clear()  # Clear the feature list before populating it
+        selected_item = None
         for feature in self.model_manager.features():
             if feature.name.startswith("__"):
                 continue
@@ -526,7 +531,28 @@ class GeologicalModelTab(QWidget):
             item.setData(0, 1, feature)
             item.setIcon(0, self._status_icon(self.model_manager.is_feature_built(feature)))
             self.featureList.addTopLevelItem(item)
+            if feature.name == selected_name:
+                selected_item = item
         self._refresh_model_status()
+        self._restore_selection(selected_item)
+
+    def _restore_selection(self, item):
+        """Keep the displayed feature selected after the list is rebuilt.
+
+        Converting a feature to a structural frame or adding a fold replaces
+        the feature object in the model under the same name, so the details
+        panel is rebuilt when the object it shows is no longer the one in the
+        model. Otherwise the panel is kept, so edits in it are not lost.
+        """
+        if item is None:
+            if getattr(self, '_displayed_feature_name', None) is not None:
+                # the displayed feature was removed from the model
+                self._set_details_panel(QWidget(), None, None)
+            return
+        self.featureList.setCurrentItem(item)
+        feature = self.model_manager.model.get_feature_by_name(item.text(0))
+        if feature is not getattr(self, '_displayed_feature', None):
+            self.on_feature_selected(item)
 
     def _status_icon(self, built):
         if built is True:
@@ -573,10 +599,16 @@ class GeologicalModelTab(QWidget):
         else:
             self.featureDetailsPanel = QWidget()  # Default empty panel
 
+        self._set_details_panel(self.featureDetailsPanel, feature_name, feature)
+
+    def _set_details_panel(self, panel, feature_name, feature):
+        self.featureDetailsPanel = panel
+        self._displayed_feature_name = feature_name
+        self._displayed_feature = feature
         # Dynamically replace the featureDetailsPanel widget
         splitter = self._splitter
         splitter.widget(1).deleteLater()  # Remove the existing widget
-        splitter.addWidget(self.featureDetailsPanel)  # Add the new widget
+        splitter.addWidget(panel)  # Add the new widget
 
     def _on_model_update_started(self):
         """Show a non-blocking indeterminate progress dialog for model updates.
