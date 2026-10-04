@@ -125,6 +125,35 @@
        </property>
       </widget>
      </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="projectionLengthLabel">
+       <property name="text">
+        <string>Projection Length:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QDoubleSpinBox" name="projectionLengthSpinBox">
+       <property name="toolTip">
+        <string>Length of the line drawn from each structure point in the dip direction, in map units.</string>
+       </property>
+       <property name="decimals">
+        <number>0</number>
+       </property>
+       <property name="minimum">
+        <double>1.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>1000000.000000000000000</double>
+       </property>
+       <property name="singleStep">
+        <double>100.000000000000000</double>
+       </property>
+       <property name="value">
+        <double>1000.000000000000000</double>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>

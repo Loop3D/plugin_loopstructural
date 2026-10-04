@@ -419,14 +419,13 @@ def extract_basal_contacts(
     return {'basal_contacts': basal_contacts}
 
 
-def _extract_contacts_for_sorting(geology_gdf, unit_name_field, updater=None):
-    """Derive unit-to-unit contacts directly from geology, for sorters that need adjacency.
+def _geology_with_unitname(geology_gdf, unit_name_field):
+    """Return a copy of the geology with the unit names in a 'UNITNAME' column.
 
-    SorterAlpha, SorterMaximiseContacts and SorterObservationProjections all
-    require a 'contacts' GeoDataFrame with 'UNITNAME_1'/'UNITNAME_2' columns.
-    Unlike basal contacts, this adjacency doesn't depend on a stratigraphic
-    order -- which isn't known yet at this point, since sorting is what
-    produces it -- so it can always be derived from the geology layer alone.
+    map2loop reads the literal 'UNITNAME' column from the geology data (for
+    example ContactExtractor, SorterUseNetworkX and
+    SorterObservationProjections), so a layer that uses a different unit name
+    field must be renamed first.
     """
     geology_gdf = geology_gdf.copy()
     if unit_name_field and unit_name_field != 'UNITNAME' and unit_name_field in geology_gdf.columns:
@@ -438,6 +437,19 @@ def _extract_contacts_for_sorting(geology_gdf, unit_name_field, updater=None):
         if 'UNITNAME' in geology_gdf.columns:
             geology_gdf = geology_gdf.drop(columns=['UNITNAME'])
         geology_gdf = geology_gdf.rename(columns={unit_name_field: 'UNITNAME'})
+    return geology_gdf
+
+
+def _extract_contacts_for_sorting(geology_gdf, unit_name_field, updater=None):
+    """Derive unit-to-unit contacts directly from geology, for sorters that need adjacency.
+
+    SorterAlpha, SorterMaximiseContacts and SorterObservationProjections all
+    require a 'contacts' GeoDataFrame with 'UNITNAME_1'/'UNITNAME_2' columns.
+    Unlike basal contacts, this adjacency doesn't depend on a stratigraphic
+    order -- which isn't known yet at this point, since sorting is what
+    produces it -- so it can always be derived from the geology layer alone.
+    """
+    geology_gdf = _geology_with_unitname(geology_gdf, unit_name_field)
     if updater:
         updater("Extracting contacts from geology...")
     return ContactExtractor(geology_gdf, None).extract_all_contacts()
@@ -459,6 +471,7 @@ def sort_stratigraphic_column(
     debug_manager=None,
     updater=None,
     contacts=None,
+    projection_length=1000.0,
 ):
     """Sort stratigraphic units using map2loop sorters.
 
@@ -493,6 +506,9 @@ def sort_stratigraphic_column(
         Digital terrain model, by default None.
     updater : callable, optional
         Callback function for progress updates, by default None.
+    projection_length : float, optional
+        Length in map units of the line that Observation projections draws
+        from each structure point in the dip direction, by default 1000.
 
     Returns
     -------
@@ -593,6 +609,10 @@ def sort_stratigraphic_column(
                 structure_gdf['DIPDIR'] = structure_gdf[dipdir_field]
         if dip_values is not None:
             structure_gdf['DIP'] = dip_values
+        # SorterObservationProjections logs row.ID for points that are not
+        # in a unit, so the column must exist.
+        if 'ID' not in structure_gdf.columns:
+            structure_gdf['ID'] = range(len(structure_gdf))
 
     # Convert DTM to a GDAL dataset, as map2loop's sorters read it via GDAL calls.
     dtm_gdal = None
@@ -604,7 +624,7 @@ def sort_stratigraphic_column(
 
     # Prepare all possible arguments
     all_args = {
-        'geology_data': geology_gdf,
+        'geology_data': _geology_with_unitname(geology_gdf, unit_name_field),
         'contacts': contacts_gdf,
         'relationships': relationships_df,
         'unit_name_field': unit_name_field,
@@ -628,6 +648,9 @@ def sort_stratigraphic_column(
 
     # Only pass required arguments to the sorter
     sorter_args = {k: v for k, v in all_args.items() if k in required_args}
+    # 'length' is optional in map2loop, so it is not in required_arguments.
+    if sorter_cls is SorterObservationProjections and projection_length:
+        sorter_args['length'] = float(projection_length)
     logger.debug('Calling sorter with args: %s', list(sorter_args.keys()))
     sorter = sorter_cls(**sorter_args)
     # If debugging, pickle sorter and write a small runner script

@@ -177,6 +177,8 @@ class SorterWidget(QWidget):
             self.sortingAlgorithmComboBox.setCurrentIndex(settings['sorting_algorithm'])
         if 'orientation_type' in settings:
             self.orientationTypeComboBox.setCurrentIndex(settings['orientation_type'])
+        if 'projection_length' in settings:
+            self.projectionLengthSpinBox.setValue(settings['projection_length'])
         for key, combo in (
             ('unit_name_field', self.unitNameFieldComboBox),
             ('min_age_field', self.minAgeFieldComboBox),
@@ -209,6 +211,7 @@ class SorterWidget(QWidget):
             ),
             'sorting_algorithm': self.sortingAlgorithmComboBox.currentIndex(),
             'orientation_type': self.orientationTypeComboBox.currentIndex(),
+            'projection_length': self.projectionLengthSpinBox.value(),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'min_age_field': self.minAgeFieldComboBox.currentField(),
             'max_age_field': self.maxAgeFieldComboBox.currentField(),
@@ -299,6 +302,8 @@ class SorterWidget(QWidget):
         self.orientationTypeComboBox.setVisible(False)
         self.dtmLayerLabel.setVisible(False)
         self.dtmLayerComboBox.setVisible(False)
+        self.projectionLengthLabel.setVisible(False)
+        self.projectionLengthSpinBox.setVisible(False)
 
         # Show widgets based on required fields
         geology_layer = self.geologyLayerComboBox.currentLayer()
@@ -326,6 +331,8 @@ class SorterWidget(QWidget):
             self.orientationTypeComboBox.setVisible(True)
             self.dtmLayerLabel.setVisible(True)
             self.dtmLayerComboBox.setVisible(True)
+            self.projectionLengthLabel.setVisible(True)
+            self.projectionLengthSpinBox.setVisible(True)
         elif algorithm_name in SORTERS_WITHOUT_YOUNGING:
             # Optional: the structure data sets which end of the order is youngest.
             self.structureLayerLabel.setVisible(True)
@@ -413,6 +420,7 @@ class SorterWidget(QWidget):
                 self.orientationTypeComboBox.currentIndex()
             ]
             kwargs['dtm'] = self.dtmLayerComboBox.currentLayer()
+            kwargs['projection_length'] = self.projectionLengthSpinBox.value()
 
         def target(progress_callback):
             return sort_stratigraphic_column(
@@ -518,6 +526,7 @@ class SorterWidget(QWidget):
             params['dipdir_field'] = self.dipDirFieldComboBox.currentField()
             params['orientation_type'] = self.orientationTypeComboBox.currentIndex()
             params['dtm_layer'] = self.dtmLayerComboBox.currentLayer()
+            params['projection_length'] = self.projectionLengthSpinBox.value()
 
         return params
 
@@ -533,3 +542,5 @@ class SorterWidget(QWidget):
             self.sortingAlgorithmComboBox.setCurrentIndex(params['sorting_algorithm'])
         if params.get('geology_layer'):
             self.geologyLayerComboBox.setLayer(params['geology_layer'])
+        if params.get('projection_length'):
+            self.projectionLengthSpinBox.setValue(params['projection_length'])
