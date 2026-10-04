@@ -8,12 +8,14 @@ bridges Python's `logging` into the plugin's logging facilities.
 
 # standard library
 import logging
+import threading
 from functools import partial
 from typing import Callable
 
 # PyQGIS
 from qgis.core import QgsMessageLog, QgsMessageOutput
 from qgis.gui import QgsMessageBar
+from qgis.PyQt.QtCore import QCoreApplication, QObject, Qt, QThread, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import QPushButton, QWidget
 from qgis.utils import iface
 
@@ -25,6 +27,45 @@ from loopstructural.__about__ import __title__
 # ############################################################################
 # ########## Classes ###############
 # ##################################
+
+
+class _MainThreadInvoker(QObject):
+    """Runs functions on the Qt main thread.
+
+    A signal emitted from a worker thread is delivered to a slot of an object
+    that lives on the main thread through the main thread's event queue.
+    """
+
+    invoke = pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+        self.invoke.connect(self._run, Qt.ConnectionType.QueuedConnection)
+
+    @pyqtSlot(object)
+    def _run(self, func):
+        func()
+
+
+_invoker = None
+_invoker_lock = threading.Lock()
+
+
+def _run_on_main_thread(func):
+    """Run `func` on the Qt main thread: now if this is the main thread, else queued."""
+    global _invoker
+    app = QCoreApplication.instance()
+    if app is None or QThread.currentThread() == app.thread():
+        func()
+        return
+    with _invoker_lock:
+        if _invoker is None:
+            invoker = _MainThreadInvoker()
+            # An object can only be moved from the thread it lives on, which
+            # is this thread, because it was made here.
+            invoker.moveToThread(app.thread())
+            _invoker = invoker
+    _invoker.invoke.emit(func)
 
 
 class PlgLogger(logging.Handler):
@@ -146,30 +187,15 @@ class PlgLogger(logging.Handler):
             except Exception:
                 logging.exception("Failed to push message to QGIS message bar")
 
-        # Try to schedule the UI interaction on the Qt main thread using QTimer
+        # The message bar is a widget, so only the Qt main thread can change it.
+        # QTimer.singleShot(0, func) does not do this: it runs func on the
+        # calling thread, so a call from a background task changed the message
+        # bar from the worker thread and locked the GUI.
         try:
-            try:
-                from qgis.PyQt.QtCore import QTimer as _QTimer
-            except Exception:
-                # fall back to qgis.PyQt/PySide2 if qgis.PyQt namespace isn't present
-                try:
-                    from qgis.PyQt.QtCore import QTimer as _QTimer  # type: ignore
-                except Exception:
-                    try:
-                        from PySide2.QtCore import QTimer as _QTimer  # type: ignore
-                    except Exception:
-                        _QTimer = None
-            if _QTimer is not None:
-                _QTimer.singleShot(0, _do_push)
-            else:
-                # last resort: call directly (may block if called from background thread)
-                _do_push()
+            _run_on_main_thread(_do_push)
         except Exception:
             # ensure we do not raise from logging
-            try:
-                _do_push()
-            except Exception:
-                pass
+            pass
 
 
 class PlgLoggerHandler(logging.Handler):
