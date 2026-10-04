@@ -23,11 +23,10 @@ on:
 
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# GitHub Pages serves the gh-pages branch, so the GITHUB_TOKEN must be able
+# to push to it.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # Allow one concurrent deployment per branch/pr
 concurrency:
@@ -77,18 +76,11 @@ jobs:
         retention-days: 30
 
 
-    - name: Setup Pages
-      uses: actions/configure-pages@v6
-      if: ${{ github.event_name == 'push' && ( startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' ) }}
-
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v5
-      if: ${{ github.event_name == 'push' && ( startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' ) }}
-      with:
-        # Upload entire repository
-        path: docs/_build/html/
-
     - name: Deploy to GitHub Pages
-      id: deployment
       if: ${{ github.event_name == 'push' && ( startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' ) }}
-      uses: actions/deploy-pages@v5
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: gh-pages
+        publish_dir: docs/_build/html/
+        force_orphan: true
