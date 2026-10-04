@@ -939,7 +939,46 @@ class GeologicalModelManager(Observable):
             cpw=PlgSettingsStructure.interpolator_cpw,
             regularisation=PlgSettingsStructure.interpolator_regularisation,
         )
+        self._strip_domain_fault_region_from_boundary_above(fault_name)
         return True
+
+    def _strip_domain_fault_region_from_boundary_above(self, fault_name):
+        """Work around a LoopStructural core bug that crops the boundary
+        above a domain fault.
+
+        `add_domain_fault_below` (in LoopStructural's
+        `_model_relationships.FeatureRelationshipManager`) walks back through
+        the earlier features and adds the domain fault region to each one.
+        Up to LoopStructural 1.8.2 it adds the region before it checks for an
+        unconformity, so the unconformity where the walk stops is cropped
+        too. Groups are built youngest first, so that unconformity is the
+        base of the younger group above the fault, and its surface is then
+        removed on one side of the fault. The walk also does not stop at an
+        earlier domain fault.
+
+        Remove the region of `fault_name` from the first unconformity or
+        domain fault above it, and from every feature before that one. This
+        is the same result as the LoopStructural fix, so it has no effect on
+        a version that has the fix.
+        """
+        reached_boundary = False
+        for feature in reversed(self.model.features):
+            if feature.name == fault_name:
+                continue
+            if getattr(feature, 'type', None) in (
+                FeatureType.UNCONFORMITY,
+                FeatureType.DOMAINFAULT,
+            ):
+                reached_boundary = True
+            if not reached_boundary:
+                continue
+            kept = [
+                r
+                for r in feature.regions
+                if getattr(getattr(r, 'parent', None), 'name', None) != fault_name
+            ]
+            if len(kept) != len(feature.regions):
+                feature.regions = kept
 
     def update_foliation_features(self):
         """Builds the stratigraphic feature from the stratigraphic column data
