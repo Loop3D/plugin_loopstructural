@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.0...v0.6.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* push log messages to the message bar from the main thread ([#127](https://github.com/Loop3D/plugin_loopstructural/issues/127)) ([cf2ebb9](https://github.com/Loop3D/plugin_loopstructural/commit/cf2ebb9bc72e825b0afe047fa588e2f780ae218c))
+
 ## [0.6.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.5.0...v0.6.0) (2026-10-04)
 
 
