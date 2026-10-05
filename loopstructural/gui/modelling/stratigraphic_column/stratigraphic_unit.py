@@ -17,6 +17,7 @@ class StratigraphicUnitWidget(QWidget):
     dragHandlePressed = pyqtSignal()  # Drag handle mouse-down
     dragHandleMoved = pyqtSignal(QPoint)  # Drag handle mouse-move (global pos)
     dragHandleReleased = pyqtSignal()  # Drag handle mouse-up
+    focused = pyqtSignal()  # One of the row's fields got keyboard focus
 
     def __init__(
         self,
@@ -53,8 +54,15 @@ class StratigraphicUnitWidget(QWidget):
         self._dragging_handle = False
         self.dragHandle.setCursor(Qt.CursorShape.SizeVerCursor)
         self.dragHandle.installEventFilter(self)
+        # Clicks on the row's fields do not reach the QListWidget, so tell the
+        # column when one of them gets focus, to make this the selected row.
+        self._focus_widgets = (self.lineEditName, self.spinBoxThickness, self.buttonColour)
+        for widget in self._focus_widgets:
+            widget.installEventFilter(self)
 
     def eventFilter(self, obj, event):
+        if obj in self._focus_widgets and event.type() == QEvent.Type.FocusIn:
+            self.focused.emit()
         if obj is self.dragHandle:
             event_type = event.type()
             if (
