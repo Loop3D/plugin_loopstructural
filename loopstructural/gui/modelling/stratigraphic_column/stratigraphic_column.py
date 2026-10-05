@@ -175,6 +175,18 @@ class StratColumnWidget(QWidget):
         )
         applyAgeButton.clicked.connect(self.apply_age_to_layer)
         ageRow.addWidget(applyAgeButton)
+
+        applyThicknessButton = self._make_tool_button(
+            "mActionMeasure.svg", "Apply Stratigraphic Thickness to Map Layer"
+        )
+        applyThicknessButton.setToolTip(
+            "Apply Stratigraphic Thickness to Map Layer\n"
+            "Write a 'strat_thickness' field (the thickness of each unit in the "
+            "column) onto the selected layer above and style it with a graduated "
+            "colour ramp."
+        )
+        applyThicknessButton.clicked.connect(self.apply_thickness_to_layer)
+        ageRow.addWidget(applyThicknessButton)
         layout.addLayout(ageRow)
 
         self._guess_units_layer()
@@ -562,6 +574,39 @@ class StratColumnWidget(QWidget):
                 "Apply Stratigraphic Age to Map Layer",
                 "Could not apply stratigraphic age. The stratigraphic column may have no "
                 "units, or no features matched a stratigraphic unit.",
+            )
+
+    def apply_thickness_to_layer(self):
+        """Write each unit's thickness onto the selected units layer and style it by a graduated ramp."""
+        if not self.data_manager:
+            print("Error: Data manager is not initialized.")
+            return
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+        if layer is None or not field_name:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                "Please select a units layer and unit name field above.",
+            )
+            return
+        ramp_name = self.strat_ageColorRampComboBox.currentText()
+        applied = self.data_manager.apply_stratigraphic_thickness_to_layer(
+            layer, field_name, ramp_name=ramp_name
+        )
+        if applied:
+            QMessageBox.information(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                f"Applied stratigraphic thickness and graduated styling to layer "
+                f"'{layer.name()}'.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                "Could not apply stratigraphic thickness. The stratigraphic column may "
+                "have no units, or no features matched a stratigraphic unit.",
             )
 
     def add_unit(self, *, unit_data=None, create_new=True):
