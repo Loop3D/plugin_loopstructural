@@ -315,7 +315,7 @@ class StratColumnWidget(QWidget):
         addUnconformityButton.setToolTip("Add an unconformity to the top of the column.")
         addUnconformityButton.clicked.connect(lambda _checked=False: self.add_unconformity())
 
-        buildMenu = QMenu(self)
+        buildMenu = self.buildMenu = QMenu(self)
         buildMenu.addAction(
             QgsApplication.getThemeIcon("mActionSharingImport.svg"),
             "From the basal contacts of the map",

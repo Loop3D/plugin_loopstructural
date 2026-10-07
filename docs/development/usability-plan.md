@@ -282,17 +282,17 @@ Files: `stratigraphic_column/*.py`, `stratigraphic_column/*.ui`,
 
 ### Phase 3: Step-based dock
 
-- [ ] Add a step navigation widget with a status for each step.
-- [ ] Add a `check()` function for each step. It returns a status and a list of
+- [x] Add a step navigation widget with a status for each step.
+- [x] Add a `check()` function for each step. It returns a status and a list of
       problems.
-- [ ] Move the existing tabs into the steps, in the order of the target design.
-- [ ] Move Save, Open, Reset and Settings into the dock header.
-- [ ] Move the dialogs into their steps as buttons or menus. Keep the dialogs.
+- [x] Move the existing tabs into the steps, in the order of the target design.
+- [x] Move Save, Open, Reset and Settings into the dock header.
+- [x] Move the dialogs into their steps as buttons or menus. Keep the dialogs.
       Do not rewrite them in this phase.
-- [ ] Move the Fault Topology Calculator into step 3.
-- [ ] Reduce the toolbar to three actions. Put the dialogs in a "Tools"
+- [x] Move the Fault Topology Calculator into step 3.
+- [x] Reduce the toolbar to three actions. Put the dialogs in a "Tools"
       submenu.
-- [ ] Keep the `separate_dock_widgets` setting.
+- [x] Keep the `separate_dock_widgets` setting.
 
 Files: `loop_widget.py`, `modelling/modelling_widget.py`, `plugin_main.py`,
 new `gui/modelling/steps/` module.

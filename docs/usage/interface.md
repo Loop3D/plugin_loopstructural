@@ -1,5 +1,18 @@
 # Plugin interface
 
+## The steps of the dock
+The LoopStructural dock has five steps. The step buttons are at the top of the dock. Each button shows its status: a check mark (done), a warning triangle (a problem) or a hollow circle (not done). Point at a button to see the reasons. The footer shows the most important message of the current step, with **Back** and **Next** buttons. The steps are a guide: you can go to any step at any time.
+
+1. **Data**: bounding box, DEM and the source layers. **Convert data...** opens the data conversion tool.
+2. **Stratigraphy**: the stratigraphic column. The **Build column** menu has the sorters and Paint Order. The **Derive from map** menu has Basal Contacts, Thickness and Sampler.
+3. **Faults**: the fault layer, **Calculate topology...** and the adjacency tables. This step is optional.
+4. **Model**: the features and the build of the model.
+5. **View**: the 3D view. With the setting "separate dock widgets", this step has a button that opens the 3D view dock.
+
+The header of the dock has **Save**, **Open**, **Reset** and **Settings**. They apply to all of the plugin.
+
+The toolbar has three actions: LoopStructural (the dock), 3D View and Help. The **Tools** submenu of the Plugins menu has the map2loop dialogs for advanced users.
+
 ## Selecting Layers
 The LoopStructural plugin interfaces with QGIS to define the model input data and parameters.
 
