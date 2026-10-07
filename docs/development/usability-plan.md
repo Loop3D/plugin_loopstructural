@@ -334,8 +334,15 @@ model, the model uses basal contacts and thicknesses that match the new order.
 
 ### Phase 5: View and export
 
-- [ ] Show "Open 3D view" as the next action after a successful build.
-- [ ] Add export of surfaces, block model and cross-sections to step 5.
+- [x] Show "Open 3D view" as the next action after a successful build.
+- [x] Add export of surfaces, block model and cross-sections to step 5.
+
+Files: `gui/modelling/steps/export_panel.py`, `main/model_export.py`,
+`gui/modelling/modelling_widget.py`.
+
+Acceptance: after a successful build, the dock tells the user to open the 3D
+view. From step 5, a user can write the surfaces, the block model and a
+cross-section to files without the 3D view.
 
 ## Risks
 

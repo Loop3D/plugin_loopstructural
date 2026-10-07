@@ -86,6 +86,9 @@ _SOLVABLE_STATES = {'initialized', 'solved'}
 
 
 class GeologicalModelTab(QWidget):
+    # Emitted when a solve finished without an error. The dock offers the 3D view.
+    model_solved = pyqtSignal()
+
     def __init__(self, parent=None, *, model_manager=None, data_manager=None):
         super().__init__(parent)
         self.model_manager = model_manager
@@ -586,7 +589,9 @@ class GeologicalModelTab(QWidget):
 
     @pyqtSlot()
     def _on_task_finished(self):
-        on_success = None if self._task_failed else self._task_on_success
+        failed = self._task_failed
+        solving = self._task_title in ("Solving Model", "Building Model")
+        on_success = None if failed else self._task_on_success
         try:
             # notify observers now on the GUI thread
             try:
@@ -601,6 +606,8 @@ class GeologicalModelTab(QWidget):
             self._finish_task()
         if on_success is not None:
             on_success()
+        if not failed and solving and self.model_manager.model_state == 'solved':
+            self.model_solved.emit()
 
     @pyqtSlot(str)
     def _on_task_cancelled(self, message):
