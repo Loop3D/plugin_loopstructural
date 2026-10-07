@@ -19,7 +19,7 @@ from loopstructural.gui.modelling.steps.pages import (
     StratigraphyStep,
     ViewStep,
 )
-from loopstructural.gui.modelling.steps.section_stack import SectionStack
+from loopstructural.gui.modelling.steps.section_stack import SectionStack, page_scroll_area
 from loopstructural.gui.modelling.steps.step_bar import StepBar
 
 # How often the checks of the steps run again, in milliseconds. Several
@@ -86,8 +86,10 @@ class ModellingWidget(QWidget):
         self.header = DockHeader(self, data_manager=self.data_manager)
         self.step_bar = StepBar(STEPS, self)
         self.stack = QStackedWidget(self)
+        # A stacked widget is as tall as its tallest page. A scroll area around
+        # each page lets the dock be short: the page scrolls and the footer stays.
         for page in self.pages:
-            self.stack.addWidget(page)
+            self.stack.addWidget(page_scroll_area(page, self.stack))
 
         self.footer_label = QLabel(self)
         # One line. The tooltip has all messages. The label can be shorter than
