@@ -1,16 +1,19 @@
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
-from qgis.core import QgsApplication, QgsMapLayerProxyModel, QgsStyle
-from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
-from qgis.PyQt.QtCore import QSize
-from qgis.PyQt.QtGui import QIcon
+from qgis.core import QgsApplication, QgsExpression, QgsMapLayerProxyModel, QgsStyle
+from qgis.gui import QgsCollapsibleGroupBox, QgsFieldComboBox, QgsMapLayerComboBox
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QBrush, QIcon
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QToolButton,
@@ -27,6 +30,12 @@ from loopstructural.main.helpers import ColumnMatcher, get_layer_names
 
 from .init_from_field_dialog import InitFromLayerFieldDialog
 from .stratigraphic_unit import StratigraphicUnitWidget
+
+
+# The values of the "Style by" combo
+STYLE_COLOUR = 'colour'
+STYLE_ORDER = 'order'
+STYLE_THICKNESS = 'thickness'
 
 
 class StratColumnWidget(QWidget):
@@ -76,110 +85,28 @@ class StratColumnWidget(QWidget):
         # The hidden tool widget that an Update button runs
         self._update_widget = None
 
-        # Main list widget
+        # The layer whose features were selected to highlight the selected
+        # unit on the map, so the selection can be cleared later.
+        self._highlighted_layer = None
+
+        # The geology layer and its unit name field. The layer is shared with
+        # the map2loop tools, and the "Style map layer" group writes to it.
+        layout.addWidget(self._build_geology_group())
+
+        layout.addLayout(self._build_actions_row())
+
+        # Main list widget, with the direction of the column above and below it
         self.unitList = QListWidget()
+        self.unitList.setMinimumHeight(120)
         self.unitList.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.unitList.model().rowsMoved.connect(self.update_order)
-        layout.addWidget(self.unitList)
+        self.unitList.itemSelectionChanged.connect(self.highlight_selected_unit)
+        self._add_empty_list_text()
+        layout.addWidget(QLabel("Youngest"))
+        layout.addWidget(self.unitList, 1)
+        layout.addWidget(QLabel("Oldest"))
 
-        # A single row of icon-only actions for building/clearing the column.
-        addUnitButton = self._make_tool_button("mActionAdd.svg", "Add Unit")
-        addUnitButton.clicked.connect(self.add_unit)
-
-        addUnconformityButton = self._make_custom_icon_tool_button(
-            "unconformity.svg", "Add Unconformity"
-        )
-        addUnconformityButton.clicked.connect(self.add_unconformity)
-
-        initFromBasalContactsButton = self._make_tool_button(
-            "mActionSharingImport.svg", "Initialise from map"
-        )
-        initFromBasalContactsButton.clicked.connect(
-            self.init_stratigraphic_column_from_basal_contacts
-        )
-
-        initFromLayerFieldButton = self._make_tool_button(
-            "mIconFieldText.svg", "Initialise from Layer Field"
-        )
-        initFromLayerFieldButton.setToolTip(
-            "Initialise from Layer Field\n"
-            "Pick a polygon layer and a field, and add a unit for each unique "
-            "value found in that field."
-        )
-        initFromLayerFieldButton.clicked.connect(self.init_stratigraphic_column_from_layer_field)
-
-        clearButton = self._make_tool_button(
-            "mActionDeleteSelected.svg", "Clear Stratigraphic Column"
-        )
-        clearButton.clicked.connect(self.clearColumn)
-
-        reverseButton = self._make_tool_button(
-            "mActionReverseLine.svg", "Reverse Stratigraphic Column"
-        )
-        reverseButton.setToolTip(
-            "Reverse Stratigraphic Column\n"
-            "Flip the order of the column so the youngest unit becomes the oldest."
-        )
-        reverseButton.clicked.connect(self.reverseColumn)
-
-        actionsRow = QHBoxLayout()
-        actionsRow.addWidget(addUnitButton)
-        actionsRow.addWidget(addUnconformityButton)
-        actionsRow.addWidget(initFromBasalContactsButton)
-        actionsRow.addWidget(initFromLayerFieldButton)
-        actionsRow.addWidget(reverseButton)
-        actionsRow.addWidget(clearButton)
-        actionsRow.addStretch(1)
-        layout.addLayout(actionsRow)
-
-        # Layer/field pickers for pushing colours back onto a map layer, with
-        # the apply action as an icon button at the end of the same row.
-        layerRow = QHBoxLayout()
-        self.unitsLayerComboBox = QgsMapLayerComboBox()
-        configure_layer_combo(
-            self.unitsLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer, allow_empty=True
-        )
-        self.unitsLayerComboBox.setCurrentIndex(-1)
-        self.unitsLayerFieldComboBox = QgsFieldComboBox()
-        self.unitsLayerComboBox.layerChanged.connect(self._on_units_layer_changed)
-        self.unitsLayerFieldComboBox.fieldChanged.connect(self._on_units_field_changed)
-        layerRow.addWidget(self.unitsLayerComboBox)
-        layerRow.addWidget(self.unitsLayerFieldComboBox)
-
-        applyColoursButton = self._make_tool_button(
-            "mIconColorSwatches.svg", "Apply Colours to Map Layer"
-        )
-        applyColoursButton.setToolTip(
-            "Apply Colours to Map Layer\n"
-            "Push the colours defined in the stratigraphic column onto the "
-            "selected layer above as a categorized renderer."
-        )
-        applyColoursButton.clicked.connect(self.apply_colours_to_layer)
-        layerRow.addWidget(applyColoursButton)
-        layout.addLayout(layerRow)
-
-        # Colour ramp picker + apply stratigraphic age action, same pattern.
-        ageRow = QHBoxLayout()
-        ageRow.addWidget(QLabel("Colour ramp:"))
-        self.strat_ageColorRampComboBox = QComboBox()
-        ramp_names = sorted(QgsStyle().defaultStyle().colorRampNames())
-        self.strat_ageColorRampComboBox.addItems(ramp_names)
-        default_ramp_index = self.strat_ageColorRampComboBox.findText('Viridis')
-        if default_ramp_index >= 0:
-            self.strat_ageColorRampComboBox.setCurrentIndex(default_ramp_index)
-        ageRow.addWidget(self.strat_ageColorRampComboBox)
-
-        applyAgeButton = self._make_tool_button(
-            "rendererGraduatedSymbol.svg", "Apply Stratigraphic Age to Map Layer"
-        )
-        applyAgeButton.setToolTip(
-            "Apply Stratigraphic Age to Map Layer\n"
-            "Write a 'strat_order' field (0 = first unit in the column) onto "
-            "the selected layer above and style it with a graduated colour ramp."
-        )
-        applyAgeButton.clicked.connect(self.apply_age_to_layer)
-        ageRow.addWidget(applyAgeButton)
-        layout.addLayout(ageRow)
+        layout.addWidget(self._build_style_group())
 
         self._add_derived_data_panel(layout)
 
@@ -353,27 +280,178 @@ class StratColumnWidget(QWidget):
         for _row, _label, button in self._derived_rows.values():
             button.setEnabled(enabled)
 
-    def _make_tool_button(self, theme_icon_name: str, tooltip: str) -> QToolButton:
-        """Build a small icon-only tool button using a QGIS theme icon, with
-        the given tooltip standing in for the label text it no longer shows.
-        """
-        return self._build_tool_button(QgsApplication.getThemeIcon(theme_icon_name), tooltip)
+    def _build_geology_group(self):
+        """Build the group with the geology layer, the unit name field and a
+        summary of the unit names that have no match in the layer."""
+        group = QGroupBox("Geology layer", self)
+        form = QFormLayout(group)
+        self.unitsLayerComboBox = QgsMapLayerComboBox()
+        configure_layer_combo(
+            self.unitsLayerComboBox, QgsMapLayerProxyModel.Filter.PolygonLayer, allow_empty=True
+        )
+        self.unitsLayerComboBox.setCurrentIndex(-1)
+        self.unitsLayerComboBox.setToolTip("The polygon layer that has the geological units.")
+        self.unitsLayerFieldComboBox = QgsFieldComboBox()
+        self.unitsLayerFieldComboBox.setToolTip("The field that has the name of each unit.")
+        self.unitsLayerComboBox.layerChanged.connect(self._on_units_layer_changed)
+        self.unitsLayerFieldComboBox.fieldChanged.connect(self._on_units_field_changed)
+        form.addRow("Layer", self.unitsLayerComboBox)
+        form.addRow("Unit name field", self.unitsLayerFieldComboBox)
+        self.unitNamesSummaryLabel = QLabel()
+        self.unitNamesSummaryLabel.setWordWrap(True)
+        form.addRow(self.unitNamesSummaryLabel)
+        return group
 
-    def _make_custom_icon_tool_button(self, icon_filename: str, tooltip: str) -> QToolButton:
-        """Build a small icon-only tool button using one of this plugin's own
-        icons (see resources/images), for geological concepts QGIS's own
-        theme has no dedicated icon for.
-        """
-        icon_path = str(DIR_PLUGIN_ROOT / "resources" / "images" / icon_filename)
-        return self._build_tool_button(QIcon(icon_path), tooltip)
+    def _build_actions_row(self):
+        """Build the row of buttons that change the column."""
+        addUnitButton = QPushButton("+ Unit", self)
+        addUnitButton.setToolTip("Add a unit to the top of the column.")
+        addUnitButton.clicked.connect(lambda _checked=False: self.add_unit())
 
-    def _build_tool_button(self, icon: QIcon, tooltip: str) -> QToolButton:
-        button = QToolButton(self)
-        button.setIcon(icon)
-        button.setIconSize(QSize(22, 22))
-        button.setToolTip(tooltip)
-        button.setAutoRaise(True)
-        return button
+        addUnconformityButton = QPushButton("+ Unconformity", self)
+        addUnconformityButton.setIcon(
+            QIcon(str(DIR_PLUGIN_ROOT / "resources" / "images" / "unconformity.svg"))
+        )
+        addUnconformityButton.setToolTip("Add an unconformity to the top of the column.")
+        addUnconformityButton.clicked.connect(lambda _checked=False: self.add_unconformity())
+
+        buildMenu = QMenu(self)
+        buildMenu.addAction(
+            QgsApplication.getThemeIcon("mActionSharingImport.svg"),
+            "From the basal contacts of the map",
+            self.init_stratigraphic_column_from_basal_contacts,
+        ).setToolTip("Add the units in the order that the basal contacts give.")
+        buildMenu.addAction(
+            QgsApplication.getThemeIcon("mIconFieldText.svg"),
+            "From a layer field...",
+            self.init_stratigraphic_column_from_layer_field,
+        ).setToolTip(
+            "Pick a polygon layer and a field, and add a unit for each unique value "
+            "found in that field."
+        )
+        buildButton = QToolButton(self)
+        buildButton.setText("Build column")
+        buildButton.setToolTip("Add units to the column from the map data.")
+        buildButton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        buildButton.setIcon(QgsApplication.getThemeIcon("mActionSharingImport.svg"))
+        buildButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        buildButton.setMenu(buildMenu)
+
+        moreMenu = QMenu(self)
+        moreMenu.addAction(
+            QgsApplication.getThemeIcon("mActionReverseLine.svg"),
+            "Reverse the column",
+            self.reverseColumn,
+        ).setToolTip("Flip the order of the column so the youngest unit becomes the oldest.")
+        moreMenu.addAction(
+            QgsApplication.getThemeIcon("mActionDeleteSelected.svg"),
+            "Clear the column...",
+            self.clearColumn,
+        )
+        moreButton = QToolButton(self)
+        moreButton.setIcon(QgsApplication.getThemeIcon("mActionOptions.svg"))
+        moreButton.setToolTip("More actions")
+        moreButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        moreButton.setMenu(moreMenu)
+
+        row = QHBoxLayout()
+        row.addWidget(addUnitButton)
+        row.addWidget(addUnconformityButton)
+        row.addWidget(buildButton)
+        row.addStretch(1)
+        row.addWidget(moreButton)
+        return row
+
+    def _build_style_group(self):
+        """Build the group that styles the geology layer by the column."""
+        group = QgsCollapsibleGroupBox("Style map layer", self)
+        form = QFormLayout(group)
+        self.styleByComboBox = QComboBox()
+        self.styleByComboBox.addItem("Unit colour", STYLE_COLOUR)
+        self.styleByComboBox.addItem("Stratigraphic order", STYLE_ORDER)
+        self.styleByComboBox.addItem("Thickness", STYLE_THICKNESS)
+        self.styleByComboBox.setToolTip(
+            "Unit colour: a categorized style with the colour of each unit.\n"
+            "Stratigraphic order: write a 'strat_order' field (0 = first unit in the "
+            "column) and use a graduated style.\n"
+            "Thickness: write a 'strat_thickness' field and use a graduated style."
+        )
+        self.strat_ageColorRampComboBox = QComboBox()
+        ramp_names = sorted(QgsStyle().defaultStyle().colorRampNames())
+        self.strat_ageColorRampComboBox.addItems(ramp_names)
+        default_ramp_index = self.strat_ageColorRampComboBox.findText('Viridis')
+        if default_ramp_index >= 0:
+            self.strat_ageColorRampComboBox.setCurrentIndex(default_ramp_index)
+        self.styleByComboBox.currentIndexChanged.connect(self._on_style_by_changed)
+        self.applyStyleButton = QPushButton("Apply")
+        self.applyStyleButton.setToolTip("Style the geology layer above.")
+        self.applyStyleButton.clicked.connect(self.apply_style_to_layer)
+        form.addRow("Style by", self.styleByComboBox)
+        form.addRow("Colour ramp", self.strat_ageColorRampComboBox)
+        form.addRow(self.applyStyleButton)
+        self._on_style_by_changed()
+        return group
+
+    def _on_style_by_changed(self, _index=None):
+        """A colour ramp is only for the graduated styles."""
+        self.strat_ageColorRampComboBox.setEnabled(
+            self.styleByComboBox.currentData() != STYLE_COLOUR
+        )
+
+    def apply_style_to_layer(self):
+        """Style the geology layer in the way that the "Style by" combo gives."""
+        style = self.styleByComboBox.currentData()
+        if style == STYLE_ORDER:
+            self.apply_age_to_layer()
+        elif style == STYLE_THICKNESS:
+            self.apply_thickness_to_layer()
+        else:
+            self.apply_colours_to_layer()
+
+    def _add_empty_list_text(self):
+        """Add a text on the list that shows when the list has no rows."""
+        self._emptyListLabel = QLabel(
+            "The column is empty.\nUse '+ Unit' to add a unit, or 'Build column' "
+            "to add the units from the map.",
+            self.unitList.viewport(),
+        )
+        self._emptyListLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._emptyListLabel.setWordWrap(True)
+        self._emptyListLabel.setEnabled(False)
+        self._emptyListLabel.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        viewport_layout = QVBoxLayout(self.unitList.viewport())
+        viewport_layout.addWidget(self._emptyListLabel)
+
+    def _update_list_state(self):
+        """Refresh the parts that depend on the rows of the list."""
+        try:
+            self._emptyListLabel.setVisible(self.unitList.count() == 0)
+            self._update_unit_names_summary()
+        except RuntimeError:
+            # the widget was deleted
+            pass
+
+    def _update_unit_names_summary(self):
+        """Show how many unit names have no match in the geology layer."""
+        names = [
+            widget.name
+            for widget, _item in self._widget_cache.values()
+            if isinstance(widget, StratigraphicUnitWidget) and widget.name
+        ]
+        if self._known_unit_names is None:
+            text = "Select a layer and a unit name field to check the unit names."
+        elif not names:
+            text = "The column has no units."
+        else:
+            missing = [name for name in names if name not in self._known_unit_names]
+            if missing:
+                text = (
+                    f"Warning: {len(missing)} of {len(names)} units have no match in the "
+                    f"layer: {', '.join(missing)}"
+                )
+            else:
+                text = f"All {len(names)} units match a name in the layer."
+        self.unitNamesSummaryLabel.setText(text)
 
     def clearColumn(self):
         """Clear the stratigraphic column, after the user confirms."""
@@ -462,6 +540,7 @@ class StratColumnWidget(QWidget):
             self._full_rebuild_display(current_order)
         finally:
             self._updating = False
+            self._update_list_state()
 
     def _full_rebuild_display(self, current_order):
         """Perform a full rebuild of the display (called only when necessary).
@@ -614,6 +693,7 @@ class StratColumnWidget(QWidget):
         """Persist and re-validate when the unit-name field selection changes."""
         self._persist_units_layer_selection()
         self._revalidate_unit_names()
+        self.highlight_selected_unit()
 
     def _on_units_layer_changed(self, layer):
         """Update the field combo box when the units layer changes."""
@@ -625,6 +705,7 @@ class StratColumnWidget(QWidget):
                 self.unitsLayerFieldComboBox.setField(unit_match)
         self._persist_units_layer_selection()
         self._revalidate_unit_names()
+        self.highlight_selected_unit()
 
     def _get_known_unit_names(self):
         """Return the set of exact unit-name values in the selected geology layer/field.
@@ -654,6 +735,48 @@ class StratColumnWidget(QWidget):
         for widget, _ in self._widget_cache.values():
             if hasattr(widget, 'set_known_unit_names'):
                 widget.set_known_unit_names(self._known_unit_names)
+        self._update_unit_names_summary()
+
+    def highlight_selected_unit(self):
+        """Select the features of the selected unit in the units layer, so
+        that QGIS highlights them on the map.
+
+        Clears the highlight when no unit row is selected (for example an
+        unconformity row) or when no units layer/field is set.
+        """
+        try:
+            items = self.unitList.selectedItems()
+        except RuntimeError:
+            # Widget was deleted
+            return
+        widget = self.unitList.itemWidget(items[0]) if items else None
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+
+        self._clear_unit_highlight()
+        if (
+            not isinstance(widget, StratigraphicUnitWidget)
+            or not widget.name
+            or layer is None
+            or not field_name
+            or layer.fields().indexFromName(field_name) < 0
+        ):
+            return
+        expression = f"{QgsExpression.quotedColumnRef(field_name)} = {QgsExpression.quotedValue(widget.name)}"
+        layer.selectByExpression(expression)
+        self._highlighted_layer = layer
+
+    def _clear_unit_highlight(self):
+        """Remove the feature selection made by highlight_selected_unit."""
+        layer = self._highlighted_layer
+        self._highlighted_layer = None
+        if layer is None:
+            return
+        try:
+            layer.removeSelection()
+        except RuntimeError:
+            # Layer was removed from the project
+            pass
 
     def apply_colours_to_layer(self):
         """Push the stratigraphic column's colours onto the selected units layer."""
@@ -713,6 +836,38 @@ class StratColumnWidget(QWidget):
                 "units, or no features matched a stratigraphic unit.",
             )
 
+    def apply_thickness_to_layer(self):
+        """Write each unit's thickness onto the selected units layer and style it by a graduated ramp."""
+        if not self.data_manager:
+            print("Error: Data manager is not initialized.")
+            return
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+        if layer is None or not field_name:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                "Please select a units layer and unit name field above.",
+            )
+            return
+        ramp_name = self.strat_ageColorRampComboBox.currentText()
+        applied = self.data_manager.apply_stratigraphic_thickness_to_layer(
+            layer, field_name, ramp_name=ramp_name
+        )
+        if applied:
+            push_success(
+                "Apply Stratigraphic Thickness to Map Layer",
+                f"Applied stratigraphic thickness and graduated styling to layer "
+                f"'{layer.name()}'.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                "Could not apply stratigraphic thickness. The stratigraphic column may "
+                "have no units, or no features matched a stratigraphic unit.",
+            )
+
     def add_unit(self, *, unit_data=None, create_new=True):
         if unit_data is None:
             unit_data = {'type': 'unit', 'name': ''}
@@ -744,6 +899,7 @@ class StratColumnWidget(QWidget):
         unit_widget.nameChanged.connect(
             lambda: self.update_element(unit_widget)
         )  # Connect name change signal
+        unit_widget.nameChanged.connect(lambda: self._on_unit_name_changed(unit_widget))
 
         unit_widget.thicknessChanged.connect(
             lambda: self.update_element(unit_widget)
@@ -760,11 +916,13 @@ class StratColumnWidget(QWidget):
         item.setSizeHint(unit_widget.sizeHint())
         self._add_list_item(item, at_top=create_new)
         self.unitList.setItemWidget(item, unit_widget)
+        unit_widget.focused.connect(lambda: self.unitList.setCurrentItem(item))
         unit_widget.setData(unit_data)  # Set data for the unit widget
         unit_widget.set_known_unit_names(self._known_unit_names)
 
         # Cache the widget for efficient updates
         self._widget_cache[unit_data['uuid']] = (unit_widget, item)
+        self._update_list_state()
 
     def add_unconformity(self, *, unconformity_data=None, create_new=True):
         if unconformity_data is None:
@@ -798,6 +956,8 @@ class StratColumnWidget(QWidget):
             lambda: self._on_drag_end(unconformity_widget)
         )
         item = QListWidgetItem()
+        # An unconformity row has another background than a unit row
+        item.setBackground(QBrush(self.palette().alternateBase()))
         item.setSizeHint(unconformity_widget.sizeHint())
         self._add_list_item(item, at_top=create_new)
         self.unitList.setItemWidget(item, unconformity_widget)
@@ -806,6 +966,17 @@ class StratColumnWidget(QWidget):
 
         # Cache the widget for efficient updates
         self._widget_cache[unconformity.uuid] = (unconformity_widget, item)
+        self._update_list_state()
+
+    def _on_unit_name_changed(self, unit_widget):
+        """Update the summary, and the map highlight when the selected unit is renamed."""
+        self._update_unit_names_summary()
+        try:
+            items = self.unitList.selectedItems()
+        except RuntimeError:
+            return
+        if items and self.unitList.itemWidget(items[0]) is unit_widget:
+            self.highlight_selected_unit()
 
     def _add_list_item(self, item, *, at_top):
         """Add a row to the list. A new element goes on top of the column
@@ -841,6 +1012,7 @@ class StratColumnWidget(QWidget):
         # Remove from cache
         if unit_widget.uuid in self._widget_cache:
             del self._widget_cache[unit_widget.uuid]
+        self._update_list_state()
 
     def _on_drag_start(self, widget):
         """Begin a reorder drag started from a row's grip handle."""

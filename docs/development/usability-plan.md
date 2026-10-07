@@ -264,18 +264,18 @@ A typed thickness is not overwritten by a calculated thickness.
 Depends on: the `feat/highlight-strat-unit` branch (map highlight, thickness
 styling) is merged.
 
-- [ ] Put the geology layer group at the top, with labels. Show a summary of
+- [x] Put the geology layer group at the top, with labels. Show a summary of
       the unit names that have no match.
-- [ ] Toolbar: "+ Unit" and "+ Unconformity" as text buttons. A "Build column"
+- [x] Toolbar: "+ Unit" and "+ Unconformity" as text buttons. A "Build column"
       menu for the import actions. An overflow menu for Reverse and Clear.
-- [ ] Add "Youngest" and "Oldest" labels above and below the list.
-- [ ] Replace the three apply buttons with one "Style map layer" group: a
+- [x] Add "Youngest" and "Oldest" labels above and below the list.
+- [x] Replace the three apply buttons with one "Style map layer" group: a
       "Style by" combo (unit colour, stratigraphic order, thickness), a ramp
       combo and one Apply button.
-- [ ] Rows: use `QgsColorButton`, a theme delete icon, and no repeated
+- [x] Rows: use `QgsColorButton`, a theme delete icon, and no repeated
       "Thickness:" label. Give unconformity rows a different style.
-- [ ] Show text in the empty list.
-- [ ] Remove the outer scroll area from the tab.
+- [x] Show text in the empty list.
+- [x] Remove the outer scroll area from the tab.
 
 Files: `stratigraphic_column/*.py`, `stratigraphic_column/*.ui`,
 `geological_history_tab.py`.
