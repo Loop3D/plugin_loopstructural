@@ -123,7 +123,6 @@ class FoldedFeatureDetailsPanel(BaseFeatureDetailsPanel):
         group_box.setLayout(form_layout)
         self.layout.addWidget(group_box)
         # Remove redundant layout setting
-        self.setLayout(self.layout)
 
     def open_splot_dialog(self):
         dialog = SPlotDialog(

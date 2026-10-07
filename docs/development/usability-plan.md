@@ -467,21 +467,21 @@ Rules:
 
 Tasks:
 
-- [ ] Add a small `SectionStack` widget in `gui/modelling/steps/`. It holds
+- [x] Add a small `SectionStack` widget in `gui/modelling/steps/`. It holds
       collapsible sections, the maximum number of open sections, and the
       collapsed state of each section. It saves the state in the widget
       settings.
-- [ ] Use it in steps 1, 2, 3 and in the feature details panel of step 4
+- [x] Use it in steps 1, 2, 3 and in the feature details panel of step 4
       (`Data Layers`, `Interpolator Settings`, `Preview`, `Export Feature`).
-- [ ] Remove the scroll areas that are inside other scroll areas
+- [x] Remove the scroll areas that are inside other scroll areas
       (`BaseTab(scrollable=True)`, the scroll area of
       `feature_details_panel/_base.py`).
-- [ ] Give the page a header summary for each collapsed section, for example
+- [x] Give the page a header summary for each collapsed section, for example
       "Geology layer: Geology, UNITNAME", so the user does not need to expand
       it to read the value.
-- [ ] Reduce the vertical use of the dock: the header and the footer use one
+- [x] Reduce the vertical use of the dock: the header and the footer use one
       row each. The footer text is one line with a tooltip.
-- [ ] In step 4, the problems list is collapsed to one line ("3 problems") with
+- [x] In step 4, the problems list is collapsed to one line ("3 problems") with
       the list in a tooltip or a popup.
 
 Acceptance: at a window height of 700 px, the main widget of each step has at
@@ -587,6 +587,256 @@ comes after 6.2, because it must lay out the final content of the pages. 6.4
 does not depend on the others. 6.5 comes after 6.2, because it changes the
 same checks.
 
+### Phase 7: Fold modelling
+
+Problem: LoopStructural can model folds with a fold frame and the discrete
+fold interpolator (DFI). The plugin gives access to a part of this code only,
+and the access is not complete:
+
+- "Attach fold frame" (`FoliationFeatureDetailsPanel`) and "Convert to
+  Structural Frame" change the feature in the current model only. They are not
+  in the spec of the feature. The next build (`update_model`) loses them, and
+  they are not saved with the state. The `folded_feature_name` key of
+  `add_foliation` is not used.
+- `fold_frames` returns all structural frames. The user cannot make a fold
+  frame from axial surface data directly.
+- The fold weights in `FoldedFeatureDetailsPanel` set only a value. The user
+  cannot turn a fold constraint off. LoopStructural turns a constraint off when
+  its weight is `None`, not `0`.
+- The S-plot dialog (`splot.py`) exists, but no button opens it. It shows the
+  limb rotation data only. It does not show the fitted curve, and the user
+  cannot change the wavelength or the profile type.
+- A fold frame cannot be folded by an older fold frame. Thus the user cannot
+  make a refolded fold.
+
+Aim: the user can model a fold with the axial surface constraint, the fold
+axis constraint and the S-plot, all at one time, one at a time, or in pairs.
+The user can make a polyphase fold model, for example the "Refolded folds"
+example of the LoopStructural documentation
+(`examples/2_fold/plot_2_refolded_folds.py`, data from `load_laurent2016`).
+
+#### Terms
+
+| Term | Meaning | LoopStructural |
+|---|---|---|
+| Fold event | One fold generation (for example F1). It has a name, an axial surface, a fold axis setting and S-plot settings. | `FoldEvent` |
+| Fold frame | The curvilinear coordinate system of a fold event. Coordinate 0 is the axial surface. Coordinate 1 is the fold axis direction field. Coordinate 2 is normal to both. | `FoldFrame`, `create_and_add_fold_frame` |
+| Folded feature | A foliation (for example bedding S0) that a fold event folds. | `create_and_add_folded_foliation` |
+| Folded fold frame | The fold frame of an older fold event that a younger fold event folds (for example S1 folded by F2). | `create_and_add_folded_fold_frame` |
+| Axial surface constraint | The gradient of the folded feature is normal to the fold direction. The fold direction comes from the fold frame and the fold limb rotation angle. | DFI `fold_orientation` |
+| Fold axis constraint | The gradient of the folded feature is normal to the fold axis. | DFI `fold_axis_w` |
+| S-plot | A plot of a fold rotation angle against a fold frame coordinate, with a fitted profile. The limb S-plot uses coordinate 0. The axis S-plot uses coordinate 1. | `fold_limb_rotation`, `fold_axis_rotation`, `SVariogram`, `limb_wl`, `axis_wl` |
+
+#### The three fold controls
+
+Each folded feature has three controls. Each control has a check box. The
+user can select any combination that is in the table below.
+
+1. **Axial surface.** The user selects the fold event (and thus its fold
+   frame). This adds the axial surface constraint (`fold_orientation`).
+2. **Fold axis.** The user selects the source of the fold axis:
+   - constant: plunge and azimuth (as now);
+   - average intersection lineation of the folded feature and the axial
+     surface (`av_fold_axis`, as now);
+   - lineation data: a layer of fold axis or intersection lineation
+     measurements. The plugin fits the fold axis rotation angle to
+     coordinate 1 (the axis S-plot).
+
+   This adds the fold axis constraint (`fold_axis_w`).
+3. **S-plot.** The user controls the rotation angle profiles: the profile
+   type (Fourier series, trigonometric), the wavelength, and fixed values for
+   the profile parameters. Without this control, the plugin fits the
+   profiles automatically (the LoopStructural default: Fourier series, and a
+   wavelength from the S-variogram).
+
+| Axial surface | Fold axis | S-plot | Result |
+|---|---|---|---|
+| - | - | - | A standard foliation. No fold constraint. |
+| x | - | - | Fold frame and DFI. Axial surface constraint on. The fold axis is the average intersection lineation, but the fold axis constraint is off (`fold_axis_w = None`). Automatic profiles. |
+| - | x | - | No fold frame. The plugin adds the fold axis as tangent constraints on a regular grid in the bounding box (gradient . axis = 0). The interpolator of the feature does not change. Only a constant fold axis is possible. |
+| x | x | - | Fold frame and DFI. Both constraints on. Automatic profiles. |
+| x | - | x | As "axial surface only", but with the limb profile of the user. |
+| x | x | x | All constraints on. The limb profile of the user. With "lineation data", also the axis profile of the user. |
+| - | - | x, or - x x | Not possible. An S-plot needs a fold frame coordinate. The S-plot check box is disabled until the user selects an axial surface. The tooltip says why. |
+
+Rules:
+
+- A control that is off sets its weight to `None`. Do not use `0` to turn a
+  constraint off.
+- The weight of each constraint is in an "Advanced" section under its
+  control. The defaults are the LoopStructural defaults (`fold_orientation`
+  10, `fold_axis_w` 10, `fold_normalisation` 1, `fold_norm` 1,
+  `fold_regularisation` [0.1, 0.01, 0.01]).
+- A folded feature always uses DFI. The interpolator combo shows "DFI (fold)"
+  and is disabled. A fold frame uses the interpolator of the settings.
+
+#### Polyphase folds
+
+- A fold event can have "Folded by": an other, younger fold event. Then its
+  fold frame is a folded fold frame, and its own three fold controls apply to
+  coordinate 0 of that frame.
+- A foliation, or the stratigraphic column group of the map workflow, can
+  have "Folded by": one fold event.
+- The fold events and the folded features make a graph. The build order comes
+  from this graph: the youngest fold event first, then each feature after the
+  fold event that folds it. A cycle (F1 folded by F2, F2 folded by F1) is an
+  error. The UI does not let the user make a cycle.
+- The feature list in step 4 shows the graph as a tree: each fold event, then
+  the features that it folds, under it.
+
+Workflow for the "Refolded folds" example. The user has three point layers
+with orientations: `s2`, `s1` and `s0`.
+
+1. Step 1: set the bounding box. Select "Interpolate surfaces from
+   constraints".
+2. Step 4: "Add Fold Event" F2. Axial surface data: the `s2` layer
+   (orientation) and one value point. Fold axis: off. Build F2. The plugin
+   shows the fold frame.
+3. "Add Fold Event" F1. Axial surface data: the `s1` layer. Folded by: F2.
+   Axial surface: on. Fold axis: average. S-plot: on. The plugin builds the F2
+   frame (current, so not again) and calculates the rotation angles of `s1`.
+   The S-plot shows the limb rotation angle of `s1` against F2 coordinate 0.
+   The user sets the wavelength to 4 (the S-variogram suggests a value).
+   Build F1.
+4. "Add Foliation" S0 from the `s0` layer. Folded by: F1. Axial surface: on.
+   Fold axis: average. S-plot: on. The S-plot shows `s0` against F1
+   coordinate 0. Build the model.
+5. Step 5: view S0, S1 and S2 in the 3D view, and export the surfaces.
+
+#### Data model
+
+- Add `fold_events: Dict[str, dict]` to the model manager, in the form of
+  `manual_foliations` and `parametric_faults`. A spec has:
+  - `name`;
+  - `axial_surface_data`: layer dicts in the form of `add_foliation`, with a
+    `coord` key (0 for the axial foliation and the axial traces, 1 for the
+    fold axis direction data);
+  - `folded_by`: the name of a fold event, or `None`;
+  - `fold`: the fold controls of the fold frame (only when `folded_by` is
+    set), see below;
+  - the interpolator settings of the frame.
+- Add a `fold` key to the spec of a manual foliation and to the generated
+  stratigraphic group:
+  - `fold_event`: the name of the fold event, or `None`;
+  - `axial_surface`: on or off, and `fold_orientation` weight;
+  - `fold_axis`: off, `constant` (plunge, azimuth), `average`, or `data`
+    (layer dicts), and `fold_axis_w` weight;
+  - `splot`: off or on; for the limb and for the axis profile: the type, the
+    wavelength (or "automatic"), and the fixed parameters;
+  - `fold_normalisation`, `fold_norm`, `fold_regularisation`.
+- Replace the `folded_feature_name` key with `fold.fold_event`. Load old
+  state files with `fold_event = None`.
+- `update_model` builds the fold events in the graph order, then the
+  features. It uses `create_and_add_fold_frame`,
+  `create_and_add_folded_fold_frame` and `create_and_add_folded_foliation`.
+  It does not use `add_fold_to_feature` on the current model.
+- Save `fold_events` and the `fold` keys with the state
+  (`*_to_dict` / `*_from_dict`).
+- Put the logic that does not need QGIS (the graph order, the cycle check,
+  the conversion from the controls to the LoopStructural arguments) in
+  `main/fold_spec.py`, so that unit tests can use it.
+
+#### Staged build for the S-plot
+
+The S-plot needs the fold frame before the folded feature is built. Thus:
+
+- "Calculate rotation angles" builds the fold frame (and the fold events that
+  fold it) if it is not current. Then it calculates the rotation angles of the
+  data of the feature. It does not build the folded feature. Run it in a
+  background task with progress.
+- The S-plot panel shows the data points, the fitted curve, the S-variogram
+  and the suggested wavelengths. When the user changes the profile type, the
+  wavelength or a parameter, the plugin fits the curve again at once. This
+  does not interpolate.
+- The values of the S-plot go into the spec. The next build uses them.
+- When the fold frame changes (new data, a new interpolator setting), the
+  rotation angles are out of date. Use the derived-data record of phase 1:
+  the S-plot shows "Rotation angles are out of date" and an **Update**
+  button. The build calculates them again before it builds the folded
+  feature.
+
+#### Tasks
+
+Do the parts in this order. Each part is a separate pull request.
+
+7.1 Fold specs and build order
+
+- [ ] `main/fold_spec.py`: the spec form, the graph order, the cycle check,
+      and the conversion of the fold controls to the arguments of
+      `create_and_add_folded_foliation` (`fold_weights`, `av_fold_axis`,
+      `fold_axis`, `limb_wl`, `axis_wl`, profile types).
+- [ ] Model manager: `fold_events`, the `fold` key, the build in graph order,
+      save and load. Remove the uses of `add_fold_to_feature` and of
+      `convert_feature_to_structural_frame` from the UI, or make them write
+      the spec.
+- [ ] `fold_frames` returns the fold frames of the fold events only.
+
+7.2 Fold events in step 4
+
+- [ ] "Add Feature -> Add Fold Event": a dialog with the name, the axial
+      surface layers (orientation, value, form line, with coordinate 0 or 1)
+      and "Folded by".
+- [ ] A details panel for a fold event: data, "Folded by", interpolator
+      settings, and (for a folded fold frame) the fold controls. Use
+      `SectionStack` (6.3).
+- [ ] The feature list shows the fold graph as a tree.
+- [ ] Step check: a fold event with no orientation data for coordinate 0 is a
+      problem. A coordinate 0 with no value constraint is a warning ("Add an
+      axial trace or a point with a value").
+
+7.3 The three fold controls
+
+- [ ] Replace "Attach fold frame" and the weight boxes of
+      `FoldedFeatureDetailsPanel` with one "Fold" section: "Folded by", and
+      the three controls with their check boxes and "Advanced" weights.
+- [ ] Apply the rules of the combination table. Disable the S-plot control
+      when there is no axial surface.
+- [ ] Fold axis "lineation data": a layer picker with the trend and plunge
+      fields.
+- [ ] Fold axis without axial surface: make the tangent constraints on a grid
+      (`main/fold_spec.py`). The grid step comes from the bounding box and
+      the number of elements.
+- [ ] Add "Folded by" to the stratigraphic column group in the map workflow.
+
+7.4 S-plot panel
+
+- [ ] Replace `SPlotDialog` with an S-plot panel: limb and axis tabs, data
+      points, fitted curve, S-variogram with suggested wavelengths, profile
+      type, wavelength, fixed parameters, misfit.
+- [ ] "Calculate rotation angles" as a background task (staged build).
+- [ ] Out-of-date state of the rotation angles in the derived-data record.
+
+7.5 Polyphase example and docs
+
+- [ ] Test data: the `load_laurent2016` data as three GeoPackage point layers
+      in `tests/data/`.
+- [ ] A user guide page in `docs/usage` for the "Refolded folds" workflow,
+      with the S-plots.
+
+Acceptance: a user makes the "Refolded folds" model of the LoopStructural
+documentation from the three layers, with the steps above and without Python.
+The result is the same as the result of the example script (see the tests).
+For one folded feature, the user can turn each of the three controls on and
+off, and the build uses only the constraints that are on. After the user saves
+and opens the project, the fold events, the "Folded by" links and the S-plot
+values are the same, and a build gives the same model.
+
+Tests:
+
+- Unit tests (no QGIS) for `main/fold_spec.py`: the graph order of
+  F2 -> F1 -> S0; a cycle is an error; each row of the combination table gives
+  the correct arguments (a control that is off gives `None`); the S-plot is
+  refused without an axial surface; old specs with `folded_feature_name` load.
+- A QGIS test that builds the refolded fold from the test layers and compares
+  the S0 scalar field on a coarse grid with the result of the LoopStructural
+  calls of the example (same data, same arguments).
+- A test that the save and load of the state keeps the fold specs.
+
+Order and links: 7.1 first, because the other parts use the spec. 7.2 and 7.3
+depend on 7.1. 7.4 depends on 7.3 (the S-plot control). 7.5 comes last. Phase 7
+depends on 6.1 (the workflow mode), 6.3 (`SectionStack`) and 6.4 (the number of
+elements of each feature, which is also used for the fold frames).
+
 ## Risks
 
 - **Large UI change.** Users of the current version must learn the new layout.
@@ -613,6 +863,16 @@ same checks.
   does not use it. Show a short message in step 4 ("The column and the map
   layers are not used in this mode"), so the user knows why a unit is not in
   the model.
+- **Fold build time (phase 7).** A folded feature uses DFI, and a polyphase
+  model builds a chain of frames. The build is slow. Build only the frames
+  that are out of date, and show the progress of each frame.
+- **Fold changes in old state files (phase 7).** A fold that the user added
+  with "Attach fold frame" is not in the saved state. Thus an old project
+  opens without that fold. Tell the user in the change log.
+- **LoopStructural API (phase 7).** The plugin uses the fold builder
+  arguments (`limb_wl`, `axis_wl`, `av_fold_axis`, the profile types). Some of
+  them are keyword arguments, not public API. Pin the LoopStructural version
+  and add a test for each argument.
 
 ## Open questions
 

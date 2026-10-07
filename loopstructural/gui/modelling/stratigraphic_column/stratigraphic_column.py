@@ -8,7 +8,6 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -27,6 +26,8 @@ from loopstructural.gui.messages import push_success
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
 from loopstructural.main import derived_data, layer_roles
 from loopstructural.main.helpers import ColumnMatcher, get_layer_names
+
+from loopstructural.gui.modelling.steps.section_stack import SectionStack
 
 from .init_from_field_dialog import InitFromLayerFieldDialog
 from .stratigraphic_unit import StratigraphicUnitWidget
@@ -91,7 +92,22 @@ class StratColumnWidget(QWidget):
 
         # The geology layer and its unit name field. The layer is shared with
         # the map2loop tools, and the "Style map layer" group writes to it.
-        layout.addWidget(self._build_geology_group())
+        # The sections are in one stack, so at most two are open. The page adds
+        # more sections (see `StratigraphyStep`).
+        self.sections = SectionStack(self, 'stratigraphy', data_manager)
+        self.sections.add_section(
+            self._build_geology_group(),
+            'geology',
+            'Geology layer',
+            summary=self._geology_summary,
+        )
+        self.sections.add_section(
+            self._build_style_group(),
+            'style',
+            'Style map layer',
+            collapsed=True,
+        )
+        layout.addWidget(self.sections)
 
         layout.addLayout(self._build_actions_row())
 
@@ -105,8 +121,6 @@ class StratColumnWidget(QWidget):
         layout.addWidget(QLabel("Youngest"))
         layout.addWidget(self.unitList, 1)
         layout.addWidget(QLabel("Oldest"))
-
-        layout.addWidget(self._build_style_group())
 
         self._add_derived_data_panel(layout)
 
@@ -283,7 +297,7 @@ class StratColumnWidget(QWidget):
     def _build_geology_group(self):
         """Build the group with the geology layer, the unit name field and a
         summary of the unit names that have no match in the layer."""
-        group = QGroupBox("Geology layer", self)
+        group = QgsCollapsibleGroupBox("Geology layer", self)
         form = QFormLayout(group)
         self.unitsLayerComboBox = QgsMapLayerComboBox()
         configure_layer_combo(
@@ -301,6 +315,14 @@ class StratColumnWidget(QWidget):
         self.unitNamesSummaryLabel.setWordWrap(True)
         form.addRow(self.unitNamesSummaryLabel)
         return group
+
+    def _geology_summary(self):
+        """The layer and the field, for the title of the collapsed section."""
+        layer = self.unitsLayerComboBox.currentLayer()
+        if layer is None:
+            return "not selected"
+        field = self.unitsLayerFieldComboBox.currentField()
+        return f"{layer.name()}, {field}" if field else layer.name()
 
     def _build_actions_row(self):
         """Build the row of buttons that change the column."""

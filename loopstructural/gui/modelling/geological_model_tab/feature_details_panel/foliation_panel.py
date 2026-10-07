@@ -29,8 +29,5 @@ class FoliationFeatureDetailsPanel(BaseFeatureDetailsPanel):
         group_box.setLayout(form_layout)
         self.layout.addWidget(group_box)
 
-        # Remove redundant layout setting
-        self.setLayout(self.layout)
-
     def on_fold_frame_changed(self, text):
         self.model_manager.add_fold_to_feature(self.feature.name, fold_frame_name=text)

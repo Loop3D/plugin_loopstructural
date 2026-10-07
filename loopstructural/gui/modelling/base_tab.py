@@ -1,54 +1,16 @@
 from qgis.gui import QgsCollapsibleGroupBox
-from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import QVBoxLayout, QWidget
 
 
 class BaseTab(QWidget):
-    def __init__(self, parent=None, data_manager=None, scrollable=False):
+    """A tab with a vertical layout. The page that holds the tab has the scroll area."""
+
+    def __init__(self, parent=None, data_manager=None):
         super().__init__(parent)
         self.data_manager = data_manager
-        # Initialize a default layout for all tabs
-        if scrollable:
-            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            self.scroll_area = QScrollArea(self)
-            self.scroll_area.setWidgetResizable(True)
-            self.scroll_area.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-            # Create a container widget for the scroll area
-            self.container_widget = QWidget()
-            self.scroll_area.setWidget(self.container_widget)
-            # Ensure the scroll area and its container widget can handle focus and mouse events
-            self.scroll_area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            self.scroll_area.setFrameShape(
-                QScrollArea.Shape.NoFrame
-            )  # Remove any unnecessary frame
-
-            # Explicitly set size policies to ensure proper interaction
-            self.scroll_area.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-            )
-            # Set up a layout for the container widget
-            self.container_layout = QVBoxLayout(self.container_widget)
-            # Set the main layout for the BaseTab
-            self.main_layout = QVBoxLayout(self)
-            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-            self.main_layout.addWidget(self.scroll_area)
-
-            self.container_widget.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-            )
-
-            # Ensure the container widget propagates mouse events properly
-            self.container_widget.setAttribute(
-                Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
-            )
-
-            self.setLayout(self.main_layout)
-        else:
-            # If not scrollable, use a simple layout
-            self.container_layout = QVBoxLayout(self)
-            self.setLayout(self.container_layout)
-
-        # Set the layout for the tab
+        self.container_layout = QVBoxLayout(self)
+        self.container_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self.container_layout)
 
     def add_widget(self, widget, name=None, group_box=True):
         """Add a widget to the tab."""
