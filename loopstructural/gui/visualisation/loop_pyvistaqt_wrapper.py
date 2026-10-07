@@ -4,6 +4,7 @@ from pyvistaqt import QtInteractor
 from qgis.PyQt.QtCore import pyqtSignal
 
 from .mesh_scalar_utils import threshold_mesh
+from .object_registry import ObjectRegistry, ViewerObject
 
 
 class LoopPyVistaQTPlotter(QtInteractor):
@@ -13,24 +14,9 @@ class LoopPyVistaQTPlotter(QtInteractor):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.objects = {}
         self.add_axes()
-        # maps name -> dict(mesh=..., actor=..., kwargs={...})
-        self.meshes = {}
-        # maintain an internal pyvista plotter
-
-    def increment_name(self, name):
-        parts = name.split('_')
-        if len(parts) == 1:
-            name = name + '_1'
-        while name in self.actors:
-            parts = name.split('_')
-            try:
-                parts[-1] = str(int(parts[-1]) + 1)
-            except ValueError:
-                parts.append('1')
-            name = '_'.join(parts)
-        return name
+        # the objects in the viewer, and the information to build them again
+        self.registry = ObjectRegistry()
 
     def add_mesh_object(
         self,
@@ -95,15 +81,6 @@ class LoopPyVistaQTPlotter(QtInteractor):
         -------
         None
         """
-        # Remove any previous entry with the same name (to keep metadata consistent)
-        # if name in self.meshes:
-        #     try:
-        #
-        #         self.remove_object(name)
-        #     except Exception:
-        #         # ignore removal errors and proceed to add
-        #         pass
-
         # Decide rendering mode: color (solid) if color provided else scalar mapping
         scalars = scalars if scalars is not None else mesh.active_scalars_name
         use_scalar = color is None and scalars is not None
@@ -139,21 +116,21 @@ class LoopPyVistaQTPlotter(QtInteractor):
         # attempt to add to the underlying pyvista plotter
         actor = self.add_mesh(display_mesh, name=name, **add_kwargs)
 
-        # store the mesh, actor and kwargs for future re-adds
-        # persist source metadata so callers can find meshes created from model features
-        self.meshes[name] = {
-            'mesh': mesh,
-            'actor': actor,
-            'kwargs': {**add_kwargs},
-            'source_feature': source_feature,
-            'source_type': source_type,
-            'isovalue': isovalue,
-            'metadata': dict(metadata or {}),
-            'out_of_date': out_of_date,
-            'threshold': dict(threshold) if threshold else None,
-            # the mesh shown in the viewer (the filtered part of `mesh`)
-            'display_mesh': display_mesh,
-        }
+        self.registry.add(
+            ViewerObject(
+                name,
+                mesh,
+                actor=actor,
+                kwargs=add_kwargs,
+                source_feature=source_feature,
+                source_type=source_type,
+                isovalue=isovalue,
+                metadata=metadata,
+                out_of_date=out_of_date,
+                threshold=threshold,
+                display_mesh=display_mesh,
+            )
+        )
         self.objectAdded.emit(self)
 
     def get_source_metadata(self, name: str) -> Dict[str, Any]:
@@ -162,17 +139,8 @@ class LoopPyVistaQTPlotter(QtInteractor):
         example to change its colour map) can still be built again from the
         model.
         """
-        entry = self.meshes.get(name)
-        if not entry:
-            return {}
-        return {
-            'source_feature': entry.get('source_feature'),
-            'source_type': entry.get('source_type'),
-            'isovalue': entry.get('isovalue'),
-            'metadata': entry.get('metadata'),
-            'out_of_date': bool(entry.get('out_of_date', False)),
-            'threshold': entry.get('threshold'),
-        }
+        obj = self.registry.get(name)
+        return obj.source_values() if obj else {}
 
     def replace_mesh_object(self, name: str, mesh=None, overrides=None, **source_updates) -> None:
         """Add the object `name` again, and keep its source values, viewer
@@ -196,22 +164,19 @@ class LoopPyVistaQTPlotter(QtInteractor):
         pyvista replaces the actor that has the same name, so if the new
         object cannot be added, the old object stays and the error is raised.
         """
-        entry = self.meshes[name]
+        obj = self.registry.get(name)
         if mesh is None:
-            mesh = entry['mesh']
+            mesh = obj.mesh
         source = self.get_source_metadata(name)
         source.update(source_updates)
         kwargs = {
-            key: value
-            for key, value in (entry.get('kwargs') or {}).items()
-            if key not in source and key != 'name'
+            key: value for key, value in obj.kwargs.items() if key not in source and key != 'name'
         }
         kwargs.update(overrides or {})
-        user_colour = entry.get('color')
+        user_colour = obj.color
         if user_colour is not None:
             kwargs['color'] = user_colour
-        actor = entry.get('actor')
-        visible = bool(getattr(actor, 'visibility', True))
+        visible = bool(getattr(obj.actor, 'visibility', True))
 
         try:
             self.add_mesh_object(mesh, name=name, **source, **kwargs)
@@ -222,63 +187,52 @@ class LoopPyVistaQTPlotter(QtInteractor):
                 kwargs.pop(key, None)
             self.add_mesh_object(mesh, name=name, **source, **kwargs)
 
-        new_entry = self.meshes[name]
+        new_obj = self.registry.get(name)
         if user_colour is not None:
-            new_entry['color'] = user_colour
-        if not visible and new_entry.get('actor') is not None:
-            new_entry['actor'].visibility = False
+            new_obj.color = user_colour
+        if not visible and new_obj.actor is not None:
+            new_obj.actor.visibility = False
 
     def set_out_of_date(self, names, out_of_date: bool = True) -> None:
         """Mark the named objects as out of date (or up to date)."""
         changed = False
         for name in names:
-            entry = self.meshes.get(name)
-            if entry is not None and bool(entry.get('out_of_date')) != out_of_date:
-                entry['out_of_date'] = out_of_date
+            obj = self.registry.get(name)
+            if obj is not None and bool(obj.out_of_date) != out_of_date:
+                obj.out_of_date = out_of_date
                 changed = True
         if changed:
             self.outOfDateChanged.emit()
 
     def out_of_date_objects(self):
         """Return the names of the objects that are out of date."""
-        return [name for name, entry in self.meshes.items() if entry.get('out_of_date')]
+        return self.registry.out_of_date()
 
     def remove_object(self, name: str) -> None:
         """Remove an object by name and clean up stored metadata.
 
         This ensures names can be re-used and re-adding works predictably.
         """
-        if name not in self.meshes:
+        obj = self.registry.get(name)
+        if obj is None:
             return
-        entry = self.meshes[name]
-        actor = entry.get('actor', None)
         try:
-            if actor is not None:
-                # pyvista.Plotter has remove_actor or remove_mesh depending on version
-                if hasattr(self, 'remove_actor'):
-                    try:
-                        self.remove_actor(actor)
-                    except Exception:
-                        # fallback to remove_mesh by name
-                        if hasattr(self, 'remove_mesh'):
-                            self.remove_mesh(name)
-                elif hasattr(self, 'remove_mesh'):
+            if obj.actor is not None:
+                try:
+                    self.remove_actor(obj.actor)
+                except Exception:
                     self.remove_mesh(name)
         except Exception:
             # ignore errors during actor removal
             pass
-        # finally delete metadata
-        try:
-            del self.meshes[name]
-        except Exception:
-            pass
-        if entry.get('out_of_date'):
+        self.registry.remove(name)
+        if obj.out_of_date:
             self.outOfDateChanged.emit()
 
     def set_object_visibility(self, name: str, visibility):
         """Change the visibility of an object."""
-        if name in self.meshes:
-            self.meshes[name]['actor'].visibility = visibility
-            self.update()
-        else:
+        obj = self.registry.get(name)
+        if obj is None:
             raise ValueError(f"Object '{name}' not found in the plotter.")
+        obj.actor.visibility = visibility
+        self.update()

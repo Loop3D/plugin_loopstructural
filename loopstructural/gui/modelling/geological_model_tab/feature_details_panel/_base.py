@@ -478,7 +478,7 @@ class BaseFeatureDetailsPanel(QWidget):
                 self.meshObjectCombo.clear()
                 if self.plugin.loop_widget.visualisation_widget.plotter is not None:
                     viewer = self.plugin.loop_widget.visualisation_widget.plotter
-                    mesh_names = list(viewer.meshes.keys())
+                    mesh_names = viewer.registry.names()
                     self.meshObjectCombo.addItems(mesh_names)
 
         self.evaluate_target_combo.currentIndexChanged.connect(_on_evaluate_target_changed)
@@ -757,7 +757,7 @@ class BaseFeatureDetailsPanel(QWidget):
             mesh = self.meshObjectCombo.currentText()
             if not mesh:
                 return
-            vtk_mesh = viewer.meshes[mesh]['mesh']
+            vtk_mesh = viewer.registry.get(mesh).mesh
             self.model_manager.export_feature_values_to_vtk_mesh(
                 self.feature.name, vtk_mesh, scalar_type=scalar_type
             )
