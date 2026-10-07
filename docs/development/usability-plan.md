@@ -346,7 +346,7 @@ cross-section to files without the 3D view.
 
 ### Phase 6: Follow-up changes
 
-Four changes that come from use of phases 3 to 5. Do them in this order. Each
+Five changes that come from use of phases 3 to 5. Do them in this order. Each
 one is a separate pull request.
 
 #### 6.1 Two separate workflows
@@ -369,26 +369,26 @@ Rules:
 
 Tasks:
 
-- [ ] Give the model manager the workflow mode. `update_model` skips
+- [x] Give the model manager the workflow mode. `update_model` skips
       `update_fault_features` (trace faults only), `update_foliation_features`
       and the generated-feature data in the "constraints" mode. It still builds
       the parametric faults and the manual foliations.
-- [ ] `refresh_feature_data` and `model_state` ignore the column, the contacts
+- [x] `refresh_feature_data` and `model_state` ignore the column, the contacts
       and the fault traces in the "constraints" mode. A change to the column
       does not make the model stale.
-- [ ] The data manager does not watch, reload or check the map input layers
+- [x] The data manager does not watch, reload or check the map input layers
       (contacts, structure, fault traces) in the "constraints" mode. This stops
       "Update data and solve" and the "Input layers changed" problem for layers
       that the model does not use. `get_layers_outside_bounding_box` uses the
       same rule.
-- [ ] `sync_extra_constraints` and the read-only "processed" rows are empty in
+- [x] `sync_extra_constraints` and the read-only "processed" rows are empty in
       the "constraints" mode.
-- [ ] Step checks: `check_data` does not ask for the geology and structure
+- [x] Step checks: `check_data` does not ask for the geology and structure
       layers in the "constraints" mode. Move these two items to
       `check_stratigraphy` (see 6.2).
-- [ ] The primary button text and tooltip name the workflow ("Build model from
+- [x] The primary button text and tooltip name the workflow ("Build model from
       constraints").
-- [ ] Save the choice with the state (done in phase 4). Load old state files
+- [x] Save the choice with the state (done in phase 4). Load old state files
       with the "map" mode.
 
 Acceptance: a user has a map project with a column, contacts and faults. The
@@ -429,7 +429,7 @@ Tasks:
 - [ ] Keep the geology picker of the column group in sync with the new picker
       (both use the same roles). Decide in the review if one of them must be
       removed (see the open questions).
-- [ ] Move the "Select the geology layer" and "Select the structure layer"
+- [x] Move the "Select the geology layer" and "Select the structure layer"
       items from `check_data` to `check_stratigraphy`.
 - [ ] Update the text that says "in step 1" for these layers
       (`derived_refresh.py`, `checks.py`, `pages.py`, the docs).
@@ -542,10 +542,50 @@ Tests: unit tests for the function: more data gives more or equal elements; the
 limits; no data; parallel and spread orientations; orientation signs do not
 matter.
 
+#### 6.5 Build a model with only faults
+
+Problem: the "map" workflow needs a stratigraphic column and basal contacts. A
+user who has only fault traces (for example, to model the faults alone) cannot
+build a model. The build asks for contacts, and the contacts extraction stops
+with "No basal contacts were found".
+
+Rules:
+
+- In the "map" workflow, the stratigraphic column and the basal contacts are
+  optional. A model with fault traces only builds the faults.
+- With no units in the column, the build does not calculate the basal contacts
+  and the thicknesses, and it makes no stratigraphic feature.
+- With units in the column but no contacts for a unit, the build gives the
+  current message. Only an empty column skips the contacts.
+
+Tasks:
+
+- [ ] `names_to_refresh` returns no result that comes from the column when the
+      column has no units. `DerivedRefresh` does not raise when there are no
+      units.
+- [ ] `update_model` builds the faults when the column has no groups.
+      `update_foliation_features` does nothing for an empty column. Check that
+      `model.stratigraphic_column` is safe to leave unset.
+- [ ] `check_stratigraphy` does not ask for the geology layer, the structure
+      layer or the contacts when the column is empty. The text says that the
+      step is optional if the user models only faults.
+- [ ] `model_state`, `valid` and the primary action accept a model that has
+      faults and no groups.
+- [ ] Step 5 (view and export) works with fault features only. The block model
+      and the stratigraphic surfaces are not offered when there are no units.
+
+Acceptance: a project has a fault trace layer and an empty column. The user
+sets the bounding box and the fault layer, and builds the model. The model has
+the fault features, and the user can view and export the fault surfaces.
+
+Tests: unit tests for `names_to_refresh` and for the checks with an empty
+column. A QGIS test of `update_model` with faults and no column.
+
 Order and links between the parts: 6.1 first, because it defines what the model
 reads in each workflow. 6.2 depends on the same checks, so do it next. 6.3
 comes after 6.2, because it must lay out the final content of the pages. 6.4
-does not depend on the others.
+does not depend on the others. 6.5 comes after 6.2, because it changes the
+same checks.
 
 ## Risks
 

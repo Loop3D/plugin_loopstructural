@@ -32,6 +32,7 @@ from loopstructural.toolbelt.preferences import PlgSettingsStructure
 from ..main import constraints, parametric_fault
 from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
+from ..main.workflow_mode import WORKFLOW_MODE_CONSTRAINTS, WORKFLOW_MODE_MAP, WORKFLOW_MODES
 
 
 class ModelSolveCancelled(Exception):
@@ -233,6 +234,29 @@ class GeologicalModelManager(Observable):
         # Set by request_cancel() and checked in _report_progress; lets a
         # running Initialize/Solve be stopped between fault/feature builds.
         self._cancel_requested = False
+        # How the user builds the model; see `set_workflow_mode`.
+        self.workflow_mode = WORKFLOW_MODE_MAP
+
+    @property
+    def uses_map_data(self) -> bool:
+        """True if the model has the features that the column and the fault traces make."""
+        return self.workflow_mode != WORKFLOW_MODE_CONSTRAINTS
+
+    def set_workflow_mode(self, mode):
+        """Set how the user builds the model.
+
+        With "constraints", the model has only the features that the user
+        added (foliations, unconformities and parametric faults). The column
+        and the fault traces keep their data, but the build does not use it.
+        A change of the mode makes the features of a built model out of date.
+        """
+        if mode not in WORKFLOW_MODES:
+            raise ValueError(f"Unknown workflow mode '{mode}'.")
+        if mode == self.workflow_mode:
+            return
+        self.workflow_mode = mode
+        if self.features():
+            self.mark_column_changed()
 
     def request_cancel(self):
         """Ask a running `update_model`/`update_all_features` call to stop.
@@ -405,6 +429,9 @@ class GeologicalModelManager(Observable):
         A change to a unit only (its name, thickness or colour) does not
         change the groups, so `refresh_feature_data` can apply it.
         """
+        if not self.uses_map_data:
+            # the build does not use the column in this mode
+            return
         requires_reinit = event in self._COLUMN_EVENTS_REQUIRING_REINIT or (
             event == 'element_updated'
             and isinstance(kwargs.get('element'), StratigraphicUnconformity)
@@ -468,7 +495,8 @@ class GeologicalModelManager(Observable):
             event in self._TOPOLOGY_EVENTS_REQUIRING_REINIT
             or new_relationship is FaultRelationshipType.FAULTED
         )
-        if requires_reinit:
+        # the fault traces are not used with "constraints"
+        if requires_reinit and self.uses_map_data:
             self._topology_dirty = True
             names = {
                 payload.get(key)
@@ -518,7 +546,8 @@ class GeologicalModelManager(Observable):
             # relationships, which -- like any single FAULTED/structural
             # edit -- needs Initialize Model re-run before Solve Model
             # picks it up; see `_TOPOLOGY_EVENTS_REQUIRING_REINIT`.
-            self._topology_dirty = True
+            if self.uses_map_data:
+                self._topology_dirty = True
             self._emit('model_updated')
 
     def update_bounding_box(self, bounding_box: BoundingBox):
@@ -1128,8 +1157,11 @@ class GeologicalModelManager(Observable):
     # -- detach a generated feature ---------------------------------------
 
     def generated_feature_names(self):
-        """Return the names of the features that the stratigraphic column makes."""
-        if self.stratigraphic_column is None:
+        """Return the names of the features that the stratigraphic column makes.
+
+        The list is empty with "constraints": the build does not use the column.
+        """
+        if self.stratigraphic_column is None or not self.uses_map_data:
             return []
         return [group.name for group in self.stratigraphic_column.get_groups()]
 
@@ -1649,11 +1681,16 @@ class GeologicalModelManager(Observable):
         if notify_observers:
             self._emit('model_update_started')
 
+        map_data = self.uses_map_data
         group_count = (
-            len(self.stratigraphic_column.get_groups()) if self.stratigraphic_column else 0
+            len(self.stratigraphic_column.get_groups())
+            if map_data and self.stratigraphic_column
+            else 0
         )
         self._progress_callback = progress_callback
-        displacement_fault_count = len(set(self.faults) - set(self.fault_boundaries.values()))
+        displacement_fault_count = (
+            len(set(self.faults) - set(self.fault_boundaries.values())) if map_data else 0
+        )
         self._progress_total = (
             displacement_fault_count
             + len(self.parametric_faults)
@@ -1665,17 +1702,19 @@ class GeologicalModelManager(Observable):
         if dbg is not None:
             try:
                 dbg.log(
-                    f"Initialize Model: building {len(self.faults)} fault(s) and "
+                    f"Initialize Model: building {displacement_fault_count} fault(s) and "
                     f"{group_count} stratigraphic group(s)",
                     log_level=0,
                 )
             except Exception:
                 pass
-        self._built_fault_data = self._copy_fault_data()
+        # With "constraints", the fault traces are not used
+        self._built_fault_data = self._copy_fault_data() if map_data else {}
         try:
-            # Update the model with stratigraphy
-            self.update_fault_features()
-            self.update_foliation_features()
+            if map_data:
+                # Update the model with stratigraphy
+                self.update_fault_features()
+                self.update_foliation_features()
             # after the stratigraphy, so each gets the same unconformity
             # regions as when the user added it
             self._build_manual_foliations()
@@ -1755,7 +1794,8 @@ class GeologicalModelManager(Observable):
             builder.set_not_up_to_date(self)
             updated.append(name)
 
-        if self.stratigraphic_column is not None:
+        map_data = self.uses_map_data
+        if map_data and self.stratigraphic_column is not None:
             isovalues = self.stratigraphic_column.get_isovalues()
             for group in self.stratigraphic_column.get_groups():
                 if qgisAttributeIsNone(group) is None:
@@ -1778,7 +1818,8 @@ class GeologicalModelManager(Observable):
                 continue
             refresh(name, data)
 
-        for name in set(self.faults) | set(self._built_fault_data):
+        # the fault traces are not used with "constraints"
+        for name in (set(self.faults) | set(self._built_fault_data)) if map_data else ():
             new_data = self.faults.get(name, {}).get('data')
             built_data = self._built_fault_data.get(name)
             if new_data is None and built_data is None:

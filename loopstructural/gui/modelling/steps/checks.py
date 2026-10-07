@@ -60,16 +60,16 @@ def check_data(data_manager, model_manager=None) -> StepCheck:
         todo.append("Set the bounding box.")
     if not data_manager.is_model_crs_valid():
         problems.append("The model CRS must be a projected CRS (in metres).")
-    if data_manager.get_layer_role(layer_roles.GEOLOGY) is None:
-        todo.append("Select the geology layer.")
-    if data_manager.get_layer_role(layer_roles.STRUCTURE) is None:
-        todo.append("Select the structure layer.")
     return StepCheck(tuple(problems), tuple(todo))
 
 
 def check_stratigraphy(data_manager, model_manager=None) -> StepCheck:
     """Step 2: the column and the results that come from it."""
     problems, todo = [], []
+    if data_manager.get_layer_role(layer_roles.GEOLOGY) is None:
+        todo.append("Select the geology layer.")
+    if data_manager.get_layer_role(layer_roles.STRUCTURE) is None:
+        todo.append("Select the structure layer.")
     unit_names = data_manager.get_stratigraphic_unit_names()
     if not unit_names:
         todo.append("Add units to the stratigraphic column.")

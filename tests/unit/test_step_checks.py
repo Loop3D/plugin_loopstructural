@@ -90,10 +90,13 @@ class TestDataStep:
         assert check.status == Status.NOT_STARTED
         assert 'Set the bounding box.' in check.todo
 
-    def test_all_inputs_set_is_done(self, dm):
+    def test_the_area_set_is_done(self, dm):
         dm.bounding_box_set = True
-        dm.layer_roles.values = {layer_roles.GEOLOGY: object(), layer_roles.STRUCTURE: object()}
         assert checks.check_data(dm).status == Status.DONE
+
+    def test_the_map_layers_are_not_a_todo_of_step_1(self, dm):
+        dm.bounding_box_set = True
+        assert checks.check_data(dm).todo == ()
 
     def test_a_geographic_crs_is_a_problem(self, dm):
         dm.crs_valid = False
@@ -101,10 +104,23 @@ class TestDataStep:
 
 
 class TestStratigraphyStep:
+    @pytest.fixture(autouse=True)
+    def map_layers(self, dm, request):
+        if request.node.name not in ('test_an_empty_column_is_not_started', 'test_missing_map_layers_are_a_todo'):
+            dm.layer_roles.values = {
+                layer_roles.GEOLOGY: object(),
+                layer_roles.STRUCTURE: object(),
+            }
+
     def test_an_empty_column_is_not_started(self, dm):
         check = checks.check_stratigraphy(dm)
         assert check.status == Status.NOT_STARTED
-        assert check.todo == ('Add units to the stratigraphic column.',)
+        assert 'Add units to the stratigraphic column.' in check.todo
+
+    def test_missing_map_layers_are_a_todo(self, dm):
+        todo = checks.check_stratigraphy(dm).todo
+        assert 'Select the geology layer.' in todo
+        assert 'Select the structure layer.' in todo
 
     def test_units_without_contacts_are_a_problem(self, dm):
         dm.units = ['a', 'b', 'c']
