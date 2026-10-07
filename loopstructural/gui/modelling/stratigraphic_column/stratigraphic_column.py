@@ -266,7 +266,7 @@ class StratColumnWidget(QWidget):
         """Show a line for each result that is out of date."""
         derived = self.data_manager.derived
         any_visible = False
-        for name, (row, label, button) in self._derived_rows.items():
+        for name, (row, label, _button) in self._derived_rows.items():
             visible = derived.is_out_of_date(name)
             # With "Use a contacts layer", the contacts are an input of the
             # user and not a result of the plugin.
