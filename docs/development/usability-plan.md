@@ -711,30 +711,30 @@ Rules:
 
 Tasks:
 
-- [ ] Read the three files and write a short list of what each class does and
+- [x] Read the three files and write a short list of what each class does and
       which methods are duplicated or not used. Remove dead code first.
-- [ ] Add an object registry class (no Qt) for the meshes and their source
+- [x] Add an object registry class (no Qt) for the meshes and their source
       information. Move the reads and writes of `viewer.meshes` to it.
-- [ ] Split `feature_list_widget.py`: move the mesh builders to a module without
+- [x] Split `feature_list_widget.py`: move the mesh builders to a module without
       Qt code (`mesh_builders.py`), and move the cross-section, block model and
       topography actions out of the tree widget.
-- [ ] Simplify `object_properties_widget.py`: one handler for the selected
+- [x] Simplify `object_properties_widget.py`: one handler for the selected
       object, and the controls shown for each source type, not a check for the
       object name in each method.
-- [ ] Simplify the object/model view (`object_list_widget.py`): group the
+- [x] Simplify the object/model view (`object_list_widget.py`): group the
       objects by source feature, and show the type and the isovalue of each
       object.
-- [ ] Add "Add isosurface..." to the menu of a model feature. The user enters
+- [x] Add "Add isosurface..." to the menu of a model feature. The user enters
       one or more values (a list, or a start, an end and a count). The default
       values come from the range of the scalar field. A pure function gives the
       values from the input.
-- [ ] Build the isosurfaces with the scalar field of the feature
+- [x] Build the isosurfaces with the scalar field of the feature
       (`feature.surfaces(value)`). Give each object a name with its value, for
       example `Fault_1_iso_0.50`. A value outside the range of the field gives
       a message in the message bar, not an error dialog.
-- [ ] Let the user change the value of an existing isosurface in the object
+- [x] Let the user change the value of an existing isosurface in the object
       properties. The object is built again.
-- [ ] Update the docs for the viewer.
+- [x] Update the docs for the viewer.
 
 Acceptance: the user adds five isosurfaces from one feature in one action. They
 show in the object list under that feature, each with its value. The user
