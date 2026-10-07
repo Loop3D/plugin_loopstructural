@@ -31,6 +31,17 @@ from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
 
+def _lookup_colour_ramp(ramp_name):
+    """Return the named QGIS colour ramp, or the first available ramp if it is not found."""
+    style = QgsStyle().defaultStyle()
+    ramp = style.colorRamp(ramp_name) if ramp_name else None
+    if ramp is None:
+        ramp_names = style.colorRampNames()
+        if ramp_names:
+            ramp = style.colorRamp(ramp_names[0])
+    return ramp
+
+
 def _colour_to_qcolor(colour):
     """Convert a stratigraphic unit colour (hex string, colour name, or RGB tuple/array) to a QColor."""
     if colour is None:
@@ -619,12 +630,7 @@ class ModellingDataManager:
             )
             return False
 
-        style = QgsStyle().defaultStyle()
-        ramp = style.colorRamp(ramp_name) if ramp_name else None
-        if ramp is None:
-            ramp_names = style.colorRampNames()
-            if ramp_names:
-                ramp = style.colorRamp(ramp_names[0])
+        ramp = _lookup_colour_ramp(ramp_name)
 
         n = len(unique_values)
         ranges = []
@@ -639,6 +645,114 @@ class ModellingDataManager:
         self.logger(
             message=f"Applied stratigraphic age field '{age_field_name}' and graduated "
             f"styling to layer '{layer.name()}'."
+        )
+        return True
+
+    def apply_stratigraphic_thickness_to_layer(self, layer, field_name, ramp_name=None):
+        """Write each unit's thickness onto a layer and style it with a graduated colour ramp.
+
+        Writes a 'strat_thickness' field to ``layer`` holding the thickness
+        set for the matching unit in the stratigraphic column (matched via
+        ``field_name``), then applies a graduated renderer over that field.
+        Features that do not match a unit are left empty.
+
+        Parameters
+        ----------
+        layer : QgsVectorLayer
+            The layer to update (e.g. the geological units/geology layer).
+        field_name : str
+            Name of the field on ``layer`` holding the stratigraphic unit name.
+        ramp_name : str, optional
+            Name of a QGIS colour ramp (from QgsStyle) to use for the
+            graduated renderer. Falls back to any available ramp if not found.
+
+        Returns
+        -------
+        bool
+            True if the field was written and the renderer applied, False otherwise.
+        """
+        if layer is None or not field_name:
+            self.logger(
+                message="No layer/unit name field set, cannot apply stratigraphic thickness."
+            )
+            return False
+        if layer.fields().indexFromName(field_name) < 0:
+            self.logger(message=f"Field '{field_name}' not found on layer '{layer.name()}'.")
+            return False
+
+        thicknesses = {}
+        for unit in self._stratigraphic_column.order:
+            if unit.element_type != StratigraphicColumnElementType.UNIT:
+                continue
+            if unit.thickness is None:
+                continue
+            thicknesses[unit.name] = float(unit.thickness)
+        if not thicknesses:
+            self.logger(
+                message="Stratigraphic column has no units, cannot apply stratigraphic thickness."
+            )
+            return False
+
+        thickness_field_name = "strat_thickness"
+        try:
+            from qgis.core import QgsField
+
+            from loopstructural.gui.compatibility import QVariantCompat
+
+            layer.startEditing()
+            if layer.fields().indexFromName(thickness_field_name) < 0:
+                layer.dataProvider().addAttributes(
+                    [QgsField(thickness_field_name, QVariantCompat.Double)]
+                )
+                layer.updateFields()
+            thickness_index = layer.fields().indexFromName(thickness_field_name)
+            for feature in layer.getFeatures():
+                value = feature[field_name]
+                unit_name = None if value is None else str(value).strip()
+                layer.changeAttributeValue(
+                    feature.id(), thickness_index, thicknesses.get(unit_name)
+                )
+            if not layer.commitChanges():
+                raise RuntimeError("; ".join(layer.commitErrors()))
+        except Exception as err:
+            layer.rollBack()
+            self.logger(message=f"Failed to write stratigraphic thickness onto layer: {err}")
+            return False
+
+        unique_values = set()
+        for feature in layer.getFeatures():
+            value = feature[thickness_field_name]
+            if value is None or (hasattr(value, 'isNull') and value.isNull()):
+                continue
+            unique_values.add(float(value))
+        unique_values = sorted(unique_values)
+
+        if not unique_values:
+            self.logger(
+                message="No features matched a stratigraphic unit, cannot style layer by thickness."
+            )
+            return False
+
+        ramp = _lookup_colour_ramp(ramp_name)
+
+        # One class per thickness value, with the class limits half-way
+        # between adjacent values so that each value is in only one class.
+        minimum = unique_values[0]
+        span = unique_values[-1] - minimum
+        ranges = []
+        for i, value in enumerate(unique_values):
+            lower = value if i == 0 else (unique_values[i - 1] + value) / 2
+            upper = value if i == len(unique_values) - 1 else (value + unique_values[i + 1]) / 2
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            if ramp is not None:
+                symbol.setColor(ramp.color((value - minimum) / span if span > 0 else 0))
+            ranges.append(QgsRendererRange(lower, upper, symbol, f"{value:g}"))
+
+        layer.setRenderer(QgsGraduatedSymbolRenderer(thickness_field_name, ranges))
+        layer.triggerRepaint()
+        self.logger(
+            message=f"Applied stratigraphic thickness field '{thickness_field_name}' and "
+            f"graduated styling to layer '{layer.name()}'."
         )
         return True
 

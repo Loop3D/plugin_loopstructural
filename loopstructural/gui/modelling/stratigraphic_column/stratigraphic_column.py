@@ -1,5 +1,5 @@
 from LoopStructural.modelling.core.stratigraphic_column import StratigraphicColumnElementType
-from qgis.core import QgsApplication, QgsMapLayerProxyModel, QgsStyle
+from qgis.core import QgsApplication, QgsExpression, QgsMapLayerProxyModel, QgsStyle
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtGui import QIcon
@@ -67,10 +67,15 @@ class StratColumnWidget(QWidget):
         # layer/field is selected, so the name-match warning is skipped.
         self._known_unit_names = None
 
+        # The layer whose features were selected to highlight the selected
+        # unit on the map, so the selection can be cleared later.
+        self._highlighted_layer = None
+
         # Main list widget
         self.unitList = QListWidget()
         self.unitList.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.unitList.model().rowsMoved.connect(self.update_order)
+        self.unitList.itemSelectionChanged.connect(self.highlight_selected_unit)
         layout.addWidget(self.unitList)
 
         # A single row of icon-only actions for building/clearing the column.
@@ -170,6 +175,18 @@ class StratColumnWidget(QWidget):
         )
         applyAgeButton.clicked.connect(self.apply_age_to_layer)
         ageRow.addWidget(applyAgeButton)
+
+        applyThicknessButton = self._make_tool_button(
+            "mActionMeasure.svg", "Apply Stratigraphic Thickness to Map Layer"
+        )
+        applyThicknessButton.setToolTip(
+            "Apply Stratigraphic Thickness to Map Layer\n"
+            "Write a 'strat_thickness' field (the thickness of each unit in the "
+            "column) onto the selected layer above and style it with a graduated "
+            "colour ramp."
+        )
+        applyThicknessButton.clicked.connect(self.apply_thickness_to_layer)
+        ageRow.addWidget(applyThicknessButton)
         layout.addLayout(ageRow)
 
         self._guess_units_layer()
@@ -413,6 +430,7 @@ class StratColumnWidget(QWidget):
         """Persist and re-validate when the unit-name field selection changes."""
         self._persist_units_layer_selection()
         self._revalidate_unit_names()
+        self.highlight_selected_unit()
 
     def _on_units_layer_changed(self, layer):
         """Update the field combo box when the units layer changes."""
@@ -424,6 +442,7 @@ class StratColumnWidget(QWidget):
                 self.unitsLayerFieldComboBox.setField(unit_match)
         self._persist_units_layer_selection()
         self._revalidate_unit_names()
+        self.highlight_selected_unit()
 
     def _get_known_unit_names(self):
         """Return the set of exact unit-name values in the selected geology layer/field.
@@ -453,6 +472,47 @@ class StratColumnWidget(QWidget):
         for widget, _ in self._widget_cache.values():
             if hasattr(widget, 'set_known_unit_names'):
                 widget.set_known_unit_names(self._known_unit_names)
+
+    def highlight_selected_unit(self):
+        """Select the features of the selected unit in the units layer, so
+        that QGIS highlights them on the map.
+
+        Clears the highlight when no unit row is selected (for example an
+        unconformity row) or when no units layer/field is set.
+        """
+        try:
+            items = self.unitList.selectedItems()
+        except RuntimeError:
+            # Widget was deleted
+            return
+        widget = self.unitList.itemWidget(items[0]) if items else None
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+
+        self._clear_unit_highlight()
+        if (
+            not isinstance(widget, StratigraphicUnitWidget)
+            or not widget.name
+            or layer is None
+            or not field_name
+            or layer.fields().indexFromName(field_name) < 0
+        ):
+            return
+        expression = f"{QgsExpression.quotedColumnRef(field_name)} = {QgsExpression.quotedValue(widget.name)}"
+        layer.selectByExpression(expression)
+        self._highlighted_layer = layer
+
+    def _clear_unit_highlight(self):
+        """Remove the feature selection made by highlight_selected_unit."""
+        layer = self._highlighted_layer
+        self._highlighted_layer = None
+        if layer is None:
+            return
+        try:
+            layer.removeSelection()
+        except RuntimeError:
+            # Layer was removed from the project
+            pass
 
     def apply_colours_to_layer(self):
         """Push the stratigraphic column's colours onto the selected units layer."""
@@ -514,6 +574,39 @@ class StratColumnWidget(QWidget):
                 "units, or no features matched a stratigraphic unit.",
             )
 
+    def apply_thickness_to_layer(self):
+        """Write each unit's thickness onto the selected units layer and style it by a graduated ramp."""
+        if not self.data_manager:
+            print("Error: Data manager is not initialized.")
+            return
+        layer = self.unitsLayerComboBox.currentLayer()
+        field_name = self.unitsLayerFieldComboBox.currentField()
+        if layer is None or not field_name:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                "Please select a units layer and unit name field above.",
+            )
+            return
+        ramp_name = self.strat_ageColorRampComboBox.currentText()
+        applied = self.data_manager.apply_stratigraphic_thickness_to_layer(
+            layer, field_name, ramp_name=ramp_name
+        )
+        if applied:
+            QMessageBox.information(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                f"Applied stratigraphic thickness and graduated styling to layer "
+                f"'{layer.name()}'.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Apply Stratigraphic Thickness to Map Layer",
+                "Could not apply stratigraphic thickness. The stratigraphic column may "
+                "have no units, or no features matched a stratigraphic unit.",
+            )
+
     def add_unit(self, *, unit_data=None, create_new=True):
         if unit_data is None:
             unit_data = {'type': 'unit', 'name': ''}
@@ -545,6 +638,7 @@ class StratColumnWidget(QWidget):
         unit_widget.nameChanged.connect(
             lambda: self.update_element(unit_widget)
         )  # Connect name change signal
+        unit_widget.nameChanged.connect(lambda: self._on_unit_name_changed(unit_widget))
 
         unit_widget.thicknessChanged.connect(
             lambda: self.update_element(unit_widget)
@@ -561,6 +655,7 @@ class StratColumnWidget(QWidget):
         item.setSizeHint(unit_widget.sizeHint())
         self._add_list_item(item, at_top=create_new)
         self.unitList.setItemWidget(item, unit_widget)
+        unit_widget.focused.connect(lambda: self.unitList.setCurrentItem(item))
         unit_widget.setData(unit_data)  # Set data for the unit widget
         unit_widget.set_known_unit_names(self._known_unit_names)
 
@@ -607,6 +702,15 @@ class StratColumnWidget(QWidget):
 
         # Cache the widget for efficient updates
         self._widget_cache[unconformity.uuid] = (unconformity_widget, item)
+
+    def _on_unit_name_changed(self, unit_widget):
+        """Update the map highlight when the selected unit is renamed."""
+        try:
+            items = self.unitList.selectedItems()
+        except RuntimeError:
+            return
+        if items and self.unitList.itemWidget(items[0]) is unit_widget:
+            self.highlight_selected_unit()
 
     def _add_list_item(self, item, *, at_top):
         """Add a row to the list. A new element goes on top of the column
