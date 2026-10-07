@@ -169,6 +169,27 @@ class ExportPanel(QgsCollapsibleGroupBox):
         )
         for tab_index in range(self.tabs.count()):
             self.tabs.widget(tab_index).setEnabled(self._model_solved and self._task is None)
+        # A model of faults only has no units: no stratigraphic surfaces, no block model
+        has_units = not solved or self._has_stratigraphic_features()
+        if has_units and not self.surface_strat.isEnabled():
+            self.surface_strat.setChecked(True)
+        self.surface_strat.setEnabled(has_units)
+        if not has_units:
+            self.surface_strat.setChecked(False)
+        self.tabs.setTabEnabled(1, has_units)
+        if not has_units:
+            self.hint.setText("The model has faults only, so the block model is not offered.")
+
+    def _has_stratigraphic_features(self):
+        """Return False if every feature of the model is a fault."""
+        manager = self.model_manager
+        if manager is None:
+            return True
+        faults = set(getattr(manager, 'faults', {}) or {}) | set(
+            getattr(manager, 'parametric_faults', {}) or {}
+        )
+        names = [f.name for f in manager.features() if not f.name.startswith('__')]
+        return any(name not in faults for name in names)
 
     # -- actions ------------------------------------------------------------
 
