@@ -13,8 +13,10 @@ from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.gui.messages import push_success
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
+from ...main import derived_data, layer_roles
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.vectorLayerWrapper import addGeoDataFrameToproject
+from .layer_defaults import adopt_geology_role, apply_layer_role_defaults
 
 
 class ThicknessCalculatorWidget(QWidget):
@@ -77,6 +79,7 @@ class ThicknessCalculatorWidget(QWidget):
         # Set up field combo boxes
         self._setup_field_combo_boxes()
         self._restore_selection()
+        self._apply_role_defaults()
 
         # Initial state update
         self._on_calculator_type_changed()
@@ -84,6 +87,33 @@ class ThicknessCalculatorWidget(QWidget):
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
         self._debug = debug_manager
+
+    def _apply_role_defaults(self):
+        """Show the layers of the shared roles as the defaults of the tool."""
+        if not self.data_manager:
+            return
+        apply_layer_role_defaults(
+            self.data_manager,
+            {
+                layer_roles.GEOLOGY: self.geologyLayerComboBox,
+                layer_roles.STRUCTURE: self.structureLayerComboBox,
+                layer_roles.DEM: self.dtmLayerComboBox,
+            },
+            unit_field_combo=self.unitNameFieldComboBox,
+        )
+        if self.data_manager.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_LAYER:
+            contacts = self.data_manager.layer_roles.get(layer_roles.BASAL_CONTACTS)
+            if contacts is not None:
+                self.basalContactsComboBox.setLayer(contacts)
+                config = self.data_manager.get_basal_contacts() or {}
+                field = config.get('unitname_field')
+                if field:
+                    self.basalUnitNameFieldComboBox.setField(field)
+        else:
+            # The contacts are calculated from the geology layer and the
+            # column when no layer is selected. A user can select a layer
+            # for one run.
+            self.basalContactsComboBox.setLayer(None)
 
     def _export_layer_for_debug(self, layer, name_prefix: str):
         # Prefer using DebugManager.export_layer if available
@@ -305,6 +335,7 @@ class ThicknessCalculatorWidget(QWidget):
                 if self.crossSectionLayerComboBox.currentLayer()
                 else None
             ),
+            'calculator_type': self.calculatorTypeComboBox.currentText(),
             'calculator_type_index': self.calculatorTypeComboBox.currentIndex(),
             'orientation_type_index': self.orientationTypeComboBox.currentIndex(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
@@ -371,6 +402,26 @@ class ThicknessCalculatorWidget(QWidget):
         # Prepare parameters
         params = self.get_parameters()
 
+        adopt_geology_role(
+            self.data_manager,
+            geology=self.geologyLayerComboBox.currentLayer(),
+            unit_field=self.unitNameFieldComboBox.currentField(),
+        )
+        # The inputs of this run, read before the run starts. A change during
+        # the run makes the result out of date.
+        self._run_inputs = (
+            self.data_manager.thickness_inputs(
+                geology=self.geologyLayerComboBox.currentLayer(),
+                unit_field=self.unitNameFieldComboBox.currentField(),
+                contacts_layer=self.basalContactsComboBox.currentLayer(),
+                calculator_type=calculator_type,
+                structure=self.structureLayerComboBox.currentLayer(),
+                cross_sections=self.crossSectionLayerComboBox.currentLayer(),
+            )
+            if self.data_manager
+            else None
+        )
+
         def target(progress_callback):
             return calculate_thickness(updater=progress_callback, **params)
 
@@ -410,69 +461,25 @@ class ThicknessCalculatorWidget(QWidget):
             thicknesses = result.get('thicknesses')
             lines = result.get('lines')
             location_tracking = result.get('location_tracking')
-            # If thicknesses were calculated, update the stratigraphic column units
-            try:
-                if thicknesses is not None and getattr(self, 'data_manager', None):
-                    # Prefer median thickness if available, fallback to mean
-                    thickness_col = (
-                        'ThicknessMedian'
-                        if 'ThicknessMedian' in getattr(thicknesses, 'columns', [])
-                        else (
-                            'ThicknessMean'
-                            if 'ThicknessMean' in getattr(thicknesses, 'columns', [])
-                            else None
-                        )
-                    )
-                    if thickness_col is not None:
-                        for _, row in thicknesses.iterrows():
-                            unit_name = row.get('name') or row.get('UNITNAME')
-                            if not unit_name:
-                                continue
-                            try:
-                                value = row.get(thickness_col)
-                            except Exception:
-                                value = None
-                            # Skip invalid values (e.g. -1 means not calculated)
-                            try:
-                                is_invalid = pd.isna(value) or float(value) == -1
-                            except Exception:
-                                is_invalid = value is None
-                            if is_invalid:
-                                continue
-                            # Find unit in stratigraphic column and update thickness
-                            try:
-                                strat_col = self.data_manager.get_stratigraphic_column()
-                                unit = strat_col.get_unit_by_name(unit_name)
-                                if unit is not None:
-                                    unit.thickness = float(value)
-                            except Exception as err:
-                                # Log but don't fail the widget
-                                try:
-                                    if getattr(self, '_debug', None):
-                                        self._debug.plugin.log(
-                                            message=f"Failed to update stratigraphic unit thickness for {unit_name}: {err}",
-                                            log_level=2,
-                                        )
-                                except Exception:
-                                    pass
-                    # Notify any stratigraphic column callbacks
-                    try:
-                        if getattr(self.data_manager, 'stratigraphic_column_callback', None):
-                            self.data_manager.stratigraphic_column_callback()
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+            skipped = []
+            # If thicknesses were calculated, update the stratigraphic column units.
+            # A thickness that the user typed does not change.
+            if thicknesses is not None and self.data_manager:
+                skipped = self._apply_thicknesses(thicknesses)
+            if self.data_manager and getattr(self, '_run_inputs', None) is not None:
+                self.data_manager.derived.record(derived_data.THICKNESS, inputs=self._run_inputs)
             # if thicknesses is not None:
             #     addGeoDataFrameToproject(thicknesses, "Thickness Results")
             if lines is not None:
                 addGeoDataFrameToproject(lines, "Thickness Lines")
             if location_tracking is not None:
                 addGeoDataFrameToproject(location_tracking, "Thickness Locations")
-            push_success(
-                "Thickness Calculator",
-                "Thickness calculation completed successfully and added to project.",
-            )
+            message = "Thickness calculation completed successfully and added to project."
+            if skipped:
+                message += (
+                    "\n\nThese units keep the thickness that you typed: " + ", ".join(skipped) + "."
+                )
+            push_success("Thickness Calculator", message)
             self.task_succeeded.emit()
             return
 
@@ -487,6 +494,35 @@ class ThicknessCalculatorWidget(QWidget):
 
         push_success("Thickness Calculator", f"Thickness calculation completed: {result}")
         self.task_succeeded.emit()
+
+    def _apply_thicknesses(self, thicknesses):
+        """Set the calculated thicknesses on the units of the column.
+
+        Returns the names of the units that keep a typed thickness.
+        """
+        # Prefer median thickness if available, fallback to mean
+        columns = getattr(thicknesses, 'columns', [])
+        if 'ThicknessMedian' in columns:
+            thickness_col = 'ThicknessMedian'
+        elif 'ThicknessMean' in columns:
+            thickness_col = 'ThicknessMean'
+        else:
+            return []
+        values = {}
+        for _, row in thicknesses.iterrows():
+            unit_name = row.get('name') or row.get('UNITNAME')
+            if not unit_name:
+                continue
+            value = row.get(thickness_col)
+            # Skip invalid values (e.g. -1 means not calculated)
+            try:
+                if pd.isna(value) or float(value) == -1:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            values[unit_name] = float(value)
+        _, skipped = self.data_manager.apply_calculated_thicknesses(values)
+        return skipped
 
     def _on_calculator_error(self, traceback_text):
         finish_background_task(
