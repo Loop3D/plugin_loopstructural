@@ -66,13 +66,18 @@ def check_data(data_manager, model_manager=None) -> StepCheck:
 def check_stratigraphy(data_manager, model_manager=None) -> StepCheck:
     """Step 2: the column and the results that come from it."""
     problems, todo = [], []
+    unit_names = data_manager.get_stratigraphic_unit_names()
+    if not unit_names:
+        # The step is optional: a model of faults only has no column
+        todo.append(
+            "Add units to the stratigraphic column. This step is optional if you model "
+            "only faults."
+        )
+        return StepCheck(tuple(problems), tuple(todo))
     if data_manager.get_layer_role(layer_roles.GEOLOGY) is None:
         todo.append("Select the geology layer.")
     if data_manager.get_layer_role(layer_roles.STRUCTURE) is None:
         todo.append("Select the structure layer.")
-    unit_names = data_manager.get_stratigraphic_unit_names()
-    if not unit_names:
-        todo.append("Add units to the stratigraphic column.")
     problems.extend(_out_of_date_messages(data_manager))
 
     contact_units = set(data_manager.get_unique_basal_units())

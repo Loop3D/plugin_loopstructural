@@ -1077,6 +1077,10 @@ class GeologicalModelManager(Observable):
         and the basal contacts and structural orientations data.
         This method will automatically add unconformities based on the stratigraphic column.
         """
+        # A model with faults only has no column, or a column with no units
+        if self.stratigraphic_column is None or not self.stratigraphic_column.get_groups():
+            self._emit('foliation_features_updated')
+            return
         stratigraphic_column = {}
         # Take each unit's training value straight from `get_isovalues()`
         # (LoopStructural core), which is what labels the extracted
@@ -1680,9 +1684,10 @@ class GeologicalModelManager(Observable):
     @property
     def valid(self):
         valid = True
-        if len(self.groups) == 0:
+        # A model with faults only has no groups and no stratigraphy
+        if len(self.groups) == 0 and len(self.faults) == 0:
             valid = False
-        if len(self.stratigraphy) == 0:
+        if len(self.stratigraphy) == 0 and len(self.faults) == 0:
             valid = False
         if len(self.faults) > 0:
             for _fault_name, fault_data in self.faults.items():

@@ -115,9 +115,16 @@ class TestStratigraphyStep:
     def test_an_empty_column_is_not_started(self, dm):
         check = checks.check_stratigraphy(dm)
         assert check.status == Status.NOT_STARTED
-        assert 'Add units to the stratigraphic column.' in check.todo
+        assert any(t.startswith('Add units to the stratigraphic column.') for t in check.todo)
+        assert 'optional' in check.todo[0]
+
+    def test_an_empty_column_does_not_ask_for_layers_or_contacts(self, dm):
+        todo = checks.check_stratigraphy(dm).todo
+        assert len(todo) == 1
+        assert not checks.check_stratigraphy(dm).problems
 
     def test_missing_map_layers_are_a_todo(self, dm):
+        dm.units = ['a']
         todo = checks.check_stratigraphy(dm).todo
         assert 'Select the geology layer.' in todo
         assert 'Select the structure layer.' in todo
