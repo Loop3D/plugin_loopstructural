@@ -79,6 +79,14 @@ class StepBar(QWidget):
     def count(self):
         return len(self._buttons)
 
+    def set_step_visible(self, key, visible):
+        """Show or hide the button of a step."""
+        self._buttons[self._keys.index(key)].setVisible(visible)
+
+    def is_step_visible(self, key):
+        # `isVisibleTo` does not depend on the visibility of the parent
+        return self._buttons[self._keys.index(key)].isVisibleTo(self)
+
     def current_index(self):
         return self._group.checkedId()
 

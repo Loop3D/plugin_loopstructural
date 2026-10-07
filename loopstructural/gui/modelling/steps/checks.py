@@ -6,6 +6,7 @@ often. They do not change the state.
 """
 
 from loopstructural.main import derived_data, layer_roles
+from loopstructural.main.workflow_mode import WORKFLOW_MODE_CONSTRAINTS
 
 from .status import StepCheck
 
@@ -106,7 +107,9 @@ def check_model(data_manager, model_manager=None) -> StepCheck:
         problems.append("Set the bounding box in step 1.")
     if not data_manager.is_model_crs_valid():
         problems.append("The model CRS must be a projected CRS (in metres).")
-    problems.extend(_out_of_date_messages(data_manager))
+    # With constraints only, there is no column, so no result comes from it
+    if getattr(data_manager, 'workflow_mode', None) != WORKFLOW_MODE_CONSTRAINTS:
+        problems.extend(_out_of_date_messages(data_manager))
     changed = data_manager.get_changed_layers()
     if changed:
         problems.append("Input layers changed after the model was built: " + ", ".join(changed))

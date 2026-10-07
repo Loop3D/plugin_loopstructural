@@ -33,6 +33,7 @@ from .derived_data import DerivedData, ThicknessSources
 from .layer_roles import LayerRoles
 from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
+from .workflow_mode import WORKFLOW_MODE_MAP, WORKFLOW_MODES
 
 
 def _lookup_colour_ramp(ramp_name):
@@ -169,6 +170,10 @@ class ModellingDataManager:
         # For each derived result, the inputs of the last run. See
         # `derived_data` for how an out-of-date result is found.
         self.derived = DerivedData()
+        # How the user builds the model: from a geological map, or by
+        # interpolating surfaces from constraints. See `gui.modelling.steps.build_plan`.
+        self.workflow_mode = WORKFLOW_MODE_MAP
+        self._workflow_mode_callbacks = []
         self.derived.register(derived_data.BASAL_CONTACTS, self.basal_contacts_inputs)
         self.derived.register(derived_data.THICKNESS, self.thickness_inputs)
         self.derived.register(derived_data.STYLED_FIELDS, self.styled_fields_inputs)
@@ -300,6 +305,20 @@ class ModellingDataManager:
     def set_debug_manager(self, debug_manager):
         """Set the debug manager for the tools that the data manager can start."""
         self.debug_manager = debug_manager
+
+    def set_workflow_mode(self, mode):
+        """Set the start choice of the user and tell the listeners if it changed."""
+        if mode not in WORKFLOW_MODES:
+            raise ValueError(f"Unknown workflow mode '{mode}'.")
+        if mode != self.workflow_mode:
+            self.workflow_mode = mode
+            for callback in list(self._workflow_mode_callbacks):
+                callback(mode)
+
+    def add_workflow_mode_callback(self, callback):
+        """Call ``callback(mode)`` each time the start choice changes."""
+        if callback not in self._workflow_mode_callbacks:
+            self._workflow_mode_callbacks.append(callback)
 
     def _on_layer_role_changed(self, role, value):
         """A layer role changed: the derived results can be out of date."""
@@ -1326,6 +1345,35 @@ class ModellingDataManager:
         model data was last read from them."""
         return sorted(self._watched_layers[i][0].name() for i in self._changed_layer_ids)
 
+    def sync_extra_constraints(self):
+        """Read the layers of the constraints that the user added to generated features.
+
+        A generated feature is one that the stratigraphic column makes. Its
+        table of data layers can have rows of the user. The model manager adds
+        them to the data of the column when it builds the feature. A feature
+        that the user added (a manual foliation) has its own build, so it is
+        not in this list.
+        """
+        if self._model_manager is None:
+            return
+        manual = self._model_manager.manual_foliations
+        generated = set(self._model_manager.generated_feature_names())
+        model_crs = self.get_model_crs()
+        extras = {}
+        for name, entries in self.feature_data.items():
+            if name in manual or name not in generated:
+                continue
+            rows = {}
+            for key, entry in entries.items():
+                if entry.get('processed') or entry.get('layer') is None:
+                    continue
+                row = dict(entry)
+                row['df'] = qgsLayerToGeoDataFrame(entry['layer'], target_crs=model_crs)
+                rows[key] = row
+            if rows:
+                extras[name] = {'data': rows, 'use_z_coordinate': True}
+        self._model_manager.extra_constraints = extras
+
     def reload_changed_layers(self):
         """Read the model data again from the input layers that changed.
 
@@ -1371,6 +1419,7 @@ class ModellingDataManager:
         if self._model_manager is None:
             raise RuntimeError("Model manager is not set.")
         self.reload_changed_layers()
+        self.sync_extra_constraints()
         return self._model_manager.refresh_feature_data()
 
     def get_layers_outside_bounding_box(self):
@@ -1505,12 +1554,28 @@ class ModellingDataManager:
     def clear_stratigraphic_column(self):
         self._stratigraphic_column.clear()
 
-    def update_stratigraphy(self):
-        """Update the foliation features in the model manager."""
+    def update_stratigraphy(self, basal_contacts=None, unit_name_field=None):
+        """Update the foliation features in the model manager.
+
+        Parameters
+        ----------
+        basal_contacts : geopandas.GeoDataFrame, optional
+            Contacts that the model uses in place of the basal contacts layer.
+            A build with "Calculate from geology polygons" gives the extracted
+            contacts here, so that the model does not read the project layer.
+        unit_name_field : str, optional
+            The unit name field of ``basal_contacts``.
+        """
         self.logger(message="Updating stratigraphy...", log_level=4)
         if self._model_manager is not None:
             model_crs = self.get_model_crs()
-            if self._basal_contacts is not None:
+            if basal_contacts is not None:
+                self._model_manager.update_contact_traces(
+                    basal_contacts,
+                    unit_name_field=unit_name_field,
+                    use_z_coordinate=False,
+                )
+            elif self._basal_contacts is not None:
                 self._model_manager.update_contact_traces(
                     qgsLayerToGeoDataFrame(self._basal_contacts['layer'], target_crs=model_crs),
                     unit_name_field=self._basal_contacts['unitname_field'],
@@ -1599,6 +1664,7 @@ class ModellingDataManager:
                     unit_data = self._model_manager.get_stratigraphy_entry(unit.name)
                     if not unit_data:
                         continue
+                    suffix = 'detached' if self._model_manager.is_detached(group.name) else 'auto'
                     contact = unit_data.get('contact')
                     if (
                         contact is not None
@@ -1608,8 +1674,9 @@ class ModellingDataManager:
                         self._add_processed_feature_row(
                             group.name,
                             self._basal_contacts.get('layer'),
-                            'Contact (auto)',
+                            f'Contact ({suffix})',
                             unit.name,
+                            suffix,
                         )
                     orientations = unit_data.get('orientations')
                     if (
@@ -1620,8 +1687,9 @@ class ModellingDataManager:
                         self._add_processed_feature_row(
                             group.name,
                             self._structural_orientations.get('layer'),
-                            'Orientation (auto)',
+                            f'Orientation ({suffix})',
                             unit.name,
+                            suffix,
                         )
 
         if self._fault_traces is not None:
@@ -1635,7 +1703,9 @@ class ModellingDataManager:
                         fault_name,
                     )
 
-    def _add_processed_feature_row(self, feature_name, layer, type_label, source_name):
+    def _add_processed_feature_row(
+        self, feature_name, layer, type_label, source_name, suffix='auto'
+    ):
         """Add a single read-only, workflow-derived row to `feature_data`.
 
         Keyed on a string distinct from a plain layer name so a processed row
@@ -1644,7 +1714,7 @@ class ModellingDataManager:
         """
         if layer is None:
             return
-        display_name = f"{source_name} ({layer.name()}, auto)"
+        display_name = f"{source_name} ({layer.name()}, {suffix})"
         self.feature_data[feature_name][display_name] = {
             'layer': layer,
             'layer_name': display_name,
@@ -1701,6 +1771,7 @@ class ModellingDataManager:
         self.layer_roles.clear()
         self.thickness_sources.clear()
         self.derived.clear()
+        self.set_workflow_mode(WORKFLOW_MODE_MAP)
 
         self.set_dem_layer(None)
         self.use_dem = True
@@ -1741,6 +1812,8 @@ class ModellingDataManager:
             self._model_manager.save_model(str(model_path))
             state['model_file'] = model_path.name
             state['manual_foliations'] = self._model_manager.manual_foliations_to_dict()
+            state['detached_features'] = self._model_manager.detached_to_dict()
+            state['parametric_faults'] = self._model_manager.parametric_faults_to_dict()
 
         with open(path, 'w') as f:
             json.dump(state, f, indent=2)
@@ -1773,6 +1846,8 @@ class ModellingDataManager:
             # the pickled model already has these features; this lets
             # Initialize Model build them again
             self._model_manager.manual_foliations_from_dict(state.get('manual_foliations', {}))
+            self._model_manager.detached_from_dict(state.get('detached_features', {}))
+            self._model_manager.parametric_faults_from_dict(state.get('parametric_faults', {}))
         # the data was just read from the layers
         self._changed_layer_ids.clear()
         self.refresh_layer_watchers()
@@ -1856,6 +1931,7 @@ class ModellingDataManager:
             'use_project_crs': self._use_project_crs,
             'layer_roles': self.layer_roles.to_dict(),
             'derived_data': self.derived.to_dict(),
+            'workflow_mode': self.workflow_mode,
             'thickness_sources': self.thickness_sources.to_dict(),
         }
 
@@ -1876,6 +1952,9 @@ class ModellingDataManager:
             self.layer_roles.contacts_source = layer_roles.CONTACTS_FROM_GEOLOGY
         self.thickness_sources.from_dict(data.get('thickness_sources'))
         self.derived.from_dict(data.get('derived_data'))
+        # A state file of an older version has no start choice
+        mode = data.get('workflow_mode')
+        self.set_workflow_mode(mode if mode in WORKFLOW_MODES else WORKFLOW_MODE_MAP)
 
     def from_dict(self, data):
         """Load data from a dictionary."""

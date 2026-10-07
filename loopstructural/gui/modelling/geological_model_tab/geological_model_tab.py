@@ -1,3 +1,5 @@
+import html
+
 from LoopStructural.modelling.features import FeatureType
 from qgis.PyQt.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
@@ -16,7 +18,12 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ....main.derived_refresh import DerivedRefresh, DerivedRefreshError, names_to_refresh
 from ....main.model_manager import ModelSolveCancelled
+from ....main.workflow_mode import DEFAULT_WORKFLOW_MODE, WORKFLOW_MODE_CONSTRAINTS
+from ...messages import push_info
+from ..steps import build_plan
+from .add_fault_dialog import AddFaultDialog
 from .add_foliation_dialog import AddFoliationDialog
 from .add_unconformity_dialog import AddUnconformityDialog
 from .feature_details_panel import (
@@ -67,14 +74,14 @@ _MODEL_STATE_LABELS = {
     'solved': "Model status: solved",
     'stale': (
         "Model status: faults, stratigraphic column or input data changed — "
-        "re-run Initialize Model"
+        "rebuild the model"
     ),
 }
 
-# Solve Model only rebuilds interpolators for features that already exist; it
-# can't apply a fault topology edit (that requires re-running Initialize
-# Model, see GeologicalModelManager._on_fault_topology_changed), so it stays
-# disabled outside these two states.
+# Solving only rebuilds interpolators for features that already exist; it
+# can't apply a fault topology edit (that requires a build, see
+# GeologicalModelManager._on_fault_topology_changed), so the primary button
+# builds in the other states.
 _SOLVABLE_STATES = {'initialized', 'solved'}
 
 
@@ -153,17 +160,18 @@ class GeologicalModelTab(QWidget):
         splitter.setStretchFactor(1, 0)  # Feature details panel
         splitter.setOrientation(Qt.Orientation.Horizontal)  # Add horizontal slider
 
-        # Initialize / Solve Model buttons + a status summary of where the
-        # model currently is: empty -> initialized (unsolved) -> solved.
-        self.initializeModelButton = QPushButton("Initialize Model")
-        self.solveModelButton = QPushButton("Solve Model")
-        self.solveModelButton.setEnabled(False)  # nothing to solve until initialized
+        # One primary button. Its text and action come from the model state
+        # (see build_plan.choose_primary_action). The status label shows where
+        # the model is: empty -> initialized (unsolved) -> solved.
+        self.primaryButton = QPushButton("Build model")
+        self.primaryButton.clicked.connect(self.on_primary_clicked)
+        self._primary_action = build_plan.PrimaryAction(build_plan.ACTION_BUILD, "Build model")
+        self._task_running = False
         self.modelStatusLabel = QLabel(_MODEL_STATE_LABELS['empty'])
 
         buttonRow = QHBoxLayout()
         buttonRow.setContentsMargins(0, 0, 0, 0)
-        buttonRow.addWidget(self.initializeModelButton)
-        buttonRow.addWidget(self.solveModelButton)
+        buttonRow.addWidget(self.primaryButton)
         buttonRow.addStretch(1)
         buttonRow.addWidget(self.modelStatusLabel)
         buttonRowWidget = QWidget()
@@ -173,36 +181,17 @@ class GeologicalModelTab(QWidget):
         buttonRowWidget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         mainLayout.insertWidget(0, buttonRowWidget, 0)
 
-        # Shown when an input layer changed after the model data was read
-        # from it. "Update Model Data" puts the new data into the existing
-        # features, so the changes made to them are kept (Initialize Model
-        # builds every feature again).
-        self.layerChangedLabel = QLabel()
-        self.layerChangedLabel.setWordWrap(True)
-        self.updateModelDataButton = QPushButton("Update Model Data")
-        self.updateModelDataButton.setToolTip(
-            "Read the changed layers again and put the new data into the current "
-            "features. Solve Model then uses the new data."
-        )
-        self.updateModelDataButton.clicked.connect(self.update_model_data)
-        layerChangedRow = QHBoxLayout()
-        layerChangedRow.setContentsMargins(0, 0, 0, 0)
-        layerChangedRow.addWidget(self.layerChangedLabel, 1)
-        layerChangedRow.addWidget(self.updateModelDataButton)
-        self.layerChangedWidget = QWidget()
-        self.layerChangedWidget.setLayout(layerChangedRow)
-        self.layerChangedWidget.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
-        )
-        mainLayout.insertWidget(1, self.layerChangedWidget, 0)
-        self.layerChangedWidget.hide()
+        # The problems of all steps. They show before the build, so the user
+        # sees why a build can fail or can give a poor model.
+        self.problemsLabel = QLabel()
+        self.problemsLabel.setWordWrap(True)
+        self.problemsLabel.setTextFormat(Qt.TextFormat.RichText)
+        self.problemsLabel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        mainLayout.insertWidget(1, self.problemsLabel, 0)
+        self.problemsLabel.hide()
+        self._problems_provider = None
         if self.data_manager is not None:
-            self.data_manager.add_layer_data_changed_callback(self._refresh_changed_layers)
-
-        # Action buttons
-
-        self.initializeModelButton.clicked.connect(self.initialize_model)
-        self.solveModelButton.clicked.connect(self.solve_model)
+            self.data_manager.add_layer_data_changed_callback(self.refresh_primary_action)
 
         # Connect feature selection to update details panel
         self.featureList.itemClicked.connect(self.on_feature_selected)
@@ -218,23 +207,36 @@ class GeologicalModelTab(QWidget):
 
     def show_add_feature_menu(self, *args):
         menu = QMenu(self)
-        add_fault = menu.addAction("Add Fault (not yet implemented)")
-        # Unlike Add Foliation/Add Unconformity, there's no model_manager entry
-        # point yet for a parametric (strike/dip/centre) fault -- faults are
-        # currently only created from trace data via update_fault_points. Keep
-        # the menu entry visible (so it's discoverable) but disabled, rather
-        # than silently accepting input and doing nothing with it.
-        add_fault.setEnabled(False)
-        add_fault.setToolTip("Adding a fault from parameters isn't implemented yet.")
+        add_fault = menu.addAction("Add Fault")
+        add_fault.setToolTip(
+            "Add a fault from a centre, a strike, a dip and a size. "
+            "Faults from a trace layer are in step 3."
+        )
         add_foliaton = menu.addAction("Add Foliation")
         add_unconformity = menu.addAction("Add Unconformity")
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec(buttonPosition)
 
-        if action == add_foliaton:
+        if action == add_fault:
+            self.open_add_fault_dialog()
+        elif action == add_foliaton:
             self.open_add_foliation_dialog()
         elif action == add_unconformity:
             self.open_add_unconformity_dialog()
+
+    def open_add_fault_dialog(self):
+        dialog = AddFaultDialog(self, model_manager=self.model_manager)
+        if dialog.exec() != dialog.Accepted:
+            return
+        try:
+            self.model_manager.add_parametric_fault(dialog.get_fault_data())
+        except ValueError as err:
+            QMessageBox.critical(self, "Cannot add the fault", str(err))
+            return
+        push_info(
+            "Fault", f"'{dialog.get_fault_data()['name']}' is added. Rebuild the model to use it."
+        )
+        self.refresh_primary_action()
 
     def open_add_foliation_dialog(self):
         dialog = AddFoliationDialog(
@@ -250,39 +252,85 @@ class GeologicalModelTab(QWidget):
         if dialog.exec() == dialog.Accepted:
             pass
 
-    def initialize_model(self):
-        # Run update_model in a background thread to avoid blocking the UI.
-        if not self.model_manager:
+    def set_problems_provider(self, provider):
+        """Set the function that gives the problems of all steps.
+
+        ``provider()`` returns ``(step_key, message)`` pairs. The dock sets it,
+        because the tab does not know the other steps.
+        """
+        self._problems_provider = provider
+        self.refresh_primary_action()
+
+    def _blocked_reason(self):
+        """Return why no build can start now, or None."""
+        if self.model_manager is None or self.data_manager is None:
+            return None
+        if not self.data_manager.is_bounding_box_set():
+            return "Set the bounding box in step 1."
+        if not self.data_manager.is_model_crs_valid():
+            return "Select a projected model CRS in step 1."
+        return None
+
+    def _workflow_mode(self):
+        return getattr(self.data_manager, 'workflow_mode', DEFAULT_WORKFLOW_MODE)
+
+    def _derived_to_refresh(self):
+        """Return the derived results that the build calculates again.
+
+        With "Interpolate surfaces from constraints", there is no column, so
+        there is nothing to calculate.
+        """
+        if self.data_manager is None or self._workflow_mode() == WORKFLOW_MODE_CONSTRAINTS:
+            return []
+        return names_to_refresh(self.data_manager)
+
+    def refresh_primary_action(self, *args, **kwargs):
+        """Show the action of the primary button and the problems of the steps."""
+        if self.model_manager is None:
             return
-        if self.data_manager is not None:
-            if not self.data_manager.is_bounding_box_set():
-                QMessageBox.critical(
-                    self,
-                    "Bounding box required",
-                    "Please set the bounding box before initializing the model.",
-                )
-                return
+        changed = self.data_manager.get_changed_layers() if self.data_manager else []
+        self._primary_action = build_plan.choose_primary_action(
+            self.model_manager.model_state,
+            derived_out_of_date=self._derived_to_refresh(),
+            layers_changed=bool(changed),
+            blocked_reason=self._blocked_reason(),
+        )
+        action = self._primary_action
+        self.primaryButton.setText(action.text)
+        self.primaryButton.setToolTip(action.tooltip)
+        if not self._task_running:
+            self.primaryButton.setEnabled(action.enabled)
 
-            # Validate model CRS
-            if not self.data_manager.is_model_crs_valid():
-                crs = self.data_manager.get_model_crs()
-                if crs is None or not crs.isValid():
-                    msg = "Model CRS is not set or invalid. Please select a valid projected CRS in the Model Definition tab."
-                else:
-                    # Safely get CRS description
-                    try:
-                        crs_desc = crs.description() or crs.authid() or "Unknown"
-                    except Exception:
-                        crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
-                    msg = f"Model CRS must be projected (in meters), not geographic.\nSelected CRS: {crs_desc}\n\nPlease select a valid projected CRS in the Model Definition tab."
+        problems = self._problems_provider() if self._problems_provider is not None else []
+        if problems:
+            lines = "".join(f"<li>{html.escape(message)}</li>" for _key, message in problems)
+            self.problemsLabel.setText(
+                f"<b>Check before the build:</b><ul style='margin:0'>{lines}</ul>"
+            )
+            self.problemsLabel.show()
+        else:
+            self.problemsLabel.hide()
 
-                QMessageBox.critical(
-                    self,
-                    "Invalid Model CRS",
-                    msg,
-                )
-                return
+    def on_primary_clicked(self):
+        """Do the action of the primary button."""
+        if self.model_manager is None or self._task_running:
+            return
+        self.refresh_primary_action()
+        action = self._primary_action
+        if action.action == build_plan.ACTION_BUILD:
+            self.build_model()
+        elif action.action == build_plan.ACTION_SOLVE:
+            self.solve_model()
 
+    def build_model(self):
+        """Calculate the out-of-date derived data, make the features, and solve them.
+
+        The derived data is calculated first, because a build must not use
+        out-of-date contacts or thicknesses. If a calculation fails, the build
+        stops.
+        """
+        if not self.model_manager or not self._validate_before_build():
+            return
         if not self._confirm_bounding_box_contains_data():
             return
 
@@ -290,55 +338,123 @@ class GeologicalModelTab(QWidget):
             # build from the current layer data, not the data read before
             # the layers changed
             self.data_manager.reload_changed_layers()
+            # the rows that the user added to generated features
+            self.data_manager.sync_extra_constraints()
+
+        refresh = None
+        names = self._derived_to_refresh()
+        if names:
+            try:
+                refresh = DerivedRefresh(self.data_manager, self.model_manager, names)
+            except DerivedRefreshError as err:
+                QMessageBox.critical(self, "Cannot build the model", str(err))
+                return
+
+        if refresh is not None:
+            self._run_model_task(
+                lambda progress_callback: refresh.run(progress_callback),
+                title="Updating derived data",
+                initial_label="Calculating the data that comes from the column...",
+                cancellable=False,
+                on_success=lambda: self._after_derived_refresh(refresh),
+            )
+        else:
+            self._run_build_task()
+
+    def _after_derived_refresh(self, refresh):
+        """Put the new derived data in place, then make the features."""
+        try:
+            skipped = refresh.finish()
+        except Exception as err:
+            QMessageBox.critical(self, "Cannot build the model", f"{type(err).__name__}: {err}")
+            return
+        if skipped:
+            push_info(
+                "Thickness",
+                "These units keep the thickness that you typed: " + ", ".join(skipped) + ".",
+            )
+        self._run_build_task()
+
+    def _run_build_task(self):
+        def target(progress_callback):
+            self.model_manager.update_model(
+                notify_observers=False, progress_callback=progress_callback
+            )
+            self.model_manager.update_all_features(
+                progress_callback=progress_callback, notify_observers=False
+            )
 
         self._run_model_task(
-            lambda progress_callback: self.model_manager.update_model(
-                notify_observers=False, progress_callback=progress_callback
-            ),
-            title="Updating Model",
-            initial_label="Updating geological model...",
+            target,
+            title="Building Model",
+            initial_label="Building geological model...",
         )
 
-    def update_model_data(self):
+    def _validate_before_build(self):
+        if self.data_manager is None:
+            return True
+        if not self.data_manager.is_bounding_box_set():
+            QMessageBox.critical(
+                self,
+                "Bounding box required",
+                "Please set the bounding box before building the model.",
+            )
+            return False
+        if not self.data_manager.is_model_crs_valid():
+            crs = self.data_manager.get_model_crs()
+            if crs is None or not crs.isValid():
+                msg = (
+                    "Model CRS is not set or invalid. "
+                    "Please select a valid projected CRS in step 1."
+                )
+            else:
+                # Safely get CRS description
+                try:
+                    crs_desc = crs.description() or crs.authid() or "Unknown"
+                except Exception:
+                    crs_desc = crs.authid() if hasattr(crs, 'authid') else "Unknown"
+                msg = (
+                    "Model CRS must be projected (in meters), not geographic.\n"
+                    f"Selected CRS: {crs_desc}\n\nPlease select a valid projected CRS in step 1."
+                )
+            QMessageBox.critical(self, "Invalid Model CRS", msg)
+            return False
+        return True
+
+    def _update_model_data(self):
         """Put the data of the changed input layers into the current
-        features, without Initialize Model."""
-        if self.data_manager is None or self.model_manager is None:
-            return
+        features, without a build. Returns False if the caller must not solve now."""
         try:
             result = self.data_manager.refresh_model_data()
         except Exception as e:
             QMessageBox.critical(self, "Update model data failed", str(e))
-            return
-        self._refresh_model_status()
-        if result['needs_initialize']:
-            names = "\n".join(f"  - {name}" for name in result['needs_initialize'])
-            QMessageBox.information(
-                self,
-                "Initialize Model needed",
-                "The new data for these features cannot be put into the current "
-                f"model:\n{names}\n\n"
-                "Run Initialize Model to use it. Initialize Model builds all "
-                "features again.",
-            )
-
-    def _refresh_changed_layers(self):
-        names = self.data_manager.get_changed_layers() if self.data_manager else []
-        if not names:
-            self.layerChangedWidget.hide()
-            return
-        self.layerChangedLabel.setText(
-            "Input layers changed after the model data was read: " + ", ".join(names)
+            return False
+        self.refresh_primary_action()
+        if not result['needs_initialize']:
+            return True
+        names = "\n".join(f"  - {name}" for name in result['needs_initialize'])
+        reply = QMessageBox.question(
+            self,
+            "Rebuild needed",
+            "The new data for these features cannot be put into the current "
+            f"model:\n{names}\n\n"
+            "Rebuild the model to use it? A rebuild makes all features again.",
         )
-        self.layerChangedWidget.show()
+        if reply == QMessageBox.StandardButton.Yes:
+            self.build_model()
+        return False
 
     def solve_model(self):
-        # Build/interpolate every feature already added to the model. Only
-        # meaningful once Initialize Model has created some features, and not
-        # while a fault topology edit is pending re-Initialize.
+        # Solve every feature already added to the model. Only meaningful
+        # once a build has created some features, and not while a fault
+        # topology edit is pending a build.
         if not self.model_manager or self.model_manager.model_state not in _SOLVABLE_STATES:
             return
         if not self._confirm_bounding_box_contains_data():
             return
+        if self.data_manager is not None and self.data_manager.get_changed_layers():
+            if not self._update_model_data():
+                return
         self._run_model_task(
             lambda progress_callback: self.model_manager.update_all_features(
                 progress_callback=progress_callback, notify_observers=False
@@ -378,7 +494,9 @@ class GeologicalModelTab(QWidget):
         )
         return reply == QMessageBox.StandardButton.Yes
 
-    def _run_model_task(self, target, *, title, initial_label):
+    def _run_model_task(
+        self, target, *, title, initial_label, cancellable=True, on_success=None
+    ):
         """Run `target(progress_callback)` on a background QThread with a
         non-modal progress dialog, so the rest of QGIS stays usable. Both
         Initialize Model and Solve Model share this: they disable each other
@@ -398,11 +516,18 @@ class GeologicalModelTab(QWidget):
         progress.setWindowModality(Qt.WindowModality.NonModal)
         progress.setWindowTitle(title)
         progress.setMinimumDuration(0)
-        progress.canceled.connect(self._on_task_cancel_requested)
+        if cancellable:
+            progress.canceled.connect(self._on_task_cancel_requested)
+        else:
+            # the calculation of derived data cannot stop part way
+            progress.setCancelButton(None)
         progress.show()
 
-        self.initializeModelButton.setEnabled(False)
-        self.solveModelButton.setEnabled(False)
+        self._task_running = True
+        self._task_failed = False
+        self._task_on_success = on_success
+        self._task_cancellable = cancellable
+        self.primaryButton.setEnabled(False)
 
         # Only one task runs at a time (buttons are disabled above for the
         # duration), so it's safe to stash the per-run state needed by the
@@ -461,6 +586,7 @@ class GeologicalModelTab(QWidget):
 
     @pyqtSlot()
     def _on_task_finished(self):
+        on_success = None if self._task_failed else self._task_on_success
         try:
             # notify observers now on the GUI thread
             try:
@@ -473,6 +599,8 @@ class GeologicalModelTab(QWidget):
                         self._debug.log_error("Error notifying observer", e)
         finally:
             self._finish_task()
+        if on_success is not None:
+            on_success()
 
     @pyqtSlot(str)
     def _on_task_cancelled(self, message):
@@ -480,10 +608,12 @@ class GeologicalModelTab(QWidget):
         # right after this, from the worker's `finally`) run its normal
         # cleanup/refresh -- the feature list will reflect whatever was
         # actually built before the cancellation took effect.
+        self._task_failed = True
         print(f"{self._task_title} cancelled: {message}")
 
     @pyqtSlot(str, str)
     def _on_task_error(self, reason, tb):
+        self._task_failed = True
         try:
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Icon.Critical)
@@ -497,8 +627,8 @@ class GeologicalModelTab(QWidget):
         self._finish_task()
 
     def _finish_task(self):
-        self.initializeModelButton.setEnabled(True)
-        self.solveModelButton.setEnabled(self.model_manager.model_state in _SOLVABLE_STATES)
+        self._task_running = False
+        self.refresh_primary_action()
         try:
             # QProgressDialog.close() emits canceled() itself (same as
             # clicking the Cancel button), so disconnect first -- otherwise
@@ -566,7 +696,7 @@ class GeologicalModelTab(QWidget):
     def _refresh_model_status(self):
         state = self.model_manager.model_state if self.model_manager is not None else 'empty'
         self.modelStatusLabel.setText(_MODEL_STATE_LABELS.get(state, "Model status: unknown"))
-        self.solveModelButton.setEnabled(state in _SOLVABLE_STATES)
+        self.refresh_primary_action()
 
     def on_feature_selected(self, item):
         feature_name = item.text(0)
@@ -663,6 +793,7 @@ class GeologicalModelTab(QWidget):
         feature_name = item.text(0)
         # so that Initialize Model does not build it again
         self.model_manager.remove_manual_foliation(feature_name)
+        self.model_manager.remove_parametric_fault(feature_name)
         # Attempt to remove from the underlying model in a few ways
         try:
             # Try model's __delitem__ if supported

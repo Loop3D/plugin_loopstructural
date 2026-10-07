@@ -1,5 +1,6 @@
 from qgis.core import QgsMapLayerProxyModel
 from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,6 +17,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from loopstructural.gui.compatibility import configure_layer_combo
+from loopstructural.main import constraints
 
 
 class LayerSelectionTable(QWidget):
@@ -173,7 +175,13 @@ class LayerSelectionTable(QWidget):
     def _create_type_combo(self):
         """Create type selection combo box."""
         combo = QComboBox()
-        combo.addItems(["Value", "Form Line", "Orientation", "Inequality"])
+        for layer_type in constraints.CONSTRAINT_TYPES:
+            combo.addItem(layer_type)
+            combo.setItemData(
+                combo.count() - 1,
+                constraints.DESCRIPTIONS[layer_type],
+                Qt.ItemDataRole.ToolTipRole,
+            )
         return combo
 
     def _create_select_layer_button(self, row, type_combo):
@@ -444,6 +452,114 @@ class LayerSelectionDialog(QDialog):
             self._setup_inequality_fields(layout)
         elif self.layer_type == "Form Line":
             self._setup_form_line_fields(layout)
+        elif self.layer_type == constraints.INTERFACE:
+            self._setup_interface_fields(layout)
+        elif self.layer_type in (constraints.GRADIENT_NORMAL, constraints.TANGENT):
+            self._setup_vector_fields(layout)
+        elif self.layer_type == constraints.PAIRWISE_INEQUALITY:
+            self._setup_pairwise_fields(layout)
+        self._setup_common_fields(layout)
+
+    def _field_combo(self, existing_key, allow_empty=False):
+        """Return a field combo of the layer, set to the field of an existing row."""
+        combo = QgsFieldComboBox()
+        if allow_empty:
+            combo.setAllowEmptyFieldName(True)
+        combo.setLayer(self.layer_combo.currentLayer())
+        self.layer_combo.layerChanged.connect(combo.setLayer)
+        if self.existing_data.get(existing_key):
+            combo.setField(self.existing_data[existing_key])
+        return combo
+
+    def _setup_interface_fields(self, layout):
+        """Setup fields for the interface type.
+
+        The group field is optional. Without it, each feature of the layer
+        (for example each line) is one surface.
+        """
+        form = QFormLayout()
+        self.group_field_combo = self._field_combo('group_field', allow_empty=True)
+        self.group_field_combo.setToolTip(
+            "Points with the same value in this field are on one surface. "
+            "If it is empty, each feature of the layer is one surface."
+        )
+        form.addRow("Group field (optional):", self.group_field_combo)
+        layout.addLayout(form)
+        self.field_combos = {'group_field': self.group_field_combo}
+
+    def _setup_vector_fields(self, layout):
+        """Setup fields for the gradient/normal and tangent types."""
+        form = QFormLayout()
+        self.field_combos = {}
+        if self.layer_type == constraints.GRADIENT_NORMAL:
+            self.vector_kind_combo = QComboBox()
+            self.vector_kind_combo.addItem("Gradient", constraints.KIND_GRADIENT)
+            self.vector_kind_combo.addItem("Normal", constraints.KIND_NORMAL)
+            index = self.vector_kind_combo.findData(
+                self.existing_data.get('vector_kind', constraints.KIND_GRADIENT)
+            )
+            self.vector_kind_combo.setCurrentIndex(max(index, 0))
+            self.vector_kind_combo.setToolTip(
+                "A gradient has a direction and a size. A normal has a direction only."
+            )
+            form.addRow("Vector:", self.vector_kind_combo)
+            self.field_combos['vector_kind'] = self.vector_kind_combo
+        for key, label in (
+            ('vector_x_field', "X component:"),
+            ('vector_y_field', "Y component:"),
+            ('vector_z_field', "Z component:"),
+        ):
+            combo = self._field_combo(key)
+            form.addRow(label, combo)
+            self.field_combos[key] = combo
+        layout.addLayout(form)
+
+    def _setup_pairwise_fields(self, layout):
+        """Setup fields for the pairwise inequality type."""
+        form = QFormLayout()
+        self.pair_field_combo = self._field_combo('pair_field')
+        self.pair_field_combo.setToolTip(
+            "A number for each group of points. The groups are ordered by this number."
+        )
+        form.addRow("Group number field:", self.pair_field_combo)
+        layout.addLayout(form)
+        self.field_combos = {'pair_field': self.pair_field_combo}
+
+    def _setup_common_fields(self, layout):
+        """Setup the weight and the source of Z. Every type has them."""
+        form = QFormLayout()
+        self.weight_spin = QDoubleSpinBox()
+        self.weight_spin.setDecimals(3)
+        self.weight_spin.setRange(0.001, 1000.0)
+        self.weight_spin.setSingleStep(0.1)
+        self.weight_spin.setValue(self.existing_data.get('weight', constraints.DEFAULT_WEIGHT))
+        self.weight_spin.setToolTip("How much the constraint counts in the interpolation.")
+        form.addRow("Weight:", self.weight_spin)
+
+        self.z_source_combo = QComboBox()
+        for source in constraints.Z_SOURCES:
+            self.z_source_combo.addItem(constraints.Z_LABELS[source], source)
+        self.z_source_combo.setCurrentIndex(
+            max(self.z_source_combo.findData(self.existing_data.get('z_source', constraints.Z_LAYER)), 0)
+        )
+        self.z_source_combo.setToolTip(
+            "Where the Z of the points comes from: the geometry of the layer, the DEM "
+            "of the project, or one number for all points."
+        )
+        form.addRow("Z source:", self.z_source_combo)
+
+        self.z_value_spin = QDoubleSpinBox()
+        self.z_value_spin.setDecimals(3)
+        self.z_value_spin.setRange(-1e9, 1e9)
+        self.z_value_spin.setValue(float(self.existing_data.get('z_value', 0.0)))
+        form.addRow("Z value:", self.z_value_spin)
+        layout.addLayout(form)
+
+        def update_z_value_state():
+            self.z_value_spin.setEnabled(self.z_source_combo.currentData() == constraints.Z_CONSTANT)
+
+        self.z_source_combo.currentIndexChanged.connect(update_z_value_state)
+        update_z_value_state()
 
     def _setup_orientation_fields(self, layout):
         """Setup fields for orientation data type."""
@@ -673,7 +789,11 @@ class LayerSelectionDialog(QDialog):
             'layer': self.layer_combo.currentLayer(),
             'layer_name': self._unique_layer_name(self.layer_combo.currentLayer()),
             'type': self.layer_type,
+            'weight': self.weight_spin.value(),
+            'z_source': self.z_source_combo.currentData(),
         }
+        if self.layer_data['z_source'] == constraints.Z_CONSTANT:
+            self.layer_data['z_value'] = self.z_value_spin.value()
 
         # Add type-specific data
         if self.layer_type == "Orientation":
@@ -712,6 +832,25 @@ class LayerSelectionDialog(QDialog):
                 self.layer_data['form_line_dip_weight'] = self.field_combos[
                     'dip_weight_spin'
                 ].value()
+
+        elif self.layer_type == constraints.INTERFACE:
+            # the group field is optional
+            group_field = self.field_combos['group_field'].currentField()
+            if group_field:
+                self.layer_data['group_field'] = group_field
+
+        elif self.layer_type in (
+            constraints.GRADIENT_NORMAL,
+            constraints.TANGENT,
+            constraints.PAIRWISE_INEQUALITY,
+        ):
+            for key, combo in self.field_combos.items():
+                if key == 'vector_kind':
+                    self.layer_data[key] = combo.currentData()
+                else:
+                    self.layer_data[key] = combo.currentField()
+            if constraints.missing_fields(self.layer_data):
+                return
 
         self.accept()
 

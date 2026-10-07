@@ -267,3 +267,38 @@ class TestThicknessSource:
         data_manager.thickness_sources.clear()
         data_manager.update_from_dict(state)
         assert data_manager.get_thickness_source(unit.uuid) == derived_data.CALCULATED
+
+
+class TestWorkflowMode:
+    def test_the_default_is_the_map(self, data_manager):
+        assert data_manager.workflow_mode == 'map'
+
+    def test_the_choice_is_saved_and_loaded(self, data_manager):
+        data_manager.set_workflow_mode('constraints')
+        state = json.loads(json.dumps(data_manager.to_dict()))
+        data_manager.set_workflow_mode('map')
+        data_manager.update_from_dict(state)
+        assert data_manager.workflow_mode == 'constraints'
+
+    def test_a_state_file_of_an_older_version_gives_the_map(self, data_manager):
+        data_manager.set_workflow_mode('constraints')
+        state = json.loads(json.dumps(data_manager.to_dict()))
+        del state['workflow_mode']
+        data_manager.update_from_dict(state)
+        assert data_manager.workflow_mode == 'map'
+
+    def test_a_change_calls_the_listeners_one_time(self, data_manager):
+        seen = []
+        data_manager.add_workflow_mode_callback(seen.append)
+        data_manager.set_workflow_mode('constraints')
+        data_manager.set_workflow_mode('constraints')
+        assert seen == ['constraints']
+
+    def test_an_unknown_choice_is_an_error(self, data_manager):
+        with pytest.raises(ValueError):
+            data_manager.set_workflow_mode('other')
+
+    def test_reset_gives_the_map(self, data_manager):
+        data_manager.set_workflow_mode('constraints')
+        data_manager.reset()
+        assert data_manager.workflow_mode == 'map'
