@@ -51,7 +51,7 @@ def _check_contacts_inputs(inputs):
     if not inputs.get('geology') or not inputs.get('unit_field'):
         raise DerivedRefreshError(
             "The basal contacts cannot be calculated: select the geology layer and the "
-            "unit name field in step 1."
+            "unit name field in step 2."
         )
 
 
@@ -141,11 +141,11 @@ class DerivedRefresh:
         if geology is None or not unit_field:
             raise DerivedRefreshError(
                 "The thicknesses cannot be calculated: select the geology layer and the "
-                "unit name field in step 1."
+                "unit name field in step 2."
             )
         if calculator_type == 'StructuralPoint' and structure is None:
             raise DerivedRefreshError(
-                "The thicknesses cannot be calculated: select the structure layer in step 1."
+                "The thicknesses cannot be calculated: select the structure layer in step 2."
             )
         if calculator_type == 'AlongSection' and cross_sections is None:
             raise DerivedRefreshError(

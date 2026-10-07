@@ -410,10 +410,10 @@ input is the polygon geology layer, so the user cannot select it there.
 
 Tasks:
 
-- [ ] Remove `StratigraphicLayersWidget` from `ModelDefinitionTab`. Step 1 has
+- [x] Remove `StratigraphicLayersWidget` from `ModelDefinitionTab`. Step 1 has
       only the bounding box, the CRS and the DEM.
-- [ ] Add the widget to `StratigraphyStep`, as a collapsible group (see 6.3).
-- [ ] The first layer picker depends on the contacts source:
+- [x] Add the widget to `StratigraphyStep`, as a collapsible group (see 6.3).
+- [x] The first layer picker depends on the contacts source:
   - "Calculate from geology polygons": the picker shows polygon layers. It
     reads and writes the `geology` and `geology_unit_field` roles. It does not
     call `set_basal_contacts`. The Z-coordinate check box is hidden.
@@ -421,19 +421,19 @@ Tasks:
     reads and writes the `basal_contacts` role.
   - Change the group title and the label to match ("Geology layer" or
     "Contacts layer").
-- [ ] When the user changes the source, do not write the old selection to the
+- [x] When the user changes the source, do not write the old selection to the
       other role. Keep one selection for each source.
-- [ ] The `set_basal_contacts` callback (a tool or a build made a new contacts
+- [x] The `set_basal_contacts` callback (a tool or a build made a new contacts
       layer) does not change the picker in the "geology" source. The layer is for
       display.
-- [ ] Keep the geology picker of the column group in sync with the new picker
+- [x] Keep the geology picker of the column group in sync with the new picker
       (both use the same roles). Decide in the review if one of them must be
       removed (see the open questions).
 - [x] Move the "Select the geology layer" and "Select the structure layer"
       items from `check_data` to `check_stratigraphy`.
-- [ ] Update the text that says "in step 1" for these layers
+- [x] Update the text that says "in step 1" for these layers
       (`derived_refresh.py`, `checks.py`, `pages.py`, the docs).
-- [ ] Keep the saved widget settings key `stratigraphic_layers_widget`, so old
+- [x] Keep the saved widget settings key `stratigraphic_layers_widget`, so old
       state files load.
 
 Acceptance: with "Calculate from geology polygons", the user selects the
