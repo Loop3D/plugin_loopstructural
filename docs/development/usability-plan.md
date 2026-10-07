@@ -346,7 +346,7 @@ cross-section to files without the 3D view.
 
 ### Phase 6: Follow-up changes
 
-Five changes that come from use of phases 3 to 5. Do them in this order. Each
+Nine changes that come from use of phases 3 to 5. Do them in this order. Each
 one is a separate pull request.
 
 #### 6.1 Two separate workflows
@@ -560,18 +560,18 @@ Rules:
 
 Tasks:
 
-- [ ] `names_to_refresh` returns no result that comes from the column when the
+- [x] `names_to_refresh` returns no result that comes from the column when the
       column has no units. `DerivedRefresh` does not raise when there are no
       units.
-- [ ] `update_model` builds the faults when the column has no groups.
+- [x] `update_model` builds the faults when the column has no groups.
       `update_foliation_features` does nothing for an empty column. Check that
       `model.stratigraphic_column` is safe to leave unset.
-- [ ] `check_stratigraphy` does not ask for the geology layer, the structure
+- [x] `check_stratigraphy` does not ask for the geology layer, the structure
       layer or the contacts when the column is empty. The text says that the
       step is optional if the user models only faults.
-- [ ] `model_state`, `valid` and the primary action accept a model that has
+- [x] `model_state`, `valid` and the primary action accept a model that has
       faults and no groups.
-- [ ] Step 5 (view and export) works with fault features only. The block model
+- [x] Step 5 (view and export) works with fault features only. The block model
       and the stratigraphic surfaces are not offered when there are no units.
 
 Acceptance: a project has a fault trace layer and an empty column. The user
@@ -581,11 +581,247 @@ the fault features, and the user can view and export the fault surfaces.
 Tests: unit tests for `names_to_refresh` and for the checks with an empty
 column. A QGIS test of `update_model` with faults and no column.
 
+#### 6.6 Fault topology as a button, not a dialog
+
+Problem: "Calculate topology..." in step 3 opens a dialog
+(`FaultTopologyWidget`). The dialog asks again for the fault layer and the fault
+ID field. The user already chose these in the "Fault layer" section of the same
+page. The dialog also closes by itself and shows a second message box.
+
+Rules:
+
+- The button runs the calculation at once. It uses the fault layer and the name
+  field that are set in the data manager.
+- The button is disabled until a fault layer and a name field are set. The
+  tooltip says why it is disabled.
+- No dialog opens. The result shows in the step message bar (for example,
+  "Calculated fault topology for 12 pairs."), not in a message box. Errors use
+  the same message bar.
+- The label is "Calculate topology", with no ellipsis, because no dialog opens.
+
+Tasks:
+
+- [x] Move the calculation from `FaultTopologyWidget._run_topology` to a
+      function that does not use Qt widgets. It takes the layer, the ID field
+      and the data manager, and it returns the number of pairs or raises an
+      error with a clear message.
+- [x] `FaultsStep` calls this function from the button. It reads the layer and
+      the field from `data_manager.get_fault_traces()`. It updates the enabled
+      state when the fault layer or the field changes.
+- [x] Show the result and the errors in the message bar of the step page.
+- [x] Remove `FaultTopologyWidget`, `fault_topology_widget.ui` and
+      `launchers.FAULT_TOPOLOGY`. Keep the toolbar action only if it still has
+      a use: if it stays, it calls the same function with the fault layer from
+      the data manager.
+
+Acceptance: the user sets the fault layer in step 3 and presses "Calculate
+topology". The Fault Adjacency tables fill with no dialog and no second choice
+of layer.
+
+Tests: unit tests for the function (a missing layer, a missing field, an empty
+layer, and a normal result). A QGIS test that the button is disabled with no
+fault layer.
+
+#### 6.7 Fault topology sets the relationship order wrongly
+
+Problem: the topology calculation writes the fault pairs in the wrong order.
+`FaultTopologyWidget._run_topology` reads `Fault1` and `Fault2` from the
+map2loop table and calls `update_fault_relationship(Fault1, Fault2, ABUTTING)`.
+In `FaultTopology` the pair `(a, b)` is directional. In
+`apply_fault_abutting_relationships`, `(a, b)` ABUTTING means that fault `a` is
+cropped by fault `b`. The map2loop pair has no such direction. The code takes
+the table order, so the abutting fault and the fault that it abuts can be the
+wrong way round. The crop then removes the wrong part of the model.
+
+Other places that use order, to check at the same time:
+
+- `new_faults` is `sorted(...)` on strings, so the fault list order is
+  alphabetical ("10" before "2"), not the order in the layer.
+- The code first removes all pairs with `NONE`, and then adds the new pairs.
+  Pairs that the user set to FAULTED are lost when the user calculates again.
+
+Status: I read the LoopStructural and plugin code. I did not read map2loop's
+table (the package is not installed here), so the cause in the table must be
+confirmed first.
+
+Rules:
+
+- For each detected pair, decide which fault ends at the other, from the
+  geometry of the traces (the fault whose end point lies on the other trace is
+  the abutting fault). Write the pair as `(abutting fault, other fault)`.
+- If the geometry does not give a direction, do not guess. Leave the pair as
+  `NONE` and list it in the message bar, so the user sets it in the Fault
+  Adjacency tab.
+- Keep the layer order for the fault list.
+- A new calculation does not delete a relationship that the user set by hand.
+
+Tasks:
+
+- [x] Confirm the columns and the order of the map2loop table. Confirmed in
+      `map2loop/topology.py`: the columns are `Fault1`, `Fault2`, `Type`,
+      `Angle`. The pairs come from the lower triangle of a buffer adjacency
+      matrix (buffer 500 map units), so `Fault1` is only the later fault in
+      the layer. The table has no direction. Pairs are near each other, and
+      not always touching.
+- [x] Add a function that gives the direction of a pair from two traces. It
+      has no Qt code.
+- [x] Use it in the calculation from 6.6. Keep the layer order of the faults.
+- [x] Keep user-set relationships when the user calculates again.
+
+Acceptance: for two faults where one ends at the other, the Fault Adjacency
+table shows the right fault as abutting, and the built fault is cropped on the
+right side. A second calculation does not change a relationship that the user
+set.
+
+Tests: unit tests for the direction function (a T-junction, a crossing, two
+separate traces, and the two input orders giving the same result). A test that
+a second calculation keeps a user-set FAULTED pair.
+
+#### 6.8 Clean up the viewer and add isosurfaces from model features
+
+Problem: the viewer code is large and has grown in parts. The files in
+`gui/visualisation/` have about 4 000 lines. `feature_list_widget.py` (1 450
+lines) mixes the feature tree, the code that builds meshes from the model, and
+the code for cross-sections, block models and topography.
+`object_properties_widget.py` (1 100 lines) has many places that read
+`viewer.meshes` directly and test `current_object_name`. `object_list_widget.py`
+(670 lines) holds the object/model view. The user can add only the surfaces that
+the model gives (`feature.surfaces()`), so the user cannot choose a value and
+make an isosurface of a scalar field.
+
+Goals:
+
+- The viewer classes are smaller and simpler, with one clear job for each.
+- The user can add many isosurfaces from a model feature, and can choose the
+  value of each one.
+
+Rules:
+
+- One object registry owns the meshes of the viewer (name, mesh, source feature,
+  source type, isovalue, style). The widgets read and change objects only through
+  it. No widget reads `viewer.meshes` directly.
+- The code that builds a mesh from the model (scalar field, surface, vector
+  field, isosurface, block model, cross-section) has no Qt code. The widgets
+  only call it.
+- Each mesh object keeps the information that is needed to build it again (the
+  source feature, the type and the isovalue), so "Update viewer objects" works
+  for isosurfaces in the same way as for other objects.
+- An isosurface is an object like a surface, with its own name, colour, opacity
+  and visibility. It does not replace the surfaces that the model gives.
+
+Tasks:
+
+- [ ] Read the three files and write a short list of what each class does and
+      which methods are duplicated or not used. Remove dead code first.
+- [ ] Add an object registry class (no Qt) for the meshes and their source
+      information. Move the reads and writes of `viewer.meshes` to it.
+- [ ] Split `feature_list_widget.py`: move the mesh builders to a module without
+      Qt code (`mesh_builders.py`), and move the cross-section, block model and
+      topography actions out of the tree widget.
+- [ ] Simplify `object_properties_widget.py`: one handler for the selected
+      object, and the controls shown for each source type, not a check for the
+      object name in each method.
+- [ ] Simplify the object/model view (`object_list_widget.py`): group the
+      objects by source feature, and show the type and the isovalue of each
+      object.
+- [ ] Add "Add isosurface..." to the menu of a model feature. The user enters
+      one or more values (a list, or a start, an end and a count). The default
+      values come from the range of the scalar field. A pure function gives the
+      values from the input.
+- [ ] Build the isosurfaces with the scalar field of the feature
+      (`feature.surfaces(value)`). Give each object a name with its value, for
+      example `Fault_1_iso_0.50`. A value outside the range of the field gives
+      a message in the message bar, not an error dialog.
+- [ ] Let the user change the value of an existing isosurface in the object
+      properties. The object is built again.
+- [ ] Update the docs for the viewer.
+
+Acceptance: the user adds five isosurfaces from one feature in one action. They
+show in the object list under that feature, each with its value. The user
+changes one value and only that object changes. After the model is updated,
+"Update viewer objects" builds the isosurfaces again with the same values.
+
+Tests: unit tests for the registry and for the function that gives the values
+(a list, a range, a value outside the range, a repeated value). A QGIS test that
+the menu action adds the objects with the right names and isovalues.
+
+#### 6.9 True clipping relationships with loop_cgal
+
+Problem: the model has no way to cut one surface with another. A surface that
+goes above the DEM stays in the model and in the exports. The user can only hide
+it in the viewer. The same is true for a surface that must end at another
+surface, for example a unit that an unconformity cuts. `loop_cgal` does mesh
+boolean operations (exact geometry), so it can make true cuts. The plugin does
+not use `loop_cgal` now.
+
+Status: the plugin has no `loop_cgal` code. I did not read the `loop_cgal` API.
+Confirm which operations it has (clip a mesh with a mesh, keep the part above or
+below, and the result type) and how to install it in the QGIS Python
+environment before the design is final.
+
+Rules:
+
+- `loop_cgal` is optional. If it is not installed, the clip controls are
+  disabled with a tooltip that says why, and the model builds as before.
+- A clipping relationship has a target surface, a clipping surface (the DEM, a
+  feature surface, or the bounding box) and a side to keep (above or below).
+- The cut is made on the output meshes (the surfaces for the viewer and the
+  export). It does not change the solved interpolator or the model data.
+- The cut is a relationship in the model state. It is saved and loaded with the
+  state, and the user can turn it off. Old state files have no clipping.
+- Cutting by the DEM is a one-step action: "Cut all surfaces by the DEM". It
+  uses the DEM from step 1 and makes one relationship for each surface.
+- The viewer and the export (step 5) use the clipped meshes. The unclipped mesh
+  is kept, so the user can remove the cut.
+
+Tasks:
+
+- [ ] Confirm the `loop_cgal` operations and the install method. Add the
+      dependency check and a clear message when it is missing.
+- [ ] Add a module without Qt code (`main/clipping.py`) with a function that
+      clips a mesh with a mesh and returns the new mesh, and a function that
+      makes a surface mesh from the DEM in the model bounding box.
+- [ ] Add a `ClippingRelationship` record (target, clipping surface, side, on
+      or off) to the model manager, with save and load. Add the result to the
+      object registry of 6.8, so each object has a clipped and an unclipped
+      mesh.
+- [ ] Add "Cut all surfaces by the DEM" to the viewer and to step 5. Add a
+      "Clip by..." action to the menu of one surface for a cut by another
+      feature surface.
+- [ ] Use the clipped meshes in the surface export and in the cross-section and
+      block model code where they make sense. Say in the docs which outputs the
+      cut changes (the block model is not cut).
+- [ ] Block model filter: the block model is not cut, but the user can choose
+      to show only the cells below the DEM. Add a "Below DEM" cell array to the
+      block model (true when the cell centre is below the DEM height at its x,
+      y), and a "Show only below DEM" check box in the object properties. The
+      check box hides the other cells with a threshold filter in the viewer.
+      It does not delete cells, and it does not need `loop_cgal`. The export of
+      the block model has the same option, off by default.
+- [ ] Handle failures: an open or self-crossing mesh, no overlap, and an empty
+      result. Show the reason in the message bar and keep the unclipped mesh.
+- [ ] Docs: say what the cut does, that it changes only the output meshes, and
+      how to install `loop_cgal`.
+
+Acceptance: a model has a DEM and five surfaces, some of which go above the
+ground. After "Cut all surfaces by the DEM", no surface in the viewer or in the
+export is above the DEM. The user turns the cut off and the full surfaces come
+back. With "Show only below DEM" on, the block model shows only the cells below
+the ground, and with it off all cells show again. The state saves and loads with
+the cut. Without `loop_cgal`, the model
+builds and the clip controls are disabled.
+
+Tests: unit tests for the clipping function with simple meshes (a plane cut by a
+plane, no overlap, an empty result) that skip when `loop_cgal` is missing. Unit
+tests for the relationship save and load. A QGIS test of the DEM cut action.
+
 Order and links between the parts: 6.1 first, because it defines what the model
 reads in each workflow. 6.2 depends on the same checks, so do it next. 6.3
 comes after 6.2, because it must lay out the final content of the pages. 6.4
 does not depend on the others. 6.5 comes after 6.2, because it changes the
-same checks.
+same checks. 6.6 does not depend on the others. 6.7 goes with 6.6, because both change the
+same calculation. 6.8 does not depend on the others. 6.9 comes
+after 6.8, because it uses the object registry.
 
 ### Phase 7: Fold modelling
 
@@ -882,13 +1118,193 @@ viewer. The new viewer shows geological data objects that are similar to
 those of Geoscience ANALYST (`geoh5` types): points, curves, surfaces,
 sections, block models, drillholes and orientations.
 
-This phase is large, and most of the work is in a separate repository. The
-tasks, the protocol, the risks and the open questions are in the
-[viewer plan](viewer-plan.md).
+This phase is large, and most of the work is in a separate repository
+(`geoviewer`). The tasks, the protocol, the risks and the open questions are
+in the viewer plan of that repository (`docs/viewer-plan.md`).
 
 Acceptance: from step 5, a user opens the advanced viewer. The viewer shows
 the model and its input data, and updates after each build. A pick in the
 viewer selects the feature in the dock and shows the point on the map.
+
+### Phase 9: Demo mode
+
+Problem: a new user cannot see what the finished workflow looks like before
+they use their own data. The dock has five steps and many buttons. The docs
+have screenshots, but they go out of date. Trainers and developers also need a
+repeatable way to show the plugin, and a way to test the full workflow through
+the real UI.
+
+Aim: a demo mode runs the workflow by itself. It clicks the real buttons, in
+the order that the user must use them, with sample data, until a model is
+built. The user watches and can pause, step or stop at any time.
+
+The demo does not use a second code path. It calls the same widgets as a user
+does. Thus the demo also shows when a step is broken, and it is a UI test.
+
+#### Rules
+
+- **Real controls.** The demo changes a control (a layer picker, a combo, a
+  check box) and presses a button through the widget. It does not call the
+  model manager or the data manager directly. If a control is hidden or
+  disabled, the demo stops with an error. This is a test failure, not a case
+  to work around.
+- **Visible.** Before each action, the demo moves a highlight (an overlay frame
+  and a one-line caption) to the control. It waits a set time, then it acts.
+  The caption says what the action does and why ("Build column from the map:
+  the order of units comes from the geology layer").
+- **Same speed as the work.** The demo waits for the end of each background
+  task (extraction, thickness, build) with the task signals. It does not wait
+  a fixed time. If a task fails, the demo stops and shows the error.
+- **User control.** A small demo bar shows Pause, Step, Speed (slow, normal,
+  fast) and Stop. The demo also stops if the user clicks or types in the dock.
+  The demo never runs by itself at start-up.
+- **Safe project.** The demo works in a new, empty QGIS project, and it asks
+  before it replaces the current project. If the current project has unsaved
+  changes, the demo asks the user to save them first. Stop removes the demo
+  layers and restores the plugin state to the state before the demo.
+- **Sample data.** The demo uses a small data set that the plugin includes
+  (see 9.1). It does not need a network.
+- **Both entries.** There are two demos: "Build from a geological map" and
+  "Interpolate surfaces from constraints". The user selects one in the demo
+  menu.
+- **No modal dialogs.** The demo does not open a modal dialog. If a step uses
+  a dialog (for example "Build column" or "Add Foliation"), the demo drives
+  the dialog and closes it. A dialog that the demo cannot drive is a problem
+  in the step (see the general rules, rule 2).
+
+#### Design
+
+A demo is a list of steps in data. A step has a target, an action and a
+caption. The runner is a small state machine. The list and the runner do not
+import QGIS widgets, so unit tests can run them.
+
+```
+demo script (data)                      runner                      dock
+------------------                      ------                      ----
+ step: target "step2.build_column"  ->  find control by id     ->   highlight
+       action  click                    wait (speed)                click()
+       wait_for "column_changed"        wait for signal        <-   signal
+       caption "..."                    next step
+```
+
+- **Target ids.** Each control that a demo uses has a stable `objectName`
+  (for example `step2.build_column`, `step4.primary_button`). The runner finds
+  the control with `findChild`. A rename of an id fails a test. The ids are
+  also usable by the other UI tests.
+- **Actions.** `click`, `set_text`, `select_layer`, `select_item` (a combo or
+  a menu entry), `check`, `go_to_step`, `wait_for` (a signal or a condition
+  with a time limit).
+- **Order from the dock.** The script does not hold the order of the workflow
+  as a second copy. Where the next action is "press Next" or "press the primary
+  button", the runner reads `choose_primary_action` and the footer text from the
+  dock. A step that does not match the dock is a failure.
+- **Checks.** After a step, the runner can assert a condition (the step status
+  is "done", the footer shows no problem). A failed check stops the demo and
+  names the step. This lets the CI run the same script without the delays.
+- **Headless mode.** The same runner runs with no highlight and with zero
+  delay, in the QGIS test job. This is the end-to-end test.
+
+#### The two scripts
+
+Map demo (about 20 actions):
+
+1. Step 1: set the bounding box from the geology layer, set the CRS, and
+   select the DEM.
+2. Step 2: select the geology layer and the unit name field. "Build column"
+   from the map. Calculate basal contacts and thickness ("Derive from map").
+3. Step 3: select the fault layer and the name field. "Calculate topology".
+   Show the adjacency tables.
+4. Step 4: press the primary button (build and solve).
+5. Step 5: "Open 3D view". Show an export action, with the output in a
+   temporary folder.
+
+Constraints demo (about 12 actions):
+
+1. Step 1: set the bounding box. Select "Interpolate surfaces from
+   constraints".
+2. Step 4: "Add Foliation" from a value layer and an orientation layer, then
+   press the primary button.
+3. Step 4: "Add Fold Event" and a folded foliation, if phase 7 is merged.
+4. Step 5: "Open 3D view".
+
+Each demo ends with a message in the message bar and the demo bar shows
+"Demo finished. Stop to remove the demo data, or keep it to explore."
+
+#### Tasks
+
+Do the parts in this order. Each part is a separate pull request.
+
+9.1 Sample data
+
+- [ ] Choose a small open data set that gives a model in less than one
+      minute (a part of the Hamersley data, or a synthetic area). Check the
+      licence, and record the source in the docs.
+- [ ] Add the layers as one GeoPackage and one small DEM in
+      `loopstructural/resources/demo/`. Keep the package size small (state the
+      limit in the pull request, for example 5 MB).
+- [ ] A function that adds the layers to a new project, with names and styles,
+      and a function that removes them. It does not need the widgets.
+
+9.2 Ids and signals
+
+- [ ] Give each control that the demos use a stable `objectName`. Add a test
+      that lists the ids and finds each one in the dock.
+- [ ] Check that each action of the demos ends with a signal that the runner
+      can wait for (column changed, derived data updated, topology
+      calculated, model built or failed). Add the signal where it is missing.
+
+9.3 Runner and overlay
+
+- [ ] `gui/demo/script.py`: the step form, the actions, the speed settings. No
+      QGIS import.
+- [ ] `gui/demo/runner.py`: the state machine (run, pause, step, stop,
+      error). It takes the time source and the control finder as arguments, so
+      unit tests can use fakes.
+- [ ] `gui/demo/overlay.py`: the highlight frame and the caption. It follows the
+      control when the dock moves or resizes, and it works for a dock that is
+      floating, tabbed or in a separate window (`separate_dock_widgets`).
+- [ ] `gui/demo/demo_bar.py`: Pause, Step, Speed and Stop. Stop on a user click
+      in the dock.
+
+9.4 Scripts and entry
+
+- [ ] The map demo and the constraints demo as data in `gui/demo/scripts/`.
+- [ ] "Demo" in the dock header menu and in the Plugins menu. It asks before it
+      replaces the project, then loads the sample data and starts the script.
+- [ ] Stop removes the demo layers, resets the plugin state and restores the
+      state before the demo (use the save and load of the application state).
+
+9.5 Tests and docs
+
+- [ ] A headless QGIS test that runs each script with zero delay and checks the
+      result: the model is solved, and the number of features is as expected.
+      Run it in the QGIS test job, so a change to the UI that breaks the
+      workflow fails the build.
+- [ ] A user guide page in `docs/usage` ("Try the demo"). Say what the demo
+      does, how to stop it, and what it changes in the project.
+- [ ] Use the demo to make the screenshots of the docs, so that they match the
+      current UI.
+
+Files: new `gui/demo/` module, `resources/demo/`, `plugin_main.py`,
+`gui/modelling/steps/header.py`, and the step pages (ids and signals only).
+
+Acceptance: a new user opens the demo from the dock menu. The plugin loads the
+sample data and clicks through the steps, with a caption for each action, and
+it ends with a solved model in the 3D view. The user can pause, step and stop.
+After Stop, the project and the plugin state are as they were before the demo.
+A script that is out of date (for example, a control was renamed or a step does
+not become "done") stops with an error that names the step.
+
+Tests: unit tests for the runner (run, pause, step, stop; a missing control; a
+timeout; a failed check; a failed task) with a fake clock and fake controls.
+Unit tests for the script form and for the sample data functions. A QGIS test
+that runs both demos end to end with zero delay.
+
+Order and links: 9.1 and 9.2 do not depend on each other. 9.3 depends on 9.2.
+9.4 depends on 9.1 and 9.3. 9.5 comes last. Phase 9 depends on phase 3 (the
+steps), phase 4 (the primary button and the two entries) and phase 5 (step 5).
+The Fold Event part of the constraints demo depends on phase 7, and the 3D
+view action can use the PyVista viewer or the viewer of phase 8.
 
 ## Risks
 
@@ -926,6 +1342,15 @@ viewer selects the feature in the dock and shows the point on the map.
   arguments (`limb_wl`, `axis_wl`, `av_fold_axis`, the profile types). Some of
   them are keyword arguments, not public API. Pin the LoopStructural version
   and add a test for each argument.
+- **Demo scripts become out of date (phase 9).** A script depends on the ids and
+  the order of the controls. Run both scripts in the QGIS test job, so that a UI
+  change that breaks them fails the build. Keep the script as data, with no
+  copy of the workflow order.
+- **Demo changes the user project (phase 9).** The demo adds layers and
+  changes the plugin state. Use a new project, ask before it replaces the
+  current one, and restore the state on Stop.
+- **Package size (phase 9).** The sample data increases the size of the plugin
+  package. Keep it small, and decide in the review if it must be a download.
 
 ## Open questions
 
@@ -967,3 +1392,9 @@ viewer selects the feature in the dock and shows the point on the map.
 11. (7) Must a fault that cuts a fold frame also cut the folded features?
     LoopStructural calculates the rotation angles in the restored space.
     Recommendation: yes, use the same faults. Test it before 7.5.
+12. (9) Must the sample data be in the plugin package, or a download from the
+    first demo run? Recommendation: in the package if it is below 5 MB. If it
+    is larger, download it once and keep it in the QGIS profile folder.
+13. (9) Must the demo also work from the Processing toolbox or the Python
+    console (for example, `loopstructural.run_demo("map")`)? Recommendation:
+    yes, one function. The test job and the screenshot job use it.

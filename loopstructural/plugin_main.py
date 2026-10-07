@@ -144,7 +144,7 @@ class LoopstructuralPlugin:
 
         # -- Actions
         self.action_fault_topology = QAction(
-            self.tr("Fault Topology Calculator"),
+            self.tr("Calculate fault topology"),
             self.iface.mainWindow(),
         )
         self.action_fault_topology.triggered.connect(self.show_fault_topology_dialog)
@@ -423,8 +423,21 @@ class LoopstructuralPlugin:
         self._show_tool(launchers.PAINT_STRAT_ORDER)
 
     def show_fault_topology_dialog(self):
-        """Show the fault topology calculator dialog."""
-        self._show_tool(launchers.FAULT_TOPOLOGY)
+        """Calculate the fault topology for the fault layer of the data manager."""
+        from loopstructural.gui.messages import push_success, push_warning
+        from loopstructural.main.fault_topology_calc import (
+            FaultTopologyError,
+            calculate_from_data_manager,
+            result_message,
+        )
+
+        try:
+            result = calculate_from_data_manager(self.data_manager)
+        except FaultTopologyError as error:
+            push_warning("Fault topology", str(error))
+            return
+        text, warn = result_message(result)
+        (push_warning if warn else push_success)("Fault topology", text)
 
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.
