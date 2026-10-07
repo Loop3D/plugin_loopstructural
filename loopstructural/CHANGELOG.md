@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.6.1](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.0...v0.6.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* push log messages to the message bar from the main thread ([#127](https://github.com/Loop3D/plugin_loopstructural/issues/127)) ([cf2ebb9](https://github.com/Loop3D/plugin_loopstructural/commit/cf2ebb9bc72e825b0afe047fa588e2f780ae218c))
+
+## [0.6.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.5.0...v0.6.0) (2026-10-04)
+
+
+### Features
+
+* flip the polarity of fault-linked column boundaries ([4c7f90e](https://github.com/Loop3D/plugin_loopstructural/commit/4c7f90ef34e7f2fc5475d35411ccae57cc4f99a8))
+
+
+### Bug Fixes
+
+* give observation projections a UNITNAME geology and a projection length ([0331b60](https://github.com/Loop3D/plugin_loopstructural/commit/0331b6057d56d6192b7cf98c8e7ca26ba7c28c16))
+* keep the boundary above a domain fault uncropped ([342692a](https://github.com/Loop3D/plugin_loopstructural/commit/342692ac4154c94b6468040fda0621e8851788fc))
+* keep the fold axis settings in the folded feature panel ([09d15f9](https://github.com/Loop3D/plugin_loopstructural/commit/09d15f924d27b22b32c208d6d56e3c3be5299f25))
+* keep the selected feature after the feature list is rebuilt ([8ba7857](https://github.com/Loop3D/plugin_loopstructural/commit/8ba78572eeecfb9d8ce88c3425981d4836430015))
+* qt6 compatibility for scoped enums and exec ([21a28f4](https://github.com/Loop3D/plugin_loopstructural/commit/21a28f459715d5277ddf1166561bc06f28f97e51))
+
 ## [0.5.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.4.0...v0.5.0) (2026-09-30)
 
 
