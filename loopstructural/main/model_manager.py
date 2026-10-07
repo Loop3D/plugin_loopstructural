@@ -29,6 +29,7 @@ from LoopStructural.utils.observer import Observable
 from LoopStructural import GeologicalModel
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
+from ..main import constraints, parametric_fault
 from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
 
@@ -193,6 +194,16 @@ class GeologicalModelManager(Observable):
         # features, so it builds these again from here; see
         # `_build_manual_foliations`. Insertion order is the build order.
         self.manual_foliations: Dict[str, dict] = {}
+        # Features that the stratigraphic column makes (one for each group of
+        # units). `detached` keeps a copy of the data of a feature that the
+        # user detached: the data no longer follows the column and the
+        # contacts. `extra_constraints` are the rows that the user added to a
+        # generated feature, in the form of `manual_foliations[name]`.
+        self.detached: Dict[str, pd.DataFrame] = {}
+        # Faults that the user gave by numbers (see `parametric_fault`), by name.
+        # They have no fault trace, so they are not in `faults`.
+        self.parametric_faults: Dict[str, dict] = {}
+        self.extra_constraints: Dict[str, dict] = {}
         # Observers managed by Observable base class
         self.dem_function = lambda x, y: 0
         # internal flag to temporarily suppress notifications (used when
@@ -271,6 +282,9 @@ class GeologicalModelManager(Observable):
         self.faults = defaultdict(dict)
         self.stratigraphy = defaultdict(dict)
         self.manual_foliations = {}
+        self.detached = {}
+        self.extra_constraints = {}
+        self.parametric_faults = {}
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
@@ -1020,6 +1034,7 @@ class GeologicalModelManager(Observable):
                 groupname,
                 data=data,
                 force_constrained=True,
+                **self._extra_kwargs(groupname),
                 nelements=PlgSettingsStructure.interpolator_nelements,
                 npw=PlgSettingsStructure.interpolator_npw,
                 cpw=PlgSettingsStructure.interpolator_cpw,
@@ -1035,12 +1050,32 @@ class GeologicalModelManager(Observable):
         # foliation features were rebuilt; let observers know
         self._emit('foliation_features_updated')
 
-    def _group_data(self, group, isovalues) -> Optional[pd.DataFrame]:
+    def _group_data(
+        self, group, isovalues, include_extra=True, use_detached=True
+    ) -> Optional[pd.DataFrame]:
         """Return the contact and orientation data of the units in `group`
         as one data frame for its foliation, or None if there is no data.
 
-        `isovalues` is `stratigraphic_column.get_isovalues()`.
+        `isovalues` is `stratigraphic_column.get_isovalues()`. A detached
+        group gives its kept data, not the data of the column. With
+        `include_extra`, the rows that the user added to the feature are in the
+        result. With `use_detached` False, the data of the column is used also
+        for a detached group.
         """
+        if use_detached and group.name in self.detached:
+            data = [self.detached[group.name].copy()]
+        else:
+            data = self._column_group_data(group, isovalues)
+        extra = self._extra_data(group.name) if include_extra else None
+        if extra is not None:
+            data.append(extra)
+        if len(data) == 0:
+            return None
+        return pd.concat(data, ignore_index=True)
+
+    def _column_group_data(self, group, isovalues) -> list:
+        """Return the data frames of the contacts and the orientations of the
+        units in `group`."""
         data = []
         for u in group.units:
             val = isovalues[u.name]['value']
@@ -1059,9 +1094,108 @@ class GeologicalModelManager(Observable):
                     orientations['val'] = np.nan
                     orientations['feature_name'] = group.name
                     data.append(orientations)
-        if len(data) == 0:
+        return data
+
+    def _extra_data(self, name) -> Optional[pd.DataFrame]:
+        """Return the rows that the user added to the generated feature `name`."""
+        spec = self.extra_constraints.get(name)
+        if not spec or not spec.get('data'):
             return None
-        return pd.concat(data, ignore_index=True)
+        try:
+            data, _kwargs = self._foliation_data(
+                name, spec['data'], AllSampler(), spec.get('use_z_coordinate', True)
+            )
+        except Exception as e:
+            if self._debug_manager is not None:
+                self._debug_manager.log(
+                    f"Could not read the added constraints of '{name}': {e}", log_level=2
+                )
+            return None
+        return data
+
+    def _extra_kwargs(self, name) -> dict:
+        """Return the `create_and_add_foliation` arguments that the rows added to `name` need."""
+        spec = self.extra_constraints.get(name)
+        if not spec or not spec.get('data'):
+            return {}
+        kwargs = {}
+        for layer_data in spec['data'].values():
+            solver = constraints.solver_for(layer_data.get('type'))
+            if solver:
+                kwargs['solver'] = solver
+        return kwargs
+
+    # -- detach a generated feature ---------------------------------------
+
+    def generated_feature_names(self):
+        """Return the names of the features that the stratigraphic column makes."""
+        if self.stratigraphic_column is None:
+            return []
+        return [group.name for group in self.stratigraphic_column.get_groups()]
+
+    def is_generated(self, name) -> bool:
+        return name in self.generated_feature_names()
+
+    def is_detached(self, name) -> bool:
+        return name in self.detached
+
+    def detach_feature(self, name) -> bool:
+        """Keep the data of a generated feature, so that the user can edit it.
+
+        The data stays the same as it is now. It no longer changes when the
+        column, the contacts or the orientations change.
+
+        Returns
+        -------
+        bool
+            True if the feature is detached. False if it is not a generated
+            feature, or it has no data.
+        """
+        group = self._group_by_name(name)
+        if group is None:
+            return False
+        data = self._group_data(
+            group, self.stratigraphic_column.get_isovalues(), include_extra=False
+        )
+        if data is None:
+            return False
+        self.detached[name] = data.copy()
+        self._emit('model_updated')
+        return True
+
+    def attach_feature(self, name) -> bool:
+        """Make a detached feature follow the column again.
+
+        The model needs a build to use the data of the column.
+        """
+        if self.detached.pop(name, None) is None:
+            return False
+        self._data_dirty = True
+        self._emit('model_updated')
+        return True
+
+    def _group_by_name(self, name):
+        if self.stratigraphic_column is None:
+            return None
+        for group in self.stratigraphic_column.get_groups():
+            if group.name == name:
+                return group
+        return None
+
+    def detached_to_dict(self) -> dict:
+        """Return `detached` in a form that `json.dump` can write."""
+        return {
+            name: {
+                'columns': {str(c): [_json_value(v) for v in data[c]] for c in data.columns}
+            }
+            for name, data in self.detached.items()
+        }
+
+    def detached_from_dict(self, detached: dict):
+        """Replace `detached` with the data from `detached_to_dict`."""
+        self.detached = {
+            name: pd.DataFrame(entry['columns']) for name, entry in (detached or {}).items()
+        }
 
     def _strip_spurious_regions_from_domain_faults(self):
         """Work around a LoopStructural core gap that corrupts a domain
@@ -1252,7 +1386,67 @@ class GeologicalModelManager(Observable):
                     cpw=PlgSettingsStructure.interpolator_cpw,
                     regularisation=PlgSettingsStructure.interpolator_regularisation,
                 )
+        self._build_parametric_faults()
         self.apply_fault_abutting_relationships()
+
+    # -- faults that the user gives by numbers ---------------------------
+
+    def used_names(self) -> set:
+        """Return the names that a new feature or fault cannot use."""
+        names = {f.name for f in self.features()}
+        names |= set(self.faults) | set(self.parametric_faults) | set(self.manual_foliations)
+        return names
+
+    def add_parametric_fault(self, spec: dict):
+        """Add a fault that is given by a centre, a strike, a dip and a size.
+
+        The fault is built the next time the model is built, together with the
+        other faults, so that the features of the column use it. Until then
+        the model is stale.
+
+        Raises
+        ------
+        ValueError
+            If the spec has a problem, see `parametric_fault.problems`.
+        """
+        spec = parametric_fault.clean_spec(spec)
+        found = parametric_fault.problems(spec, self.used_names())
+        if found:
+            raise ValueError(" ".join(found))
+        self.parametric_faults[spec['name']] = spec
+        self._data_dirty = True
+        self._emit('model_updated')
+
+    def remove_parametric_fault(self, name: str):
+        """Stop building the parametric fault `name`. The model is stale until the next build."""
+        if self.parametric_faults.pop(name, None) is not None:
+            self._data_dirty = True
+
+    def _build_parametric_faults(self):
+        for name, spec in self.parametric_faults.items():
+            self._report_progress(f"Building fault '{name}'")
+            try:
+                self.model.create_and_add_fault(
+                    name,
+                    data=parametric_fault.frame_data(spec),
+                    nelements=PlgSettingsStructure.interpolator_nelements,
+                    npw=PlgSettingsStructure.interpolator_npw,
+                    cpw=PlgSettingsStructure.interpolator_cpw,
+                    regularisation=PlgSettingsStructure.interpolator_regularisation,
+                    **parametric_fault.fault_arguments(spec),
+                )
+            except Exception as e:
+                raise ValueError(f"Could not build fault '{name}': {e}") from e
+
+    def parametric_faults_to_dict(self) -> dict:
+        """Return `parametric_faults` in a form that `json.dump` can write."""
+        return {name: parametric_fault.clean_spec(spec) for name, spec in self.parametric_faults.items()}
+
+    def parametric_faults_from_dict(self, faults: dict):
+        """Replace `parametric_faults` with the specs from `parametric_faults_to_dict`."""
+        self.parametric_faults = {
+            name: parametric_fault.spec_from_dict(spec) for name, spec in (faults or {}).items()
+        }
 
     def _get_feature_by_name_or_none(self, name):
         """Non-raising counterpart to `GeologicalModel.get_feature_by_name`.
@@ -1460,7 +1654,12 @@ class GeologicalModelManager(Observable):
         )
         self._progress_callback = progress_callback
         displacement_fault_count = len(set(self.faults) - set(self.fault_boundaries.values()))
-        self._progress_total = displacement_fault_count + group_count + len(self.manual_foliations)
+        self._progress_total = (
+            displacement_fault_count
+            + len(self.parametric_faults)
+            + group_count
+            + len(self.manual_foliations)
+        )
         self._progress_current = 0
         dbg = getattr(self, '_debug_manager', None)
         if dbg is not None:
@@ -1741,10 +1940,12 @@ class GeologicalModelManager(Observable):
             Name for the new foliation feature.
         data : dict
             Mapping of layer identifiers to dicts describing each layer. Each
-            layer dict must include a 'type' key (one of 'Orientation',
-            'Form Line', 'Value', 'Inequality') and the fields required by
-            that type (e.g. 'strike_field', 'dip_field', 'value_field',
-            'form_line_constraint', ...).
+            layer dict must include a 'type' key (one of
+            `constraints.CONSTRAINT_TYPES`) and the fields required by that
+            type (e.g. 'strike_field', 'dip_field', 'value_field',
+            'form_line_constraint', ...). Each layer dict can also have a
+            'weight' and a 'z_source' ('layer', 'dem' or 'constant', with
+            'z_value'); see `constraints`.
         folded_feature_name : str or None
             Optional name of a feature to which the foliation should be
             associated/converted (currently unused in this helper).
@@ -1880,21 +2081,25 @@ class GeologicalModelManager(Observable):
                 # auto-synced rows from the map2loop workflow (type values
                 # like 'Contact (auto)') aren't meant for this manual path
                 continue
-            if layer_data['type'] == 'Orientation':
-                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+            layer_type = layer_data['type']
+            if layer_type not in constraints.CONSTRAINT_TYPES:
+                raise ValueError(f"Unknown layer type: {layer_type}")
+            df = constraints.sample_layer(sampler, layer_data, self.dem_function, use_z_coordinate)
+            if layer_type == 'Orientation':
                 df['strike'] = df[layer_data['strike_field']]
                 if layer_data.get('orientation_format') == 'Dip Direction':
                     df['strike'] = df['strike'] - 90
                 df['dip'] = df[layer_data['dip_field']]
                 df['feature_name'] = name
-                dfs.append(df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']])
-            elif layer_data['type'] == 'Form Line':
-                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                rows = df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']]
+                dfs.append(constraints.add_weight(rows, df, layer_data))
+            elif layer_type == 'Form Line':
                 df['feature_name'] = name
                 if layer_data.get('form_line_constraint') == 'strike':
                     df[['tx', 'ty', 'tz']] = _form_line_tangent_vectors(df)
                     df = df.dropna(subset=['tx', 'ty', 'tz'])
-                    dfs.append(df[['X', 'Y', 'Z', 'tx', 'ty', 'tz', 'feature_name']])
+                    rows = df[['X', 'Y', 'Z', 'tx', 'ty', 'tz', 'feature_name']]
+                    dfs.append(constraints.add_weight(rows, df, layer_data))
                     dip = layer_data.get('form_line_dip')
                     if dip is not None and not df.empty:
                         # The line's own direction is a precisely known hard
@@ -1919,24 +2124,32 @@ class GeologicalModelManager(Observable):
                         dip_df['w'] = layer_data.get('form_line_dip_weight', 0.1)
                         dfs.append(dip_df[['X', 'Y', 'Z', 'strike', 'dip', 'w', 'feature_name']])
                 else:
-                    df['interface'] = df['feature_id'].astype(float) + interface_offset
-                    interface_offset += df['feature_id'].nunique()
-                    dfs.append(df[['X', 'Y', 'Z', 'interface', 'feature_name']])
-            elif layer_data['type'] == 'Value':
-                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                    rows, interface_offset = constraints.interface_rows(
+                        df, {}, name, interface_offset
+                    )
+                    dfs.append(constraints.add_weight(rows, df, layer_data))
+            elif layer_type == 'Interface':
+                rows, interface_offset = constraints.interface_rows(
+                    df, layer_data, name, interface_offset
+                )
+                dfs.append(constraints.add_weight(rows, df, layer_data))
+            elif layer_type == 'Value':
                 df['val'] = df[layer_data['value_field']]
                 df['feature_name'] = name
-                dfs.append(df[['X', 'Y', 'Z', 'val', 'feature_name']])
-
-            elif layer_data['type'] == 'Inequality':
-                df = sampler(layer_data['df'], self.dem_function, use_z_coordinate)
+                dfs.append(
+                    constraints.add_weight(df[['X', 'Y', 'Z', 'val', 'feature_name']], df, layer_data)
+                )
+            elif layer_type == 'Inequality':
                 df['l'] = df[layer_data['lower_field']]
                 df['u'] = df[layer_data['upper_field']]
                 df['feature_name'] = name
-                dfs.append(df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']])
-                kwargs['solver'] = 'admm'
+                rows = df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']]
+                dfs.append(constraints.add_weight(rows, df, layer_data))
             else:
-                raise ValueError(f"Unknown layer type: {layer_data['type']}")
+                dfs.append(constraints.constraint_rows(df, layer_data, name))
+            solver = constraints.solver_for(layer_type)
+            if solver:
+                kwargs['solver'] = solver
         return pd.concat(dfs, ignore_index=True), kwargs
 
     def add_unconformity(

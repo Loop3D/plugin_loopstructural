@@ -302,27 +302,27 @@ Acceptance: a new user can go from an empty project to a solved model with the
 
 ### Phase 4: Model step and direct interpolation
 
-- [ ] Replace "Initialize Model", "Solve Model" and "Update Model Data" with one
+- [x] Replace "Initialize Model", "Solve Model" and "Update Model Data" with one
       primary button. Its text and action come from the model state.
-- [ ] Show the problems from all steps before the build.
-- [ ] Before the build, calculate all out-of-date derived data again: basal
+- [x] Show the problems from all steps before the build.
+- [x] Before the build, calculate all out-of-date derived data again: basal
       contacts first, then calculated thicknesses. Run this in a background
       task with progress. If the calculation fails, stop the build and show
       the error.
-- [ ] With "Calculate from geology polygons", give the extracted contacts
+- [x] With "Calculate from geology polygons", give the extracted contacts
       directly to the model. Update the project contacts layer for display
       only.
-- [ ] Add the start choice: "Build from a geological map" or "Interpolate
+- [x] Add the start choice: "Build from a geological map" or "Interpolate
       surfaces from constraints". Save the choice with the state.
-- [ ] Constraint list for each feature: source layer, constraint type, field
+- [x] Constraint list for each feature: source layer, constraint type, field
       mapping, weight, Z source (layer Z, DEM or constant).
-- [ ] Add the constraint types: value, interface, gradient/normal, tangent,
+- [x] Add the constraint types: value, interface, gradient/normal, tangent,
       inequality, pairwise inequality.
-- [ ] Show generated constraints as read-only rows. Add "Detach" to make a
+- [x] Show generated constraints as read-only rows. Add "Detach" to make a
       generated feature editable.
-- [ ] Build and preview one feature: an isoline on the map canvas, or a surface
+- [x] Build and preview one feature: an isoline on the map canvas, or a surface
       in the 3D view.
-- [ ] Implement "Add Fault" in the model step.
+- [x] Implement "Add Fault" in the model step.
 
 Files: `geological_model_tab/*.py`, `layer_selection_table.py`,
 `feature_details_panel/*.py`, `main/model_manager.py`.
@@ -361,9 +361,10 @@ model, the model uses basal contacts and thicknesses that match the new order.
    done), or only a guide? Recommendation: only a guide. Show problems, but do
    not lock steps.
 2. Is the Data Conversion dialog part of step 1, or a separate tool?
-3. In direct mode, which constraint types does each interpolator (FDI, PLI,
-   surfe) support? The UI must hide types that the selected interpolator does
-   not support.
+3. ~~In direct mode, which constraint types does each interpolator (FDI, PLI,
+   surfe) support?~~ Resolved: all interpolators accept the same constraint
+   types. LoopStructural converts them as needed. The UI shows the same types
+   for every interpolator and does not hide any.
 4. Is there a minimum QGIS version for the new widgets?
 5. Must the Processing algorithms also use the derived-data record, or only
    the dock? Recommendation: only the dock. Processing runs are single runs
