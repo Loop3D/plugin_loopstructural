@@ -11,7 +11,6 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -23,6 +22,7 @@ from loopstructural.main import preview
 
 from ....background_task import finish_background_task, start_background_task
 from ....messages import push_info, push_warning
+from ...steps.section_stack import SectionStack
 from ..bounding_box_widget import BoundingBoxWidget
 from ..layer_selection_table import LayerSelectionTable
 
@@ -85,24 +85,13 @@ class BaseFeatureDetailsPanel(QWidget):
         self.feature = feature
         self.model_manager = model_manager
         self.data_manager = data_manager
-        # Create a scroll area for horizontal scrolling
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-
-        # Create content widget to hold the form layout
-        content = QWidget()
-        self.layout = QVBoxLayout(content)
-        # Set the content widget as the scroll area's widget
-        scroll.setWidget(content)
-
-        # Add scroll area to main layout
+        # The sections of the panel. At most two are open. The page that holds
+        # the panel has the scroll area.
         mainLayout = QVBoxLayout(self)
-        mainLayout.addWidget(scroll)
-
-        # Set the main layout
-        self.setLayout(mainLayout)
+        mainLayout.setContentsMargins(0, 0, 0, 0)
+        self.layout = SectionStack(self, 'feature_details', data_manager)
+        mainLayout.addWidget(self.layout)
+        mainLayout.addStretch(1)
 
         ## define interpolator parameters
         # Regularisation spin box
@@ -176,9 +165,17 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
         group_box = QgsCollapsibleGroupBox('Interpolator Settings')
         group_box.setLayout(form_layout)
-        self.layout.addWidget(group_box)
-        self.layout.addWidget(self._build_preview_widget())
-        self.layout.addWidget(table_group_box)
+        self.layout.add_section(
+            group_box,
+            'interpolator',
+            'Interpolator Settings',
+            summary=lambda: (
+                f"{self.interpolator_type_combo.currentText()}, "
+                f"{int(self.n_elements_spinbox.value())} elements"
+            ),
+        )
+        self.layout.add_section(self._build_preview_widget(), 'preview', 'Preview', collapsed=True)
+        self.layout.add_section(table_group_box, 'data_layers', 'Data Layers')
         # this will call the addMidBlock and addExportBlock methods
         self.addMidBlock()
         self.addExportBlock()

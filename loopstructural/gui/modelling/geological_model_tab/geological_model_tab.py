@@ -23,6 +23,7 @@ from ....main.model_manager import ModelSolveCancelled
 from ....main.workflow_mode import DEFAULT_WORKFLOW_MODE, WORKFLOW_MODE_CONSTRAINTS
 from ...messages import push_info
 from ..steps import build_plan
+from ..steps.section_stack import page_scroll_area
 from .add_fault_dialog import AddFaultDialog
 from .add_foliation_dialog import AddFoliationDialog
 from .add_unconformity_dialog import AddUnconformityDialog
@@ -187,7 +188,7 @@ class GeologicalModelTab(QWidget):
         # The problems of all steps. They show before the build, so the user
         # sees why a build can fail or can give a poor model.
         self.problemsLabel = QLabel()
-        self.problemsLabel.setWordWrap(True)
+        self.problemsLabel.setWordWrap(False)
         self.problemsLabel.setTextFormat(Qt.TextFormat.RichText)
         self.problemsLabel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         mainLayout.insertWidget(1, self.problemsLabel, 0)
@@ -316,9 +317,11 @@ class GeologicalModelTab(QWidget):
         problems = self._problems_provider() if self._problems_provider is not None else []
         if problems:
             lines = "".join(f"<li>{html.escape(message)}</li>" for _key, message in problems)
+            count = len(problems)
             self.problemsLabel.setText(
-                f"<b>Check before the build:</b><ul style='margin:0'>{lines}</ul>"
+                f"<b>Check before the build:</b> {count} problem{'s' if count != 1 else ''}"
             )
+            self.problemsLabel.setToolTip(f"<ul style='margin:0'>{lines}</ul>")
             self.problemsLabel.show()
         else:
             self.problemsLabel.hide()
@@ -756,7 +759,8 @@ class GeologicalModelTab(QWidget):
         # Dynamically replace the featureDetailsPanel widget
         splitter = self._splitter
         splitter.widget(1).deleteLater()  # Remove the existing widget
-        splitter.addWidget(panel)  # Add the new widget
+        # The page has one scroll area, here. The panel does not have its own.
+        splitter.addWidget(page_scroll_area(panel))
 
     def _on_model_update_started(self):
         """Show a non-blocking indeterminate progress dialog for model updates.
