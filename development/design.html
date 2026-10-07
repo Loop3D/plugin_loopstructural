@@ -1,0 +1,209 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Design Document for LoopStructural Plugin &mdash; LoopStructural 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+    <link rel="shortcut icon" href="../_static/icon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: SteelBlue" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            LoopStructural
+              <img src="../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../usage/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/3d-modeling.html">3D Modelling Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/interface.html">Plugin interface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contribution guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contribute.html">Contributing Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="translation.html">Manage translations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packaging.html">Packaging and deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing the plugin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: SteelBlue" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">LoopStructural</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Design Document for LoopStructural Plugin</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/development/design.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="design-document-for-loopstructural-plugin">
+<h1>Design Document for LoopStructural Plugin<a class="headerlink" href="#design-document-for-loopstructural-plugin" title="Link to this heading"></a></h1>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>The LoopStructural plugin is designed to integrate geological modeling capabilities from LoopStructural into QGIS. It provides tools for visualizing, managing, and analyzing geological data, enabling users to create and refine geological models directly within the QGIS environment.</p>
+<section id="design-choices">
+<h3>Design Choices<a class="headerlink" href="#design-choices" title="Link to this heading"></a></h3>
+<ol class="arabic">
+<li><p>Modular Architecture
+The plugin is structured into multiple modules, each responsible for specific functionalities:</p>
+<ul class="simple">
+<li><p>GUI Module: Contains user interface components such as dialogs, widgets, and tabs for interacting with the plugin.</p></li>
+<li><p>Main Module: Handles core functionalities like data management, model management, and project handling.</p></li>
+<li><p>Processing Module: Provides processing algorithms and tools for geological data analysis.</p></li>
+<li><p>Toolbelt Module: Includes utility functions like logging and preferences management.</p></li>
+<li><p>Resources Module: Stores static resources such as images, translations, and help files.</p></li>
+</ul>
+<p>This modular design ensures separation of concerns, making the codebase easier to maintain and extend.</p>
+</li>
+<li><p>Integration with QGIS
+The plugin leverages QGIS’s PyQt-based framework for GUI development and its processing framework for data analysis. Key integration points include:</p>
+<ul class="simple">
+<li><p>Use of QgsCollapsibleGroupBox for organizing UI components.</p></li>
+<li><p>Implementation of custom processing algorithms using the Processing module.</p></li>
+<li><p>Utilization of QGIS’s vector and raster layers for geological data representation.</p></li>
+</ul>
+</li>
+<li><p>Dynamic UI Components
+The plugin dynamically generates UI components based on the data provided by the data_manager. For example:</p>
+<ul class="simple">
+<li><p>Fault adjacency tables are created dynamically based on unique faults retrieved from the data manager.</p></li>
+<li><p>Stratigraphic units tables are similarly generated, allowing users to interact with geological units.</p></li>
+</ul>
+</li>
+<li><p>Custom Interactivity
+Interactive elements like QPushButton are used extensively in the UI. These buttons allow users to perform actions such as toggling states or cycling through options (e.g., changing colors to represent different statuses).</p></li>
+<li><p>Extensibility
+The plugin is designed to be extensible, allowing developers to add new features or modify existing ones with minimal impact on the overall architecture. Examples include:</p>
+<ul class="simple">
+<li><p>Adding new tabs or widgets to the GUI.</p></li>
+<li><p>Extending the data_manager to support additional geological data types.</p></li>
+<li><p>Implementing new processing algorithms in the Processing module.</p></li>
+</ul>
+</li>
+<li><p>Resource Management
+Static resources such as images and translations are stored in the resources module. This ensures that all assets are centralized and easily accessible.</p></li>
+<li><p>Testing
+The plugin includes a tests directory with unit tests for various components. This ensures that changes to the codebase do not introduce regressions.</p></li>
+</ol>
+</section>
+</section>
+<section id="key-components">
+<h2>Key Components<a class="headerlink" href="#key-components" title="Link to this heading"></a></h2>
+<section id="gui-module">
+<h3>GUI Module<a class="headerlink" href="#gui-module" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Fault Adjacency Tab: Displays a table of faults with interactive buttons for adjacency settings.</p></li>
+<li><p>Stratigraphic Units Tab: Similar to the fault adjacency tab but focused on stratigraphic units.</p></li>
+<li><p>Visualization Widgets: Tools for rendering geological models and features.</p></li>
+</ul>
+</section>
+<section id="main-module">
+<h3>Main Module<a class="headerlink" href="#main-module" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Data Manager: Handles loading, saving, and querying geological data.</p></li>
+<li><p>Model Manager: Manages geological models, including their creation and modification.</p></li>
+</ul>
+</section>
+<section id="processing-module">
+<h3>Processing Module<a class="headerlink" href="#processing-module" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Provider: Implements custom processing algorithms for geological data analysis.</p></li>
+</ul>
+</section>
+<section id="toolbelt-module">
+<h3>Toolbelt Module<a class="headerlink" href="#toolbelt-module" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Log Handler: Provides logging utilities for debugging and monitoring.</p></li>
+<li><p>Preferences: Manages user preferences and settings.</p></li>
+</ul>
+</section>
+</section>
+<section id="future-enhancements">
+<h2>Future Enhancements<a class="headerlink" href="#future-enhancements" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Support for additional geological data types.</p></li>
+<li><p>Improved visualization capabilities using advanced rendering libraries.</p></li>
+<li><p>Enhanced interactivity with more intuitive UI components.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 - 2026, Lachlan GROSE.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(false);
+      });
+  </script> 
+
+</body>
+</html>

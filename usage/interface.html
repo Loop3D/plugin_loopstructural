@@ -1,0 +1,228 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plugin interface &mdash; LoopStructural 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+    <link rel="shortcut icon" href="../_static/icon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="&lt;no title&gt;" href="tutorials.html" />
+    <link rel="prev" title="3D Modelling Background" href="3d-modeling.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: SteelBlue" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            LoopStructural
+              <img src="../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="3d-modeling.html">3D Modelling Background</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Plugin interface</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#selecting-layers">Selecting Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#bounding-box">Bounding box</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#elevation-data">Elevation data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fault-layers">Fault layers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#stratigraphy">Stratigraphy</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#stratigraphic-column">Stratigraphic Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fault-topology-relationships">Fault topology relationships</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#processing-tools">Processing Tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#paint-stratigraphic-order">Paint Stratigraphic Order</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#model-parameters">Model parameters</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contribution guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/contribute.html">Contributing Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/environment.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/translation.html">Manage translations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/packaging.html">Packaging and deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/testing.html">Testing the plugin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/history.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: SteelBlue" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">LoopStructural</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Plugin interface</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/usage/interface.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul><div class="rst-breadcrumbs-buttons" role="navigation" aria-label="Sequential page navigation">
+        <a href="3d-modeling.html" class="btn btn-neutral float-left" title="3D Modelling Background" accesskey="p"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="tutorials.html" class="btn btn-neutral float-right" title="&lt;no title&gt;" accesskey="n">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+  </div>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="plugin-interface">
+<h1>Plugin interface<a class="headerlink" href="#plugin-interface" title="Link to this heading"></a></h1>
+<section id="selecting-layers">
+<h2>Selecting Layers<a class="headerlink" href="#selecting-layers" title="Link to this heading"></a></h2>
+<p>The LoopStructural plugin interfaces with QGIS to define the model input data and parameters.</p>
+<section id="bounding-box">
+<h3>Bounding box<a class="headerlink" href="#bounding-box" title="Link to this heading"></a></h3>
+<p>The bounding box defines the spatial extent of the model and can be either specified manually or automatically by calculating the extent from a selected layer or the current view. Not that the bounding box currently has to be axis aligned, meaning that the bounding box is defined by the minimum and maximum x, y and z coordinates.</p>
+<p><img alt="Bounding Box" src="../_images/bounding_box_widget.png" /></p>
+</section>
+<section id="elevation-data">
+<h3>Elevation data<a class="headerlink" href="#elevation-data" title="Link to this heading"></a></h3>
+<p>The elevation data is used to define the height of the input data. If a digital elevation model (DEM) is available, the height for all data points will be extracted from the layer. Otherwise a constant elevation can be used.</p>
+<p>If the points being modelled contain a Z coordinate, this can be used instead of the DEM or constant elevation and is selected on a per layer basis.</p>
+<p><img alt="DEM" src="../_images/dem_widget.png" /></p>
+</section>
+<section id="fault-layers">
+<h3>Fault layers<a class="headerlink" href="#fault-layers" title="Link to this heading"></a></h3>
+<p>The faults trace layer is usually a line layer that contains the trace of the fault. The fault trace is used to define the location of the fault in the model. Optional attributes can be used to further constrain the model:</p>
+<ul class="simple">
+<li><p><strong>fault name</strong> the name of the fault to be used in the model, if this is left blank the feature ID will be used instead.</p></li>
+<li><p><strong>Dip</strong> the dip of the fault, if this is left blank the fault will be assumed to be vertical.</p></li>
+<li><p><strong>Displacement</strong> - The maximum displacement magnitude of the fault. If this is not specified, a default value will be used.</p></li>
+<li><p><strong>Pitch</strong> - defines the pitch of the fault slip vector in the fault surface. If this is left blank a vertical slip vector is assumed and projected onto the fault surface.</p></li>
+</ul>
+<p><img alt="Fault Layer" src="../_images/fault_layers.png" /></p>
+</section>
+<section id="stratigraphy">
+<h3>Stratigraphy<a class="headerlink" href="#stratigraphy" title="Link to this heading"></a></h3>
+<p>Two layers can be used to constrain the stratigraphy of the model:</p>
+<ol class="arabic simple">
+<li><p>Basal contacts - this layer defines the basal contacts of the stratigraphy. The layer should contain a line layer with the contact traces. The attributes can be used to define the name of the contact.</p></li>
+<li><p>Structural data - this layer defines the structural data that is used to constrain the model. The layer should contain a point layer with the structural data. The attributes can be used to define the orientation of the data, such as dip and dip direction.</p></li>
+</ol>
+<p><img alt="Stratigraphic Layer" src="../_images/stratigraphic_layer.png" /></p>
+</section>
+</section>
+<section id="stratigraphic-column">
+<h2>Stratigraphic Column<a class="headerlink" href="#stratigraphic-column" title="Link to this heading"></a></h2>
+<p>The stratigraphic column defines the order of the contacts and any unconformable relationships between them. The column is defined by a list of units - these units are ordered from oldest at the bottom to youngest at the top. Unconformities can be inserted between units to define an unconformable relationship. The thicknesses define the true thickness of each unit and are used to parameterise the interpolation. The unit names should match the names of the contacts in the basal contacts layer. Units without basal contacts can be included in the stratigraphic column but will not be constrained by any data.</p>
+<p>The stratigraphic column can be initialised from the basal contacts layer by clicking the “Initialise from Layer” button. This will create a column with the contacts in the order they are found in the layer. The column can then be edited to add unconformities or change the order of the units. To change the order of units simply drag the units in the list. To add an unconformity, click the “Add Unconformity” button and drag the unconformity the location in the column.</p>
+<p><img alt="Stratigraphic Column" src="../_images/stratigraphic_column_04.png" /></p>
+</section>
+<section id="fault-topology-relationships">
+<h2>Fault topology relationships<a class="headerlink" href="#fault-topology-relationships" title="Link to this heading"></a></h2>
+<p>The fault-fault relationship table defines the interaction between faults in the model. This is used to define abutting relationships and where one fault is faulted by another fault. The fault table is updated whenever the faults layer or fault name field is changed. For each fault the columns indicate whether the fault is abutting to another fault. By clicking the cell the relationship can be toggled between no relationship (white background), abutting (red) and faulted (green).</p>
+<p><img alt="Fault Topology" src="../_images/fault_topology_hamersley.png" /></p>
+</section>
+<section id="processing-tools">
+<h2>Processing Tools<a class="headerlink" href="#processing-tools" title="Link to this heading"></a></h2>
+<p>The plugin provides several QGIS Processing algorithms for working with geological data. These can be accessed through the QGIS Processing Toolbox.</p>
+<section id="paint-stratigraphic-order">
+<h3>Paint Stratigraphic Order<a class="headerlink" href="#paint-stratigraphic-order" title="Link to this heading"></a></h3>
+<p>The <strong>Paint Stratigraphic Order</strong> algorithm allows you to visualize the stratigraphic order on geology polygons. This tool is useful for:</p>
+<ul class="simple">
+<li><p>Visually debugging the stratigraphic column</p></li>
+<li><p>Quality checking unit order</p></li>
+<li><p>Creating visualizations of stratigraphic relationships</p></li>
+</ul>
+<p>The algorithm takes:</p>
+<ul class="simple">
+<li><p><strong>Input Polygons</strong>: A polygon layer containing geological units (e.g., your geology map)</p></li>
+<li><p><strong>Unit Name Field</strong>: The field in your polygon layer that contains unit names</p></li>
+<li><p><strong>Stratigraphic Column</strong>: A table or layer with the stratigraphic column (ordered from youngest to oldest)</p></li>
+<li><p><strong>Paint Mode</strong>: Choose between:</p>
+<ul>
+<li><p><strong>Stratigraphic Order</strong> (0 = youngest, N = oldest): Paints a numeric order onto each polygon</p></li>
+<li><p><strong>Cumulative Thickness</strong>: Paints the cumulative thickness from the bottom (oldest) unit</p></li>
+</ul>
+</li>
+</ul>
+<p>The algorithm adds a new field to your polygon layer:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">strat_order</span></code>: The stratigraphic order (when using Stratigraphic Order mode)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cum_thickness</span></code>: The cumulative thickness in the stratigraphic column (when using Cumulative Thickness mode)</p></li>
+</ul>
+<p>Units that don’t match the stratigraphic column will have null values, helping you identify data quality issues.</p>
+</section>
+</section>
+<section id="model-parameters">
+<h2>Model parameters<a class="headerlink" href="#model-parameters" title="Link to this heading"></a></h2>
+<p>Once the layers have been selected, stratigraphic column defined and the fault topology relationships set, the LoopStructural model can be initialised.</p>
+<p>Initialise model will create a LoopStructural model with all of the geological features in the model. For each feature in the model the number of interpolation elements (degrees of freedom), the weighting of the regularisation, contact points and orientation weight can be changed.
+<img alt="Model Parameters" src="../_images/model-setup.png" /></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="3d-modeling.html" class="btn btn-neutral float-left" title="3D Modelling Background" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="tutorials.html" class="btn btn-neutral float-right" title="&lt;no title&gt;" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 - 2026, Lachlan GROSE.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(false);
+      });
+  </script> 
+
+</body>
+</html>

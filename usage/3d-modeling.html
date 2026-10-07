@@ -1,0 +1,167 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Modelling Background &mdash; LoopStructural 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+    <link rel="shortcut icon" href="../_static/icon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Plugin interface" href="interface.html" />
+    <link rel="prev" title="MacOS" href="install/macosx.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: SteelBlue" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            LoopStructural
+              <img src="../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">3D Modelling Background</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#background-on-3d-modeling">Background on 3D Modeling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#implicit-modeling">Implicit Modeling</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#loopstructural">LoopStructural</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#stratigraphic-modelling">Stratigraphic Modelling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fault-modelling">Fault modelling</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="interface.html">Plugin interface</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contribution guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/contribute.html">Contributing Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/environment.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/documentation.html">Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/translation.html">Manage translations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/packaging.html">Packaging and deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/testing.html">Testing the plugin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/history.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: SteelBlue" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">LoopStructural</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">3D Modelling Background</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/usage/3d-modeling.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul><div class="rst-breadcrumbs-buttons" role="navigation" aria-label="Sequential page navigation">
+        <a href="install/macosx.html" class="btn btn-neutral float-left" title="MacOS" accesskey="p"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="interface.html" class="btn btn-neutral float-right" title="Plugin interface" accesskey="n">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+  </div>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="d-modelling-background">
+<h1>3D Modelling Background<a class="headerlink" href="#d-modelling-background" title="Link to this heading"></a></h1>
+<section id="background-on-3d-modeling">
+<h2>Background on 3D Modeling<a class="headerlink" href="#background-on-3d-modeling" title="Link to this heading"></a></h2>
+<p>A <strong>3D model</strong> is a mathematical representation of a three-dimensional object. In the context of geology, 3D models are used to visualize and analyze the subsurface structure of the Earth. These models are constructed by integrating various types of geological data, such as borehole logs, geological maps, geophysical surveys, and structural measurements. The goal is to create a coherent representation of the subsurface that can be used for exploration, resource management, and scientific research.</p>
+<section id="implicit-modeling">
+<h3>Implicit Modeling<a class="headerlink" href="#implicit-modeling" title="Link to this heading"></a></h3>
+<p>Implicit modeling is a modern approach to constructing 3D geological models. Unlike traditional methods that rely on explicit surfaces and manual digitization, implicit modeling uses mathematical functions to represent geological features. These functions are defined over the entire model space and allow for the automatic generation of surfaces, such as stratigraphic boundaries and faults.</p>
+<p>Key advantages of implicit modeling include:</p>
+<ul class="simple">
+<li><p><strong>Efficiency</strong>: Models can be constructed quickly, even with large datasets.</p></li>
+<li><p><strong>Flexibility</strong>: Implicit methods can handle complex geometries and data uncertainties.</p></li>
+<li><p><strong>Automation</strong>: The process is less reliant on manual interpretation, reducing subjectivity.</p></li>
+</ul>
+<p>Implicit modeling has become widely used, enabling geoscientists to create detailed and accurate representations of the Earth’s subsurface.</p>
+</section>
+</section>
+<section id="loopstructural">
+<h2>LoopStructural<a class="headerlink" href="#loopstructural" title="Link to this heading"></a></h2>
+<p>LoopStructural is an open-source Python library designed for implicit geological modeling. It provides tools for creating 3D geological models based on various types of input data, including borehole data, surface data, and structural measurements. LoopStructural provides both the implicit modelling algorithms and parameterisation of geological objects.</p>
+<section id="stratigraphic-modelling">
+<h3>Stratigraphic Modelling<a class="headerlink" href="#stratigraphic-modelling" title="Link to this heading"></a></h3>
+<p>In LoopStructural stratigraphic surfaces can be modelled using implicit functions. The function is approximated to fit observations of the surface for example the location of contacts, the orientation of the surface at the location of a contact. Combined with a stratigraphic column which defines the order of the contacts and any unconformable relationships between them, LoopStructural can interpolate a function which approximates the geometry of the surface.</p>
+</section>
+<section id="fault-modelling">
+<h3>Fault modelling<a class="headerlink" href="#fault-modelling" title="Link to this heading"></a></h3>
+<p>Faults are modelled in LoopStructural by building three implicit functions defining the fault surface, fault slip vector and the fault extent. Combined with a parametric representation of the fault displacement within these coordinates a kinematic model.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="install/macosx.html" class="btn btn-neutral float-left" title="MacOS" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="interface.html" class="btn btn-neutral float-right" title="Plugin interface" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 - 2026, Lachlan GROSE.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(false);
+      });
+  </script> 
+
+</body>
+</html>
