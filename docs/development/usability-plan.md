@@ -204,16 +204,16 @@ of date with its contacts, and update it at build time.
 
 No change to the layout.
 
-- [ ] Remove the second `toolbar.addAction(self.action_fault_topology)`.
-- [ ] Remove the second `initProcessing()` call.
-- [ ] Add the Fault Adjacency instruction labels to their group layouts.
-- [ ] Basal Contacts: show one message only. Do not show "Success" after "No
+- [x] Remove the second `toolbar.addAction(self.action_fault_topology)`.
+- [x] Remove the second `initProcessing()` call.
+- [x] Add the Fault Adjacency instruction labels to their group layouts.
+- [x] Basal Contacts: show one message only. Do not show "Success" after "No
       Contacts Found".
-- [ ] Replace success `QMessageBox.information` calls with message bar
+- [x] Replace success `QMessageBox.information` calls with message bar
       messages. Start with the stratigraphic column, basal contacts, thickness
       and save state.
-- [ ] Ask for confirmation before "Clear Stratigraphic Column".
-- [ ] Delete the unused `.ui` files, or keep `export_tab.ui` for phase 5.
+- [x] Ask for confirmation before "Clear Stratigraphic Column".
+- [x] Delete the unused `.ui` files, or keep `export_tab.ui` for phase 5.
 
 Files: `plugin_main.py`, `fault_adjacency_tab.py`, `basal_contacts_widget.py`,
 `stratigraphic_column.py`, `model_definition_tab.py`.
