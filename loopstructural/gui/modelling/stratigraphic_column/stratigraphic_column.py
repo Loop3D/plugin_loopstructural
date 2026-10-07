@@ -498,9 +498,7 @@ class StratColumnWidget(QWidget):
             or layer.fields().indexFromName(field_name) < 0
         ):
             return
-        expression = (
-            f"{QgsExpression.quotedColumnRef(field_name)} = {QgsExpression.quotedValue(widget.name)}"
-        )
+        expression = f"{QgsExpression.quotedColumnRef(field_name)} = {QgsExpression.quotedValue(widget.name)}"
         layer.selectByExpression(expression)
         self._highlighted_layer = layer
 
