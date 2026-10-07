@@ -346,7 +346,7 @@ cross-section to files without the 3D view.
 
 ### Phase 6: Follow-up changes
 
-Four changes that come from use of phases 3 to 5. Do them in this order. Each
+Five changes that come from use of phases 3 to 5. Do them in this order. Each
 one is a separate pull request.
 
 #### 6.1 Two separate workflows
@@ -542,10 +542,50 @@ Tests: unit tests for the function: more data gives more or equal elements; the
 limits; no data; parallel and spread orientations; orientation signs do not
 matter.
 
+#### 6.5 Build a model with only faults
+
+Problem: the "map" workflow needs a stratigraphic column and basal contacts. A
+user who has only fault traces (for example, to model the faults alone) cannot
+build a model. The build asks for contacts, and the contacts extraction stops
+with "No basal contacts were found".
+
+Rules:
+
+- In the "map" workflow, the stratigraphic column and the basal contacts are
+  optional. A model with fault traces only builds the faults.
+- With no units in the column, the build does not calculate the basal contacts
+  and the thicknesses, and it makes no stratigraphic feature.
+- With units in the column but no contacts for a unit, the build gives the
+  current message. Only an empty column skips the contacts.
+
+Tasks:
+
+- [ ] `names_to_refresh` returns no result that comes from the column when the
+      column has no units. `DerivedRefresh` does not raise when there are no
+      units.
+- [ ] `update_model` builds the faults when the column has no groups.
+      `update_foliation_features` does nothing for an empty column. Check that
+      `model.stratigraphic_column` is safe to leave unset.
+- [ ] `check_stratigraphy` does not ask for the geology layer, the structure
+      layer or the contacts when the column is empty. The text says that the
+      step is optional if the user models only faults.
+- [ ] `model_state`, `valid` and the primary action accept a model that has
+      faults and no groups.
+- [ ] Step 5 (view and export) works with fault features only. The block model
+      and the stratigraphic surfaces are not offered when there are no units.
+
+Acceptance: a project has a fault trace layer and an empty column. The user
+sets the bounding box and the fault layer, and builds the model. The model has
+the fault features, and the user can view and export the fault surfaces.
+
+Tests: unit tests for `names_to_refresh` and for the checks with an empty
+column. A QGIS test of `update_model` with faults and no column.
+
 Order and links between the parts: 6.1 first, because it defines what the model
 reads in each workflow. 6.2 depends on the same checks, so do it next. 6.3
 comes after 6.2, because it must lay out the final content of the pages. 6.4
-does not depend on the others.
+does not depend on the others. 6.5 comes after 6.2, because it changes the
+same checks.
 
 ## Risks
 
