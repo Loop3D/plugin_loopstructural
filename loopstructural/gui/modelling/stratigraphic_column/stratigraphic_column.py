@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -21,6 +22,7 @@ from loopstructural.__about__ import DIR_PLUGIN_ROOT
 from loopstructural.gui.compatibility import configure_layer_combo
 from loopstructural.gui.messages import push_success
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
+from loopstructural.main import derived_data, layer_roles
 from loopstructural.main.helpers import ColumnMatcher, get_layer_names
 
 from .init_from_field_dialog import InitFromLayerFieldDialog
@@ -67,6 +69,12 @@ class StratColumnWidget(QWidget):
         # field, refreshed by _revalidate_unit_names(). None means no
         # layer/field is selected, so the name-match warning is skipped.
         self._known_unit_names = None
+
+        # True while the pickers follow a change of the shared geology role,
+        # so that the change is not written back
+        self._syncing_roles = False
+        # The hidden tool widget that an Update button runs
+        self._update_widget = None
 
         # Main list widget
         self.unitList = QListWidget()
@@ -173,9 +181,13 @@ class StratColumnWidget(QWidget):
         ageRow.addWidget(applyAgeButton)
         layout.addLayout(ageRow)
 
+        self._add_derived_data_panel(layout)
+
         self._guess_units_layer()
         self._restore_units_layer_selection()
+        self._sync_units_layer_from_roles()
         self._known_unit_names = self._get_known_unit_names()
+        self.data_manager.layer_roles.attach(self._on_layer_role_changed)
 
         # Update display from data manager
         self.update_display()
@@ -194,6 +206,152 @@ class StratColumnWidget(QWidget):
                 except RuntimeError:
                     # Widget was deleted
                     pass
+
+    # Words for the inputs that changed, in the message of an out-of-date result
+    _INPUT_WORDS = {
+        'unit_order': 'the order of the units',
+        'geology': 'the geology layer',
+        'unit_field': 'the unit name field',
+        'faults': 'the faults layer',
+        'ignore_units': 'the ignored units',
+        'override_units': 'the basal override units',
+        'contacts': 'the basal contacts settings',
+        'calculator_type': 'the calculator type',
+        'structure': 'the structure layer',
+        'cross_sections': 'the cross-sections layer',
+        'thicknesses': 'a unit thickness',
+    }
+
+    def _add_derived_data_panel(self, layout):
+        """Add the list of the derived results that are out of date.
+
+        Each result has a line of text and an Update button. The panel is
+        hidden when all results are current. The column does not calculate
+        again after each change, because the extraction is slow and the user
+        often moves many rows.
+        """
+        self.derivedDataPanel = QWidget(self)
+        panel_layout = QVBoxLayout(self.derivedDataPanel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        self._derived_rows = {}
+        for name in (
+            derived_data.BASAL_CONTACTS,
+            derived_data.THICKNESS,
+            derived_data.STYLED_FIELDS,
+        ):
+            row = QWidget(self.derivedDataPanel)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            label = QLabel(row)
+            label.setWordWrap(True)
+            button = QPushButton("Update", row)
+            button.setIcon(QgsApplication.getThemeIcon("mActionRefresh.svg"))
+            button.clicked.connect(lambda _checked=False, n=name: self._update_derived(n))
+            row_layout.addWidget(label, 1)
+            row_layout.addWidget(button)
+            panel_layout.addWidget(row)
+            self._derived_rows[name] = (row, label, button)
+        layout.addWidget(self.derivedDataPanel)
+        self.data_manager.derived.attach(self._on_derived_status_changed)
+        self._refresh_derived_panel()
+
+    def _on_derived_status_changed(self, name, status):
+        try:
+            self._refresh_derived_panel()
+        except RuntimeError:
+            # the widget was deleted
+            pass
+
+    def _refresh_derived_panel(self):
+        """Show a line for each result that is out of date."""
+        derived = self.data_manager.derived
+        any_visible = False
+        for name, (row, label, button) in self._derived_rows.items():
+            visible = derived.is_out_of_date(name)
+            # With "Use a contacts layer", the contacts are an input of the
+            # user and not a result of the plugin.
+            if (
+                name == derived_data.BASAL_CONTACTS
+                and self.data_manager.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_LAYER
+            ):
+                visible = False
+            row.setVisible(visible)
+            if visible:
+                any_visible = True
+                words = [
+                    self._INPUT_WORDS.get(key, key.replace('_', ' '))
+                    for key in derived.changed_inputs(name)
+                ]
+                reason = f" ({', '.join(words)} changed)" if words else ""
+                label.setText(f"{derived_data.DESCRIPTIONS[name]} are out of date{reason}.")
+        self.derivedDataPanel.setVisible(any_visible)
+
+    def _update_derived(self, name):
+        """Calculate an out-of-date result again with the settings of the project."""
+        if self._update_widget is not None:
+            # a calculation is running
+            return
+        if name == derived_data.STYLED_FIELDS:
+            self._update_styled_fields()
+            return
+        if name == derived_data.BASAL_CONTACTS:
+            from loopstructural.gui.map2loop_tools.basal_contacts_widget import (
+                BasalContactsWidget as tool_class,
+            )
+
+            run_method = '_run_extractor'
+        else:
+            from loopstructural.gui.map2loop_tools.thickness_calculator_widget import (
+                ThicknessCalculatorWidget as tool_class,
+            )
+
+            run_method = '_run_calculator'
+        # The tool widget takes its settings from the layer roles and from the
+        # last run. It is not shown. Its progress dialog is shown.
+        widget = tool_class(
+            self, data_manager=self.data_manager, debug_manager=self.data_manager.debug_manager
+        )
+        widget.hide()
+        widget.task_succeeded.connect(self._finish_update)
+        widget.task_failed.connect(self._finish_update)
+        self._update_widget = widget
+        self._set_update_buttons_enabled(False)
+        if getattr(widget, run_method)() is False:
+            # The tool did not start, for example no geology layer is selected.
+            # It showed the reason.
+            self._finish_update()
+
+    def _update_styled_fields(self):
+        """Write the order of the column again to the layer that was styled."""
+        detail = self.data_manager.derived.detail(derived_data.STYLED_FIELDS)
+        layer = self.data_manager.find_layer_by_name(detail.get('layer'))
+        field = detail.get('field') or self.data_manager.layer_roles.get(
+            layer_roles.GEOLOGY_UNIT_FIELD
+        )
+        if layer is None or not field:
+            QMessageBox.warning(
+                self,
+                "Update Map Layer Fields",
+                "The layer that has the stratigraphic order fields is not in the project. "
+                "Use 'Apply Stratigraphic Age to Map Layer' to write them again.",
+            )
+            return
+        if not self.data_manager.refresh_stratigraphic_order_field(layer, field):
+            QMessageBox.warning(
+                self,
+                "Update Map Layer Fields",
+                f"Could not write the stratigraphic order to layer '{layer.name()}'.",
+            )
+
+    def _finish_update(self):
+        widget, self._update_widget = self._update_widget, None
+        if widget is not None:
+            widget.deleteLater()
+        self._set_update_buttons_enabled(True)
+
+    def _set_update_buttons_enabled(self, enabled):
+        for _row, _label, button in self._derived_rows.values():
+            button.setEnabled(enabled)
 
     def _make_tool_button(self, theme_icon_name: str, tooltip: str) -> QToolButton:
         """Build a small icon-only tool button using a QGIS theme icon, with
@@ -413,13 +571,44 @@ class StratColumnWidget(QWidget):
         if not self.data_manager:
             return
         layer = self.unitsLayerComboBox.currentLayer()
+        field = self.unitsLayerFieldComboBox.currentField()
         self.data_manager.set_widget_settings(
             'stratigraphic_column_widget',
             {
                 'units_layer': layer.name() if layer else None,
-                'units_layer_field': self.unitsLayerFieldComboBox.currentField(),
+                'units_layer_field': field,
             },
         )
+        # The geology layer is shared with the map2loop tools
+        if not self._syncing_roles:
+            self.data_manager.layer_roles.set(layer_roles.GEOLOGY, layer)
+            self.data_manager.layer_roles.set(layer_roles.GEOLOGY_UNIT_FIELD, field or None)
+
+    def _sync_units_layer_from_roles(self):
+        """Show the geology layer and the unit name field of the shared roles."""
+        roles = self.data_manager.layer_roles
+        layer = roles.get(layer_roles.GEOLOGY)
+        field = roles.get(layer_roles.GEOLOGY_UNIT_FIELD)
+        if layer is None:
+            return
+        self._syncing_roles = True
+        try:
+            if self.unitsLayerComboBox.currentLayer() != layer:
+                self.unitsLayerComboBox.setLayer(layer)
+            if field and layer.fields().indexFromName(field) >= 0:
+                self.unitsLayerFieldComboBox.setField(field)
+        finally:
+            self._syncing_roles = False
+        self._revalidate_unit_names()
+
+    def _on_layer_role_changed(self, role, value):
+        """Follow a change of the geology role that did not come from this widget."""
+        if role in (layer_roles.GEOLOGY, layer_roles.GEOLOGY_UNIT_FIELD):
+            try:
+                self._sync_units_layer_from_roles()
+            except RuntimeError:
+                # the widget was deleted
+                pass
 
     def _on_units_field_changed(self, _field_name):
         """Persist and re-validate when the unit-name field selection changes."""
@@ -763,6 +952,10 @@ class StratColumnWidget(QWidget):
                         )
                 else:
                     self.data_manager.clear_fault_boundary(unit_widget.uuid)
+            if not isinstance(unit_widget, UnconformityWidget):
+                # a thickness that the user typed must not be replaced by a
+                # calculated thickness
+                self.data_manager.note_thickness_edit(unit_data)
             self.data_manager._stratigraphic_column.update_element(unit_data)
             # Trigger callback to notify all listeners of the change
             if self.data_manager.stratigraphic_column_callback:

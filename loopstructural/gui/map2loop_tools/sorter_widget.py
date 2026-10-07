@@ -9,6 +9,7 @@ from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
+from loopstructural.main import layer_roles
 from loopstructural.main.helpers import get_layer_names
 from loopstructural.main.m2l_api import (
     PARAMETERS_DICTIONARY,
@@ -16,6 +17,8 @@ from loopstructural.main.m2l_api import (
     SORTERS_WITHOUT_YOUNGING,
 )
 from loopstructural.toolbelt.preferences import PlgOptionsManager
+
+from .layer_defaults import adopt_geology_role, apply_layer_role_defaults
 
 
 class SorterWidget(QWidget):
@@ -80,6 +83,16 @@ class SorterWidget(QWidget):
         # Set up field combo boxes
         self._setup_field_combo_boxes()
         self._restore_selection()
+        # The layers of the shared roles are the defaults of the tool
+        apply_layer_role_defaults(
+            self.data_manager,
+            {
+                layer_roles.GEOLOGY: self.geologyLayerComboBox,
+                layer_roles.STRUCTURE: self.structureLayerComboBox,
+                layer_roles.DEM: self.dtmLayerComboBox,
+            },
+            unit_field_combo=self.unitNameFieldComboBox,
+        )
 
         # Initial state update
         self._on_algorithm_changed()
@@ -365,6 +378,11 @@ class SorterWidget(QWidget):
         if not self.geologyLayerComboBox.currentLayer():
             QMessageBox.warning(self, "Missing Input", "Please select a geology layer.")
             return False
+        adopt_geology_role(
+            self.data_manager,
+            geology=self.geologyLayerComboBox.currentLayer(),
+            unit_field=self.unitNameFieldComboBox.currentField(),
+        )
 
         algorithm_index = self.sortingAlgorithmComboBox.currentIndex()
         algorithm_name = self.sorting_algorithms[algorithm_index]

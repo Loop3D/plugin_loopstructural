@@ -12,6 +12,7 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsGraduatedSymbolRenderer,
+    QgsMapLayer,
     QgsPointXY,
     QgsProject,
     QgsRectangle,
@@ -26,7 +27,10 @@ from qgis.PyQt.QtGui import QColor
 
 from LoopStructural import FaultTopology, StratigraphicColumn
 
+from . import derived_data, layer_roles
 from .data_types import BasalContactsConfig, FaultTracesConfig, StructuralOrientationsConfig
+from .derived_data import DerivedData, ThicknessSources
+from .layer_roles import LayerRoles
 from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
 
@@ -49,6 +53,22 @@ def _colour_to_qcolor(colour):
 
 
 __title__ = "LoopStructural"
+# Marks an argument that the caller did not give, because None is a value
+# for some of them (for example, no faults layer).
+_UNSET = object()
+
+
+def _layer_name(layer):
+    """Return the name of a layer, the same string, or None."""
+    if layer is None or isinstance(layer, str):
+        return layer
+    try:
+        return layer.name()
+    except RuntimeError:
+        # the C++ layer was deleted
+        return None
+
+
 # number of cells in the bounding box grid (used for isosurfaces and
 # evaluation, not for the interpolation)
 DEFAULT_BOUNDING_BOX_NELEMENTS = 100_000
@@ -131,6 +151,19 @@ class ModellingDataManager:
         # data was last read from them
         self._changed_layer_ids = set()
         self._layer_data_changed_callbacks = []
+        # The layer that each role has (geology, fault traces, ...). The
+        # tools read these as their default layers.
+        self.layer_roles = LayerRoles(layer_resolver=self._find_any_layer)
+        self.layer_roles.attach(self._on_layer_role_changed)
+        # For each derived result, the inputs of the last run. See
+        # `derived_data` for how an out-of-date result is found.
+        self.derived = DerivedData()
+        self.derived.register(derived_data.BASAL_CONTACTS, self.basal_contacts_inputs)
+        self.derived.register(derived_data.THICKNESS, self.thickness_inputs)
+        self.derived.register(derived_data.STYLED_FIELDS, self.styled_fields_inputs)
+        # Records if the thickness of each unit was typed or calculated
+        self.thickness_sources = ThicknessSources()
+        self.debug_manager = None
 
     def onSaveProject(self):
         """Save project data."""
@@ -245,10 +278,229 @@ class ModellingDataManager:
     @property
     def stratigraphic_column_callback(self):
         def call_all():
+            # Find the derived results that the change made out of date
+            # first, so that the widgets show the new status.
+            self.derived.refresh()
             for cb in self._stratigraphic_column_callbacks:
                 cb()
 
         return call_all
+
+    def set_debug_manager(self, debug_manager):
+        """Set the debug manager for the tools that the data manager can start."""
+        self.debug_manager = debug_manager
+
+    def _on_layer_role_changed(self, role, value):
+        """A layer role changed: the derived results can be out of date."""
+        self.derived.refresh()
+
+    def get_layer_role(self, role):
+        """Get the layer (or the field name) that a role has, or None."""
+        return self.layer_roles.get(role)
+
+    def adopt_layer_roles(self, **roles):
+        """Set the roles that have no value. A role with a value does not change.
+
+        A tool calls this when it runs, so that the layer that the user
+        selected in the tool becomes the default of the other tools.
+        """
+        for role, value in roles.items():
+            if value is not None and self.layer_roles.get(role) is None:
+                self.layer_roles.set(role, value)
+
+    # -- derived data --------------------------------------------------
+
+    def _settings_layer_name(self, settings, key, role):
+        """Return the layer name that a tool used last, or the role value."""
+        if key in settings:
+            return settings[key]
+        return _layer_name(self.layer_roles.get(role))
+
+    def basal_contacts_inputs(
+        self,
+        *,
+        geology=_UNSET,
+        unit_field=_UNSET,
+        faults=_UNSET,
+        ignore_units=_UNSET,
+        override_units=_UNSET,
+    ):
+        """Return the inputs of the basal contacts calculation.
+
+        A value that is not given comes from the layer roles and from the
+        last settings of the Basal Contacts tool. A tool that runs gives its
+        own values, so the record is the inputs of the run.
+        """
+        settings = self.get_widget_settings('basal_contacts_widget', {}) or {}
+        if geology is _UNSET:
+            geology = self.layer_roles.get(layer_roles.GEOLOGY)
+        if unit_field is _UNSET:
+            unit_field = self.layer_roles.get(layer_roles.GEOLOGY_UNIT_FIELD)
+        if faults is _UNSET:
+            faults = self._settings_layer_name(settings, 'faults_layer', layer_roles.FAULT_TRACES)
+        if ignore_units is _UNSET:
+            ignore_units = settings.get('ignore_units', [])
+        if override_units is _UNSET:
+            override_units = settings.get('basal_override_units', [])
+        return {
+            'unit_order': self.get_stratigraphic_unit_names(),
+            'geology': _layer_name(geology),
+            'unit_field': unit_field,
+            'faults': _layer_name(faults),
+            'ignore_units': sorted(ignore_units or []),
+            'override_units': sorted(override_units or []),
+        }
+
+    def thickness_inputs(
+        self,
+        *,
+        geology=_UNSET,
+        unit_field=_UNSET,
+        contacts_layer=_UNSET,
+        calculator_type=_UNSET,
+        structure=_UNSET,
+        cross_sections=_UNSET,
+    ):
+        """Return the inputs of the thickness calculation.
+
+        Without a contacts layer, the calculation makes the contacts from
+        the geology layer, so the inputs of the contacts are inputs of the
+        thickness.
+        """
+        settings = self.get_widget_settings('thickness_calculator_widget', {}) or {}
+        if geology is _UNSET:
+            geology = self.layer_roles.get(layer_roles.GEOLOGY)
+        if unit_field is _UNSET:
+            unit_field = self.layer_roles.get(layer_roles.GEOLOGY_UNIT_FIELD)
+        if contacts_layer is _UNSET:
+            if self.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_LAYER:
+                contacts_layer = self.layer_roles.get(layer_roles.BASAL_CONTACTS)
+            else:
+                contacts_layer = settings.get('basal_contacts_layer')
+        if calculator_type is _UNSET:
+            calculator_type = settings.get('calculator_type')
+        if structure is _UNSET:
+            structure = self._settings_layer_name(
+                settings, 'structure_layer', layer_roles.STRUCTURE
+            )
+        if cross_sections is _UNSET:
+            cross_sections = settings.get('cross_sections_layer')
+        contacts_layer = _layer_name(contacts_layer)
+        if contacts_layer is not None:
+            contacts = {'layer': contacts_layer}
+        else:
+            contacts = {
+                'calculated': self.basal_contacts_inputs(geology=geology, unit_field=unit_field)
+            }
+        return {
+            'unit_order': self.get_stratigraphic_unit_names(),
+            'geology': _layer_name(geology),
+            'unit_field': unit_field,
+            'contacts': contacts,
+            'calculator_type': calculator_type,
+            'structure': _layer_name(structure),
+            'cross_sections': _layer_name(cross_sections),
+        }
+
+    def styled_fields_inputs(self):
+        """Return the inputs of the `strat_order` / `strat_thickness` fields."""
+        thicknesses = {}
+        for unit in self._stratigraphic_column.order:
+            if unit.element_type == StratigraphicColumnElementType.UNIT:
+                thickness = unit.thickness
+                thicknesses[unit.name] = (
+                    round(float(thickness), 6) if derived_data.thickness_is_set(thickness) else None
+                )
+        return {'unit_order': self.get_stratigraphic_unit_names(), 'thicknesses': thicknesses}
+
+    def refresh_stratigraphic_order_field(self, layer, field_name):
+        """Write the order of the column to the `strat_order` field of a layer again.
+
+        The style of the layer does not change.
+
+        Returns
+        -------
+        bool
+            True if the field was written.
+        """
+        unit_names = self.get_stratigraphic_unit_names()
+        if layer is None or not field_name or not unit_names:
+            return False
+        try:
+            paint_stratigraphic_order(layer, unit_names, field_name)
+        except Exception as err:
+            self.logger(message=f"Failed to write stratigraphic order onto layer: {err}")
+            return False
+        self.derived.record(
+            derived_data.STYLED_FIELDS,
+            inputs=self.styled_fields_inputs(),
+            detail={'layer': layer.name(), 'field': field_name},
+        )
+        return True
+
+    def get_derived_status(self, name):
+        """Return `current`, `out_of_date` or `not_run` for a derived result."""
+        return self.derived.status(name)
+
+    # -- thickness -----------------------------------------------------
+
+    def get_thickness_source(self, unit_uuid):
+        """Return `typed`, `calculated` or None for the thickness of a unit."""
+        return self.thickness_sources.get(unit_uuid)
+
+    def note_thickness_edit(self, unit_data):
+        """Record that the user typed the thickness of a unit.
+
+        The unit rows also send their value back when the data manager
+        sets it, so only a value that is not the same as the value in the
+        column is a user edit. The row shows two decimals.
+        """
+        element = self._stratigraphic_column.get_element_by_uuid(unit_data.get('uuid'))
+        if element is None or element.element_type != StratigraphicColumnElementType.UNIT:
+            return
+        new = unit_data.get('thickness')
+        if not derived_data.thickness_is_set(new):
+            # the user cleared the value
+            self.thickness_sources.discard(element.uuid)
+            return
+        old = element.thickness
+        if derived_data.thickness_is_set(old) and abs(float(old) - float(new)) <= 0.005 + 1e-9:
+            return
+        self.thickness_sources.set(element.uuid, derived_data.TYPED)
+
+    def apply_calculated_thicknesses(self, thicknesses):
+        """Set the thickness of units from a calculation.
+
+        A thickness that the user typed does not change.
+
+        Parameters
+        ----------
+        thicknesses : dict
+            Unit name -> thickness. A value that is not a number above zero
+            (map2loop uses -1 for a unit with no result) is ignored.
+
+        Returns
+        -------
+        tuple of list
+            The names of the units that changed, and the names of the units
+            that kept their typed thickness.
+        """
+        applied, skipped = [], []
+        for name, value in thicknesses.items():
+            if not derived_data.thickness_is_set(value):
+                continue
+            unit = self._stratigraphic_column.get_unit_by_name(name=name)
+            if unit is None:
+                continue
+            if not self.thickness_sources.can_overwrite(unit.uuid, unit.thickness):
+                skipped.append(name)
+                continue
+            unit.thickness = float(value)
+            self.thickness_sources.set(unit.uuid, derived_data.CALCULATED)
+            applied.append(name)
+        if applied:
+            self.stratigraphic_column_callback()
+        return applied, skipped
 
     def set_dem_callback(self, callback):
         """Set the callback for when the DEM layer is updated."""
@@ -417,6 +669,7 @@ class ModellingDataManager:
     def set_dem_layer(self, dem_layer):
         """Set the DEM layer to sample elevation from when `use_dem` is True."""
         self.dem_layer = dem_layer
+        self.layer_roles.set(layer_roles.DEM, dem_layer)
         if dem_layer is None:
             self.logger(
                 message="DEM layer is None, using 0.0 for elevation. Choose a valid layer or specify a constant value",
@@ -439,6 +692,7 @@ class ModellingDataManager:
             'unitname_field': unitname_field,
             'use_z_coordinate': use_z_coordinate,
         }
+        self.layer_roles.set(layer_roles.BASAL_CONTACTS, basal_contacts)
         # self._unitname_field = unitname_field
         self.calculate_unique_basal_units()
         # if stratigraphic column is not empty, update contacts
@@ -639,6 +893,11 @@ class ModellingDataManager:
         self.logger(
             message=f"Applied stratigraphic age field '{age_field_name}' and graduated "
             f"styling to layer '{layer.name()}'."
+        )
+        self.derived.record(
+            derived_data.STYLED_FIELDS,
+            inputs=self.styled_fields_inputs(),
+            detail={'layer': layer.name(), 'field': field_name},
         )
         return True
 
@@ -1084,6 +1343,7 @@ class ModellingDataManager:
             'fault_displacement_field': fault_displacement_field,
             'use_z_coordinate': use_z_coordinate,
         }
+        self.layer_roles.set(layer_roles.FAULT_TRACES, fault_trace_layer)
         self.update_faults()
         if self.fault_traces_callback:
             self.fault_traces_callback(**self._fault_traces)
@@ -1110,6 +1370,7 @@ class ModellingDataManager:
         self._structural_orientations['unitname_field'] = unitname_field
         self._structural_orientations['orientation_type'] = orientation_type
         self._structural_orientations['use_z_coordinate'] = use_z_coordinate
+        self.layer_roles.set(layer_roles.STRUCTURE, structural_orientations)
         if self.structural_orientations_callback:
             self.structural_orientations_callback(**self._structural_orientations)
         self.update_stratigraphy()
@@ -1319,6 +1580,9 @@ class ModellingDataManager:
         self.fault_stratigraphy_adjacency = None
         self.feature_data = defaultdict(dict)
         self.widget_settings = {}
+        self.layer_roles.clear()
+        self.thickness_sources.clear()
+        self.derived.clear()
 
         self.set_dem_layer(None)
         self.use_dem = True
@@ -1472,7 +1736,28 @@ class ModellingDataManager:
             'widget_settings': self.widget_settings,
             'model_crs': self._get_model_crs_authid(),
             'use_project_crs': self._use_project_crs,
+            'layer_roles': self.layer_roles.to_dict(),
+            'derived_data': self.derived.to_dict(),
+            'thickness_sources': self.thickness_sources.to_dict(),
         }
+
+    def _restore_derived_state(self, data):
+        """Restore the layer roles, derived-data records and thickness sources.
+
+        A state file from an older version has none of these keys. The roles
+        for the layers that the data manager already restored are the same
+        as the layers of these settings. The other roles and the records
+        get their default values.
+        """
+        roles = data.get('layer_roles')
+        if roles:
+            self.layer_roles.from_dict(roles)
+        else:
+            self.layer_roles.set(layer_roles.GEOLOGY, None)
+            self.layer_roles.set(layer_roles.GEOLOGY_UNIT_FIELD, None)
+            self.layer_roles.contacts_source = layer_roles.CONTACTS_FROM_GEOLOGY
+        self.thickness_sources.from_dict(data.get('thickness_sources'))
+        self.derived.from_dict(data.get('derived_data'))
 
     def from_dict(self, data):
         """Load data from a dictionary."""
@@ -1518,6 +1803,7 @@ class ModellingDataManager:
             self._flipped_fault_boundaries.update(data['flipped_fault_boundaries'])
         if 'widget_settings' in data:
             self.widget_settings = data['widget_settings']
+        self._restore_derived_state(data)
 
         # Load model CRS settings
         if 'use_project_crs' in data:
@@ -1639,6 +1925,8 @@ class ModellingDataManager:
         else:
             self.widget_settings = {}
 
+        self._restore_derived_state(data)
+
         if self.stratigraphic_column_callback:
             self.stratigraphic_column_callback()
 
@@ -1670,6 +1958,10 @@ class ModellingDataManager:
                 self.logger(message=f"Layer '{layer_name}' is not a vector layer.", log_level=2)
                 return None
 
+    def _find_any_layer(self, layer_name):
+        """Find a layer of any type (vector or raster) by name."""
+        return self.find_layer_by_name(layer_name, layer_type=QgsMapLayer)
+
     def update_feature_data(self, feature_name: str, feature_data: dict):
         """Update the feature data in the data manager."""
         if not isinstance(feature_data, dict):
@@ -1679,8 +1971,13 @@ class ModellingDataManager:
         self.refresh_layer_watchers()
 
     def set_widget_settings(self, widget_name: str, settings: dict):
-        """Store widget settings for persistence."""
+        """Store widget settings for persistence.
+
+        The settings of a tool are inputs of the derived results, so the
+        status of these results can change.
+        """
         self.widget_settings[widget_name] = settings
+        self.derived.refresh()
 
     def get_widget_settings(self, widget_name: str, default=None):
         """Retrieve persisted widget settings."""

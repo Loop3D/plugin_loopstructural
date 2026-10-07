@@ -7,12 +7,14 @@ from qgis.PyQt import uic
 from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from ...main import derived_data, layer_roles
 from ...main.helpers import ColumnMatcher, get_layer_names
 from ...main.m2l_api import extract_basal_contacts
 from ...main.vectorLayerWrapper import addGeoDataFrameToproject
 from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
 from ..messages import push_success, push_warning
+from .layer_defaults import adopt_geology_role, apply_layer_role_defaults
 
 
 class BasalContactsWidget(QWidget):
@@ -63,6 +65,15 @@ class BasalContactsWidget(QWidget):
         # Set up field combo boxes
         self._setup_field_combo_boxes()
         self._restore_selection()
+        # The layers of the shared roles are the defaults of the tool
+        apply_layer_role_defaults(
+            self.data_manager,
+            {
+                layer_roles.GEOLOGY: self.geologyLayerComboBox,
+                layer_roles.FAULT_TRACES: self.faultsLayerComboBox,
+            },
+            unit_field_combo=self.unitNameFieldComboBox,
+        )
 
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
@@ -164,6 +175,8 @@ class BasalContactsWidget(QWidget):
             self.unitNameFieldComboBox.setField(field)
         if units := settings.get('basal_override_units'):
             self.basalOverrideUnitsLineEdit.setText(', '.join(units))
+        if units := settings.get('ignore_units'):
+            self.ignoreUnitsLineEdit.setText(', '.join(units))
 
     def _persist_selection(self):
         """Persist current selections into data manager."""
@@ -182,6 +195,7 @@ class BasalContactsWidget(QWidget):
             ),
             'unit_name_field': self.unitNameFieldComboBox.currentField(),
             'basal_override_units': self._units_from_line_edit(self.basalOverrideUnitsLineEdit),
+            'ignore_units': self._units_from_line_edit(self.ignoreUnitsLineEdit),
         }
         self.data_manager.set_widget_settings('basal_contacts_widget', settings)
 
@@ -229,6 +243,23 @@ class BasalContactsWidget(QWidget):
 
         target = self._make_extract_contacts_target()
 
+        geology = self.geologyLayerComboBox.currentLayer()
+        unit_name_field = self.unitNameFieldComboBox.currentField()
+        adopt_geology_role(self.data_manager, geology=geology, unit_field=unit_name_field)
+        # The inputs of this run, read before the run starts. A change during
+        # the run makes the result out of date.
+        self._run_inputs = (
+            self.data_manager.basal_contacts_inputs(
+                geology=geology,
+                unit_field=unit_name_field,
+                faults=self.faultsLayerComboBox.currentLayer(),
+                ignore_units=self._units_from_line_edit(self.ignoreUnitsLineEdit),
+                override_units=self._units_from_line_edit(self.basalOverrideUnitsLineEdit),
+            )
+            if self.data_manager
+            else None
+        )
+
         self.setEnabled(False)
         self._extractor_thread, self._extractor_worker, self._extractor_progress = (
             start_background_task(
@@ -268,6 +299,7 @@ class BasalContactsWidget(QWidget):
                     self.data_manager.apply_stratigraphic_colours_to_layer(
                         basal_layer, 'basal_unit'
                     )
+                    self._use_new_contacts(basal_layer)
             else:
                 contact_type = None
             if contact_type is None:
@@ -289,6 +321,16 @@ class BasalContactsWidget(QWidget):
             self.task_succeeded.emit()
         else:
             self.task_failed.emit()
+
+    def _use_new_contacts(self, basal_layer):
+        """Make the new layer the basal contacts of the model, and record the run.
+
+        With the contacts source "Use a contacts layer", the contacts layer
+        of the user is an input and does not change.
+        """
+        if self.data_manager.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_GEOLOGY:
+            self.data_manager.set_basal_contacts(basal_layer, unitname_field='basal_unit')
+        self.data_manager.derived.record(derived_data.BASAL_CONTACTS, inputs=self._run_inputs)
 
     def _on_extractor_error(self, traceback_text):
         finish_background_task(
