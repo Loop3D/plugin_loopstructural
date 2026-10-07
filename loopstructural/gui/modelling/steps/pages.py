@@ -4,7 +4,8 @@ Each page has a `check()` method. It returns the `StepCheck` of the step.
 The existing tabs and dialogs are the contents of the pages.
 """
 
-from qgis.core import QgsApplication
+from qgis.core import Qgis, QgsApplication
+from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
@@ -28,6 +29,11 @@ from loopstructural.gui.modelling.model_definition.stratigraphic_layers import (
 )
 
 from loopstructural.main import layer_roles
+from loopstructural.main.fault_topology_calc import (
+    FaultTopologyError,
+    calculate_from_data_manager,
+    result_message,
+)
 from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
 
 from . import checks
@@ -204,16 +210,58 @@ class FaultsStep(StepPage):
         )
         layout.addWidget(self.sections)
 
-        topology = QPushButton("Calculate topology...", self)
-        topology.setToolTip("Find which faults touch each other, from the fault traces.")
-        topology.clicked.connect(lambda _checked=False: self._show_tool(launchers.FAULT_TOPOLOGY))
+        self.message_bar = QgsMessageBar(self)
+        layout.addWidget(self.message_bar)
+
+        self.topology_button = QPushButton("Calculate topology", self)
+        self.topology_button.clicked.connect(self._calculate_topology)
         row = QHBoxLayout()
         row.addStretch(1)
-        row.addWidget(topology)
+        row.addWidget(self.topology_button)
         layout.addLayout(row)
+        # The button follows the fault layer and the name field
+        self.fault_layers.faultTraceLayer.layerChanged.connect(self.update_topology_button)
+        self.fault_layers.faultNameField.fieldChanged.connect(self.update_topology_button)
+        if self.data_manager is not None:
+            self.data_manager.layer_roles.attach(lambda _role, _value: self.update_topology_button())
+        self.update_topology_button()
 
         self.adjacency = FaultAdjacencyTab(self, data_manager=self.data_manager)
         layout.addWidget(page_scroll_area(self.adjacency, self), 1)
+
+    def _fault_traces(self):
+        traces = self.data_manager.get_fault_traces() if self.data_manager is not None else None
+        return traces or {}
+
+    def update_topology_button(self, *_args):
+        """Enable the button when the fault layer and the name field are set."""
+        traces = self._fault_traces()
+        layer = self.data_manager.get_layer_role(layer_roles.FAULT_TRACES) if self.data_manager else None
+        if layer is None or not traces.get('fault_name_field'):
+            self.topology_button.setEnabled(False)
+            self.topology_button.setToolTip(
+                "Select a fault layer and the field with the fault name in the Fault layer section."
+            )
+        else:
+            self.topology_button.setEnabled(True)
+            self.topology_button.setToolTip(
+                "Find which faults touch each other, from the fault traces."
+            )
+
+    def _calculate_topology(self):
+        self.message_bar.clearWidgets()
+        try:
+            result = calculate_from_data_manager(self.data_manager)
+        except FaultTopologyError as error:
+            self.message_bar.pushMessage("Fault topology", str(error), level=Qgis.MessageLevel.Critical)
+            return
+        text, warn = result_message(result)
+        self.message_bar.pushMessage(
+            "Fault topology",
+            text,
+            level=Qgis.MessageLevel.Warning if warn else Qgis.MessageLevel.Success,
+            duration=0 if warn else 8,
+        )
 
     def _fault_layer_summary(self):
         if self.data_manager is None:

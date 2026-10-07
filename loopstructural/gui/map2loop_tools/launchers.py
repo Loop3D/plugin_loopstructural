@@ -6,7 +6,6 @@ USER_SORTER = 'user_sorter'
 BASAL_CONTACTS = 'basal_contacts'
 THICKNESS = 'thickness'
 PAINT_STRAT_ORDER = 'paint_strat_order'
-FAULT_TOPOLOGY = 'fault_topology'
 DATA_CONVERSION = 'data_conversion'
 
 
@@ -16,10 +15,6 @@ def _dialog_class(tool):
         from loopstructural.gui.data_conversion import AutomaticConversionDialog
 
         return AutomaticConversionDialog
-    if tool == FAULT_TOPOLOGY:
-        from loopstructural.gui.map2loop_tools.fault_topology_widget import FaultTopologyWidget
-
-        return FaultTopologyWidget
     from loopstructural.gui import map2loop_tools
 
     names = {
