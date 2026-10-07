@@ -344,6 +344,209 @@ Acceptance: after a successful build, the dock tells the user to open the 3D
 view. From step 5, a user can write the surfaces, the block model and a
 cross-section to files without the 3D view.
 
+### Phase 6: Follow-up changes
+
+Four changes that come from use of phases 3 to 5. Do them in this order. Each
+one is a separate pull request.
+
+#### 6.1 Two separate workflows
+
+Problem: with "Interpolate surfaces from constraints", the build still uses the
+data of the map workflow. The build reads the basal contacts, the structural
+orientations, the fault traces and the stratigraphic column that the user set
+in the other steps. The "constraints" choice only hides steps 2 and 3. It does
+not stop the model from using their data.
+
+Rules:
+
+- With "Interpolate surfaces from constraints", the model has only the features
+  that the user adds in step 4 (foliations, unconformities, parametric faults).
+  It has no feature from the column, and no fault from a trace layer.
+- With "Build from a geological map", the model has the generated features, and
+  the features that the user adds.
+- The data of one workflow is kept when the user changes the choice. It is not
+  used, and it is not deleted.
+
+Tasks:
+
+- [ ] Give the model manager the workflow mode. `update_model` skips
+      `update_fault_features` (trace faults only), `update_foliation_features`
+      and the generated-feature data in the "constraints" mode. It still builds
+      the parametric faults and the manual foliations.
+- [ ] `refresh_feature_data` and `model_state` ignore the column, the contacts
+      and the fault traces in the "constraints" mode. A change to the column
+      does not make the model stale.
+- [ ] The data manager does not watch, reload or check the map input layers
+      (contacts, structure, fault traces) in the "constraints" mode. This stops
+      "Update data and solve" and the "Input layers changed" problem for layers
+      that the model does not use. `get_layers_outside_bounding_box` uses the
+      same rule.
+- [ ] `sync_extra_constraints` and the read-only "processed" rows are empty in
+      the "constraints" mode.
+- [ ] Step checks: `check_data` does not ask for the geology and structure
+      layers in the "constraints" mode. Move these two items to
+      `check_stratigraphy` (see 6.2).
+- [ ] The primary button text and tooltip name the workflow ("Build model from
+      constraints").
+- [ ] Save the choice with the state (done in phase 4). Load old state files
+      with the "map" mode.
+
+Acceptance: a user has a map project with a column, contacts and faults. The
+user changes the choice to "constraints" and adds one foliation. The build gives
+one feature. The solved model does not change when the user edits the column or
+the contacts layer. When the user changes back to "map", the generated features
+are made again from the same data.
+
+Tests: unit tests of the model manager with a fake column and fake contacts: the
+"constraints" mode builds only the manual features; the "map" mode builds both.
+Unit tests for the checks and for `choose_primary_action` in each mode.
+
+#### 6.2 Stratigraphic layers move to step 2
+
+Problem: the "Stratigraphic Layers" group (basal contacts and structural
+orientations) is in step 1. It belongs to the column workflow. Its layer picker
+shows only line and point layers. With "Calculate from geology polygons", the
+input is the polygon geology layer, so the user cannot select it there.
+
+Tasks:
+
+- [ ] Remove `StratigraphicLayersWidget` from `ModelDefinitionTab`. Step 1 has
+      only the bounding box, the CRS and the DEM.
+- [ ] Add the widget to `StratigraphyStep`, as a collapsible group (see 6.3).
+- [ ] The first layer picker depends on the contacts source:
+  - "Calculate from geology polygons": the picker shows polygon layers. It
+    reads and writes the `geology` and `geology_unit_field` roles. It does not
+    call `set_basal_contacts`. The Z-coordinate check box is hidden.
+  - "Use a contacts layer": the picker shows line and point layers, as now. It
+    reads and writes the `basal_contacts` role.
+  - Change the group title and the label to match ("Geology layer" or
+    "Contacts layer").
+- [ ] When the user changes the source, do not write the old selection to the
+      other role. Keep one selection for each source.
+- [ ] The `set_basal_contacts` callback (a tool or a build made a new contacts
+      layer) does not change the picker in the "geology" source. The layer is for
+      display.
+- [ ] Keep the geology picker of the column group in sync with the new picker
+      (both use the same roles). Decide in the review if one of them must be
+      removed (see the open questions).
+- [ ] Move the "Select the geology layer" and "Select the structure layer"
+      items from `check_data` to `check_stratigraphy`.
+- [ ] Update the text that says "in step 1" for these layers
+      (`derived_refresh.py`, `checks.py`, `pages.py`, the docs).
+- [ ] Keep the saved widget settings key `stratigraphic_layers_widget`, so old
+      state files load.
+
+Acceptance: with "Calculate from geology polygons", the user selects the
+polygon layer in the group in step 2, and the unit name field list shows the
+fields of that layer. After the user changes to "Use a contacts layer", the
+picker shows only line and point layers. The selection of each source is kept.
+
+Tests: unit tests for the role writes of each source. A Qt test of the picker
+filter for each source (QGIS test job).
+
+#### 6.3 Limit the vertical stack of widgets
+
+Problem: the pages put many widgets one above the other. Step 2 has the
+geology group, the button row, the column list, the style group, the derived
+data panel and the "Derive from map" row. Adding the stratigraphic layers (6.2)
+makes it worse. The group boxes, the feature details panel (its own scroll
+area) and the dock header, step bar and footer use the height. On a laptop
+screen the part with the content is very small.
+
+Rules:
+
+- A page has at most one scroll area, at the page level. A widget inside a page
+  does not make its own scroll area.
+- A page shows at most two expanded sections at one time. When the user
+  expands a third section, the section that was expanded first collapses.
+- The main widget of a page (the column list, the feature list) is not in a
+  collapsible section. Its minimum height is 120 px. It gets the extra height.
+- Do not nest a group box in a group box more than one level.
+- A section that the user needs only sometimes starts collapsed ("Style map
+  layer", "Derived data", "Stratigraphic layers" after the first setup).
+
+Tasks:
+
+- [ ] Add a small `SectionStack` widget in `gui/modelling/steps/`. It holds
+      collapsible sections, the maximum number of open sections, and the
+      collapsed state of each section. It saves the state in the widget
+      settings.
+- [ ] Use it in steps 1, 2, 3 and in the feature details panel of step 4
+      (`Data Layers`, `Interpolator Settings`, `Preview`, `Export Feature`).
+- [ ] Remove the scroll areas that are inside other scroll areas
+      (`BaseTab(scrollable=True)`, the scroll area of
+      `feature_details_panel/_base.py`).
+- [ ] Give the page a header summary for each collapsed section, for example
+      "Geology layer: Geology, UNITNAME", so the user does not need to expand
+      it to read the value.
+- [ ] Reduce the vertical use of the dock: the header and the footer use one
+      row each. The footer text is one line with a tooltip.
+- [ ] In step 4, the problems list is collapsed to one line ("3 problems") with
+      the list in a tooltip or a popup.
+
+Acceptance: at a window height of 700 px, the main widget of each step has at
+least 200 px. No page has a scroll area inside a scroll area.
+
+Tests: unit test of the open-section limit (it does not need QGIS if the logic
+is in a plain class). Manual check at 700 px and 1080 px.
+
+#### 6.4 Choose the number of elements from the data
+
+Problem: each interpolator has the fixed number of elements of the settings
+(default 50 000). A feature with 10 points and a feature with 10 000 points
+get the same number. A small number gives a coarse surface. A large number
+makes the solve slow. In addition, the model manager reads the default value
+of `PlgSettingsStructure` (the class), not the value that the user saved. The
+setting of the user has no effect on a build. User-added foliations do not set
+the number at all.
+
+Design:
+
+- Add a pure function `suggest_nelements(summary)` in
+  `main/interpolation_size.py` (no QGIS import). The `summary` has the number
+  of value constraints, the number of orientation constraints, the number of
+  different values (surfaces) and a measure of the spread of the orientations
+  (0 for parallel planes, 1 for all directions).
+- Rule of thumb: elements = equations x 25 x surface factor x spread factor,
+  where an orientation counts as two equations, the surface factor is
+  1 + 0.1 for each surface after the first (at most 10 surfaces), and the
+  spread factor is 1 + spread. Round to 1 000. Limit to 5 000 .. 250 000. A
+  feature with no data gets the minimum. These numbers are a first guess: check
+  them with real models (see the open questions).
+- Add the setting `interpolator_nelements_auto` (default: on). With it on,
+  the settings page shows the number as "Automatic" and the spin box is
+  disabled. With it off, the fixed number is used.
+- Add one method in the model manager that gives the interpolator arguments
+  (`nelements`, `npw`, `cpw`, `regularisation`) for a data frame. It reads the
+  saved settings, not the class defaults. Use it for the generated features,
+  the faults, the domain faults, the parametric faults and the foliations that
+  the user added.
+- Show the number that was used in the feature details panel ("Elements: 24 000
+  (automatic)"). If the user changes it there, the feature keeps the number of
+  the user until the user selects "Automatic" again.
+
+Tasks:
+
+- [ ] `main/interpolation_size.py` with `summarise_data` and `suggest_nelements`.
+- [ ] Setting, settings page and preference test.
+- [ ] Model manager: one method for the interpolator arguments, used in all
+      build paths. Fix the use of the class defaults.
+- [ ] Feature panel: show the number, and an "Automatic" check box.
+- [ ] Docs: say how the number is chosen, and what the user can change.
+
+Acceptance: a model with 20 contact points and a model with 5 000 points get
+different numbers of elements, both inside the limits. A saved fixed number is
+used when "Automatic" is off. A user-added foliation gets a number.
+
+Tests: unit tests for the function: more data gives more or equal elements; the
+limits; no data; parallel and spread orientations; orientation signs do not
+matter.
+
+Order and links between the parts: 6.1 first, because it defines what the model
+reads in each workflow. 6.2 depends on the same checks, so do it next. 6.3
+comes after 6.2, because it must lay out the final content of the pages. 6.4
+does not depend on the others.
+
 ## Risks
 
 - **Large UI change.** Users of the current version must learn the new layout.
@@ -362,6 +565,15 @@ cross-section to files without the 3D view.
   overwrites these edits. Show a warning before the overwrite, and offer to
   change the contacts source to "Use a contacts layer".
 
+- **Saved fixed number of elements (phase 6.4).** Now the saved setting has no
+  effect on a build. After the fix, a user who saved a small or large number
+  sees a change in the result. Make "Automatic" the default, and tell the user
+  in the change log.
+- **Hidden data (phase 6.1).** The "constraints" mode keeps the map data but
+  does not use it. Show a short message in step 4 ("The column and the map
+  layers are not used in this mode"), so the user knows why a unit is not in
+  the model.
+
 ## Open questions
 
 1. Must the steps be strict (the user cannot go to step 4 before step 2 is
@@ -376,3 +588,12 @@ cross-section to files without the 3D view.
 5. Must the Processing algorithms also use the derived-data record, or only
    the dock? Recommendation: only the dock. Processing runs are single runs
    with explicit inputs.
+6. (6.2) After the move, step 2 has two geology pickers (the column group and
+   the stratigraphic layers group). Must one of them be removed?
+   Recommendation: keep the picker in the stratigraphic layers group, and show
+   the geology layer in the column group as a read-only summary.
+7. (6.4) Are the numbers of the element rule right? Test it with 3 or 4 real
+   models (small and large, folded and simple) before the default is "Automatic".
+   Does a fault need a different rule from a foliation?
+8. (6.1) Must a manual unconformity or fold in the "constraints" mode use the
+   column? Recommendation: no. It uses only the features of that mode.
