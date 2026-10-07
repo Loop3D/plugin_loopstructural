@@ -713,6 +713,10 @@ class ModellingDataManager:
             self.basal_contacts_callback(**self._basal_contacts)
         self.refresh_layer_watchers()
 
+    def get_unique_basal_units(self):
+        """Return the unit names that the basal contacts layer has."""
+        return list(self._unique_basal_units)
+
     def calculate_unique_basal_units(self):
         if (
             self._basal_contacts is not None

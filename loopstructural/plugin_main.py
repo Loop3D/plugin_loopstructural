@@ -13,7 +13,7 @@ from qgis.core import QgsApplication, QgsProject, QgsSettings
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QCoreApplication, QLocale, Qt, QTranslator, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QIcon
-from qgis.PyQt.QtWidgets import QAction, QDockWidget
+from qgis.PyQt.QtWidgets import QAction, QDockWidget, QMenu
 
 # project
 from loopstructural.__about__ import (
@@ -34,6 +34,7 @@ if importlib.util.find_spec("LoopStructural") is None:
 from loopstructural.debug_manager import DebugManager
 from loopstructural.gui.dlg_settings import PlgOptionsFactory
 from loopstructural.gui.loop_widget import LoopWidget
+from loopstructural.gui.map2loop_tools import launchers
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
 from loopstructural.processing import (
@@ -143,7 +144,7 @@ class LoopstructuralPlugin:
 
         # -- Actions
         self.action_fault_topology = QAction(
-            "Fault Topology Calculator",
+            self.tr("Fault Topology Calculator"),
             self.iface.mainWindow(),
         )
         self.action_fault_topology.triggered.connect(self.show_fault_topology_dialog)
@@ -166,7 +167,7 @@ class LoopstructuralPlugin:
         )
         self.action_modelling = QAction(
             QIcon(os.path.dirname(__file__) + "/icon.png"),
-            self.tr("LoopStructural Modelling"),
+            self.tr("LoopStructural"),
             self.iface.mainWindow(),
         )
         self.action_data_conversion = QAction(
@@ -176,16 +177,19 @@ class LoopstructuralPlugin:
         self.action_data_conversion.triggered.connect(self.show_data_conversion_dialog)
         self.action_visualisation = QAction(
             QIcon(os.path.dirname(__file__) + "/3D_icon.png"),
-            self.tr("LoopStructural Visualisation"),
+            self.tr("3D View"),
             self.iface.mainWindow(),
         )
 
+        # -- Toolbar: the dock, the 3D view and the help
         self.toolbar.addAction(self.action_modelling)
-        self.toolbar.addAction(self.action_fault_topology)
+        self.toolbar.addAction(self.action_visualisation)
+        self.toolbar.addAction(self.action_help)
         # -- Menu
+        self.iface.addPluginToMenu(__title__, self.action_modelling)
+        self.iface.addPluginToMenu(__title__, self.action_visualisation)
         self.iface.addPluginToMenu(__title__, self.action_settings)
         self.iface.addPluginToMenu(__title__, self.action_help)
-        self.iface.addPluginToMenu(__title__, self.action_data_conversion)
         self.initProcessing()
 
         # Map2Loop tool actions
@@ -230,21 +234,22 @@ class LoopstructuralPlugin:
         )
         self.action_paint_strat_order.triggered.connect(self.show_paint_strat_order_dialog)
 
-        # Add all map2loop tool actions to the toolbar
-        self.toolbar.addAction(self.action_sampler)
-        self.toolbar.addAction(self.action_sorter)
-        self.toolbar.addAction(self.action_user_sorter)
-        self.toolbar.addAction(self.action_basal_contacts)
-        self.toolbar.addAction(self.action_thickness)
-        self.toolbar.addAction(self.action_paint_strat_order)
-
-        self.iface.addPluginToMenu(__title__, self.action_sampler)
-        self.iface.addPluginToMenu(__title__, self.action_sorter)
-        self.iface.addPluginToMenu(__title__, self.action_user_sorter)
-        self.iface.addPluginToMenu(__title__, self.action_basal_contacts)
-        self.iface.addPluginToMenu(__title__, self.action_thickness)
-        self.iface.addPluginToMenu(__title__, self.action_paint_strat_order)
-        self.iface.addPluginToMenu(__title__, self.action_fault_topology)
+        # The tools are in the steps of the dock. The "Tools" submenu has them
+        # for the advanced users.
+        self.tools_menu = QMenu(self.tr("Tools"), self.iface.mainWindow())
+        for action in (
+            self.action_data_conversion,
+            self.action_sorter,
+            self.action_user_sorter,
+            self.action_paint_strat_order,
+            self.action_basal_contacts,
+            self.action_thickness,
+            self.action_sampler,
+            self.action_fault_topology,
+        ):
+            self.tools_menu.addAction(action)
+        self.action_tools = self.tools_menu.menuAction()
+        self.iface.addPluginToMenu(__title__, self.action_tools)
 
         # -- Help menu
 
@@ -273,8 +278,8 @@ class LoopstructuralPlugin:
                 logger=self.log,
                 data_manager=self.data_manager,
                 model_manager=self.model_manager,
+                separate_docks=True,
             )
-            self.toolbar.addAction(self.action_visualisation)
 
             # Create modelling dock
             self.modelling_dockwidget = QDockWidget(
@@ -325,6 +330,10 @@ class LoopstructuralPlugin:
             self.action_visualisation.triggered.connect(
                 self.visualisation_dockwidget.toggleViewAction().trigger
             )
+            # The last step of the modelling dock has a button for the 3D view
+            self.loop_widget.get_modelling_widget().open_view_requested.connect(
+                self._show_visualisation_dock
+            )
             # Store reference to main dock as None for unload compatibility
             self.loop_dockwidget = None
         else:
@@ -360,97 +369,62 @@ class LoopstructuralPlugin:
 
             # -- Connect actions
             self.action_modelling.triggered.connect(self.loop_dockwidget.toggleViewAction().trigger)
+            self.action_visualisation.triggered.connect(self._show_view_step)
 
             # Store references to separate docks as None for unload compatibility
             self.modelling_dockwidget = None
             self.visualisation_dockwidget = None
 
-    def show_sampler_dialog(self):
-        """Show the sampler dialog."""
-        from loopstructural.gui.map2loop_tools import SamplerDialog
+    def _show_visualisation_dock(self):
+        """Show the visualisation dock (when the docks are separate)."""
+        self.visualisation_dockwidget.show()
+        self.visualisation_dockwidget.raise_()
 
-        dialog = SamplerDialog(
+    def _show_view_step(self):
+        """Show the dock with the last step, which has the 3D view."""
+        self.loop_dockwidget.show()
+        self.loop_dockwidget.raise_()
+        self.loop_widget.show_view_step()
+
+    def _show_tool(self, tool):
+        launchers.show_tool_dialog(
+            tool,
             self.iface.mainWindow(),
             data_manager=self.data_manager,
             debug_manager=self.debug_manager,
         )
-        dialog.exec()
+
+    def show_sampler_dialog(self):
+        """Show the sampler dialog."""
+        self._show_tool(launchers.SAMPLER)
 
     def show_data_conversion_dialog(self):
         """Show the data conversion dialog."""
-        from loopstructural.gui.data_conversion import AutomaticConversionDialog
-
-        dialog = AutomaticConversionDialog(
-            self.iface.mainWindow(),
-            project=self.data_manager.project if self.data_manager else None,
-        )
-        dialog.exec()
+        self._show_tool(launchers.DATA_CONVERSION)
 
     def show_sorter_dialog(self):
         """Show the automatic stratigraphic sorter dialog."""
-        from loopstructural.gui.map2loop_tools import SorterDialog
-
-        dialog = SorterDialog(
-            self.iface.mainWindow(),
-            data_manager=self.data_manager,
-            debug_manager=self.debug_manager,
-        )
-        dialog.exec()
+        self._show_tool(launchers.SORTER)
 
     def show_user_sorter_dialog(self):
         """Show the user-defined stratigraphic column dialog."""
-        from loopstructural.gui.map2loop_tools import UserDefinedSorterDialog
-
-        dialog = UserDefinedSorterDialog(
-            self.iface.mainWindow(),
-            data_manager=self.data_manager,
-            debug_manager=self.debug_manager,
-        )
-        dialog.exec()
+        self._show_tool(launchers.USER_SORTER)
 
     def show_basal_contacts_dialog(self):
         """Show the basal contacts extractor dialog."""
-        from loopstructural.gui.map2loop_tools import BasalContactsDialog
-
-        dialog = BasalContactsDialog(
-            self.iface.mainWindow(),
-            data_manager=self.data_manager,
-            debug_manager=self.debug_manager,
-        )
-        dialog.exec()
+        self._show_tool(launchers.BASAL_CONTACTS)
 
     def show_thickness_dialog(self):
         """Show the thickness calculator dialog."""
-        from loopstructural.gui.map2loop_tools import ThicknessCalculatorDialog
-
-        dialog = ThicknessCalculatorDialog(
-            self.iface.mainWindow(),
-            data_manager=self.data_manager,
-            debug_manager=self.debug_manager,
-        )
-        dialog.exec()
+        self._show_tool(launchers.THICKNESS)
 
     def show_paint_strat_order_dialog(self):
         """Show the paint stratigraphic order dialog."""
-        from loopstructural.gui.map2loop_tools import PaintStratigraphicOrderDialog
-
-        dialog = PaintStratigraphicOrderDialog(
-            self.iface.mainWindow(),
-            data_manager=self.data_manager,
-            debug_manager=self.debug_manager,
-        )
-        dialog.exec()
+        self._show_tool(launchers.PAINT_STRAT_ORDER)
 
     def show_fault_topology_dialog(self):
         """Show the fault topology calculator dialog."""
-        from loopstructural.gui.map2loop_tools.fault_topology_widget import FaultTopologyWidget
-
-        dialog = FaultTopologyWidget(
-            self.iface.mainWindow(),
-            data_manager=self.data_manager,
-            debug_manager=self.debug_manager,
-        )
-        dialog.exec()
+        self._show_tool(launchers.FAULT_TOPOLOGY)
 
     def tr(self, message: str) -> str:
         """Translate a string using Qt translation API.
@@ -507,6 +481,7 @@ class LoopstructuralPlugin:
             "action_fault_topology",
             "action_modelling",
             "action_visualisation",
+            "action_tools",
         ):
             act = getattr(self, attr, None)
             if act:
@@ -518,6 +493,17 @@ class LoopstructuralPlugin:
                     delattr(self, attr)
                 except Exception:
                     pass
+
+        tools_menu = getattr(self, "tools_menu", None)
+        if tools_menu:
+            try:
+                tools_menu.deleteLater()
+            except Exception:
+                pass
+            try:
+                delattr(self, "tools_menu")
+            except Exception:
+                pass
 
         # -- Clean up preferences panel in QGIS settings
         options_factory = getattr(self, "options_factory", None)
