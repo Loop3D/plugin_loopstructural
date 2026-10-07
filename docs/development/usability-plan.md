@@ -527,12 +527,12 @@ Design:
 
 Tasks:
 
-- [ ] `main/interpolation_size.py` with `summarise_data` and `suggest_nelements`.
-- [ ] Setting, settings page and preference test.
-- [ ] Model manager: one method for the interpolator arguments, used in all
+- [x] `main/interpolation_size.py` with `summarise_data` and `suggest_nelements`.
+- [x] Setting, settings page and preference test.
+- [x] Model manager: one method for the interpolator arguments, used in all
       build paths. Fix the use of the class defaults.
-- [ ] Feature panel: show the number, and an "Automatic" check box.
-- [ ] Docs: say how the number is chosen, and what the user can change.
+- [x] Feature panel: show the number, and an "Automatic" check box.
+- [x] Docs: say how the number is chosen, and what the user can change.
 
 Acceptance: a model with 20 contact points and a model with 5 000 points get
 different numbers of elements, both inside the limits. A saved fixed number is
@@ -636,13 +636,34 @@ user can select any combination that is in the table below.
    frame). This adds the axial surface constraint (`fold_orientation`).
 2. **Fold axis.** The user selects the source of the fold axis:
    - constant: plunge and azimuth (as now);
-   - average intersection lineation of the folded feature and the axial
-     surface (`av_fold_axis`, as now);
-   - lineation data: a layer of fold axis or intersection lineation
-     measurements. The plugin fits the fold axis rotation angle to
-     coordinate 1 (the axis S-plot).
+   - lineations. The user selects one of two lineation sources:
+     1. **Lineation layer**: a point layer (for example a shapefile) with
+        measured fold axes or intersection lineations. The user selects the
+        plunge field and the trend (plunge direction) field.
+     2. **Calculated intersection lineations**: the plugin calculates a
+        lineation at each orientation point of the folded feature. The
+        lineation is the intersection of the folded foliation and the axial
+        foliation (coordinate 0 of the fold frame) at that point
+        (`FoldFrame.calculate_intersection_lineation`). This source needs an
+        axial surface.
+
+     Then the user selects how the plugin uses the lineations:
+     - **average**: the fold axis is the mean of the lineations, and it is
+       constant in the model (`av_fold_axis` for the calculated lineations,
+       as now);
+     - **fit**: the plugin fits the fold axis rotation angle of the
+       lineations to coordinate 1 (the axis S-plot), so that the fold axis
+       can change in the model. This needs an axial surface.
 
    This adds the fold axis constraint (`fold_axis_w`).
+
+   | Lineation source | Average | Fit (axis S-plot) | Needs an axial surface |
+   |---|---|---|---|
+   | Lineation layer | yes | yes | only for "fit" |
+   | Calculated intersection lineations | yes | yes | yes |
+
+   The UI shows the lineations of the selected source in the 3D view and in
+   the axis S-plot, so that the user can compare the two sources.
 3. **S-plot.** The user controls the rotation angle profiles: the profile
    type (Fourier series, trigonometric), the wavelength, and fixed values for
    the profile parameters. Without this control, the plugin fits the
@@ -652,11 +673,11 @@ user can select any combination that is in the table below.
 | Axial surface | Fold axis | S-plot | Result |
 |---|---|---|---|
 | - | - | - | A standard foliation. No fold constraint. |
-| x | - | - | Fold frame and DFI. Axial surface constraint on. The fold axis is the average intersection lineation, but the fold axis constraint is off (`fold_axis_w = None`). Automatic profiles. |
-| - | x | - | No fold frame. The plugin adds the fold axis as tangent constraints on a regular grid in the bounding box (gradient . axis = 0). The interpolator of the feature does not change. Only a constant fold axis is possible. |
+| x | - | - | Fold frame and DFI. Axial surface constraint on. The fold axis is the average of the calculated intersection lineations, but the fold axis constraint is off (`fold_axis_w = None`). Automatic profiles. |
+| - | x | - | No fold frame. The plugin adds the fold axis as tangent constraints on a regular grid in the bounding box (gradient . axis = 0). The interpolator of the feature does not change. Only a constant fold axis is possible: plunge and azimuth, or the average of a lineation layer. |
 | x | x | - | Fold frame and DFI. Both constraints on. Automatic profiles. |
 | x | - | x | As "axial surface only", but with the limb profile of the user. |
-| x | x | x | All constraints on. The limb profile of the user. With "lineation data", also the axis profile of the user. |
+| x | x | x | All constraints on. The limb profile of the user. With lineations and "fit", also the axis profile of the user. |
 | - | - | x, or - x x | Not possible. An S-plot needs a fold frame coordinate. The S-plot check box is disabled until the user selects an axial surface. The tooltip says why. |
 
 Rules:
@@ -719,8 +740,11 @@ with orientations: `s2`, `s1` and `s0`.
   stratigraphic group:
   - `fold_event`: the name of the fold event, or `None`;
   - `axial_surface`: on or off, and `fold_orientation` weight;
-  - `fold_axis`: off, `constant` (plunge, azimuth), `average`, or `data`
-    (layer dicts), and `fold_axis_w` weight;
+  - `fold_axis`: `source` (off, `constant` or `lineations`), the plunge and
+    azimuth for `constant`, the `fold_axis_w` weight, and for `lineations`:
+    - `lineation_source`: `layer` (layer dict with the plunge and trend
+      fields) or `intersection` (calculated);
+    - `use`: `average` or `fit`;
   - `splot`: off or on; for the limb and for the axis profile: the type, the
     wavelength (or "automatic"), and the fixed parameters;
   - `fold_normalisation`, `fold_norm`, `fold_regularisation`.
@@ -741,7 +765,8 @@ with orientations: `s2`, `s1` and `s0`.
 The S-plot needs the fold frame before the folded feature is built. Thus:
 
 - "Calculate rotation angles" builds the fold frame (and the fold events that
-  fold it) if it is not current. Then it calculates the rotation angles of the
+  fold it) if it is not current. Then it calculates the lineations (for the
+  "calculated intersection lineations" source) and the rotation angles of the
   data of the feature. It does not build the folded feature. Run it in a
   background task with progress.
 - The S-plot panel shows the data points, the fitted curve, the S-variogram
@@ -791,8 +816,15 @@ Do the parts in this order. Each part is a separate pull request.
       the three controls with their check boxes and "Advanced" weights.
 - [ ] Apply the rules of the combination table. Disable the S-plot control
       when there is no axial surface.
-- [ ] Fold axis "lineation data": a layer picker with the trend and plunge
-      fields.
+- [ ] Fold axis "lineations": a choice of the two lineation sources. For
+      "lineation layer", a point layer picker with the plunge and trend
+      fields. For "calculated intersection lineations", no input (disabled
+      without an axial surface).
+- [ ] Fold axis "average" or "fit" for the lineations. Disable "fit" without
+      an axial surface.
+- [ ] Convert the plunge and trend of the layer to vectors, and give them
+      with their points (N x 6) to the fold axis calculation
+      (`main/fold_spec.py`).
 - [ ] Fold axis without axial surface: make the tangent constraints on a grid
       (`main/fold_spec.py`). The grid step comes from the bounding box and
       the number of elements.
@@ -827,6 +859,11 @@ Tests:
   F2 -> F1 -> S0; a cycle is an error; each row of the combination table gives
   the correct arguments (a control that is off gives `None`); the S-plot is
   refused without an axial surface; old specs with `folded_feature_name` load.
+- Unit tests for the two lineation sources: the plunge and trend of a layer
+  give the correct vectors; the calculated intersection lineation of a known
+  folded foliation and a known axial foliation is their cross product; the
+  "average" of both sources gives the same axis for the same data; "fit" and
+  the calculated source are refused without an axial surface.
 - A QGIS test that builds the refolded fold from the test layers and compares
   the S0 scalar field on a coarse grid with the result of the LoopStructural
   calls of the example (same data, same arguments).
@@ -836,6 +873,22 @@ Order and links: 7.1 first, because the other parts use the spec. 7.2 and 7.3
 depend on 7.1. 7.4 depends on 7.3 (the S-plot control). 7.5 comes last. Phase 7
 depends on 6.1 (the workflow mode), 6.3 (`SectionStack`) and 6.4 (the number of
 elements of each feature, which is also used for the fold frames).
+
+### Phase 8: Advanced 3D viewer
+
+A second 3D viewer for hard 3D problems. It is a standalone application
+(Rust, Bevy) with a live link to QGIS. The PyVista viewer stays as the default
+viewer. The new viewer shows geological data objects that are similar to
+those of Geoscience ANALYST (`geoh5` types): points, curves, surfaces,
+sections, block models, drillholes and orientations.
+
+This phase is large, and most of the work is in a separate repository. The
+tasks, the protocol, the risks and the open questions are in the
+[viewer plan](viewer-plan.md).
+
+Acceptance: from step 5, a user opens the advanced viewer. The viewer shows
+the model and its input data, and updates after each build. A pick in the
+viewer selects the feature in the dock and shows the point on the map.
 
 ## Risks
 
@@ -897,3 +950,20 @@ elements of each feature, which is also used for the fold frames).
    Does a fault need a different rule from a foliation?
 8. (6.1) Must a manual unconformity or fold in the "constraints" mode use the
    column? Recommendation: no. It uses only the features of that mode.
+9. (7) How does the plugin give the lineations of a layer to LoopStructural?
+   `FoldFrame.calculate_fold_axis_rotation` has a `fold_axis` argument (an
+   N x 6 array of points and lineations), but
+   `FoldedFeatureBuilder.set_fold_axis` does not use it, and there is no build
+   argument for it. "Average" of a lineation layer is easy: the plugin
+   calculates the mean and gives it as `fold_axis`. For "fit", either the
+   plugin calls `calculate_fold_axis_rotation` itself and sets
+   `fold.fold_axis_rotation`, or LoopStructural gets a build argument for the
+   lineations. Recommendation: add the build argument to LoopStructural, and
+   use the plugin call until that version is released.
+10. (7) Is "fold axis without axial surface" (tangent constraints on a grid)
+    good enough, or must the plugin make a simple fold frame from the fold
+    axis? Recommendation: tangent constraints first. Compare the two on the
+    single fold example (`load_noddy_single_fold`).
+11. (7) Must a fault that cuts a fold frame also cut the folded features?
+    LoopStructural calculates the rotation angles in the restored space.
+    Recommendation: yes, use the same faults. Test it before 7.5.
