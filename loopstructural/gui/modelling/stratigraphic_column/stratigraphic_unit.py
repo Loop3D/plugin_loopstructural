@@ -2,8 +2,10 @@ import os
 from typing import Optional
 
 import numpy as np
+from qgis.core import QgsApplication
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QEvent, QPoint, Qt, pyqtSignal
+from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QWidget
 
 from loopstructural.gui.compatibility import event_global_pos
@@ -39,8 +41,12 @@ class StratigraphicUnitWidget(QWidget):
         # means no layer/field has been selected, so the check is skipped.
         self._known_unit_names = None
         # Connect buttons
+        self.buttonDelete.setIcon(QgsApplication.getThemeIcon("mActionRemove.svg"))
+        self.buttonDelete.setAutoRaise(True)
         self.buttonDelete.clicked.connect(self.request_delete)
-        self.buttonColour.clicked.connect(self.onColourSelectClicked)
+        self.buttonColour.setAllowOpacity(False)
+        self.buttonColour.setColorDialogTitle("Unit colour")
+        self.buttonColour.colorChanged.connect(self.onColourChanged)
         self.lineEditName.editingFinished.connect(self.onNameChanged)
         self.spinBoxThickness.valueChanged.connect(self.onThicknessChanged)
         # Initialize UI widgets with the provided values
@@ -137,23 +143,17 @@ class StratigraphicUnitWidget(QWidget):
         self.validateFields()
 
     def _update_colour_button(self):
-        """Update the color button's appearance to show the current color."""
-        if self.colour:
-            self.buttonColour.setStyleSheet(
-                f"background-color: {self.colour}; border: 1px solid #999;"
-            )
-        else:
-            self.buttonColour.setStyleSheet("background-color: #cccccc; border: 1px solid #999;")
+        """Show the current colour on the colour button, without a signal."""
+        self.buttonColour.blockSignals(True)
+        try:
+            self.buttonColour.setColor(QColor(self.colour) if self.colour else QColor("#cccccc"))
+        finally:
+            self.buttonColour.blockSignals(False)
 
-    def onColourSelectClicked(self):
-        """Open a color dialog to select a color for the stratigraphic unit."""
-        from qgis.PyQt.QtWidgets import QColorDialog
-
-        color = QColorDialog.getColor()
-        if color.isValid():
-            self.colour = color.name()
-            self._update_colour_button()
-            self.colourChanged.emit(self.colour)
+    def onColourChanged(self, colour: QColor):
+        """Store the colour that the user selected in the colour button."""
+        self.colour = colour.name()
+        self.colourChanged.emit(self.colour)
 
     def onThicknessChanged(self, thickness: float):
         """Handle changes to the thickness spinbox.
