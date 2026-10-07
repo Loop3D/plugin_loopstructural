@@ -12,6 +12,7 @@ from ...main.m2l_api import extract_basal_contacts
 from ...main.vectorLayerWrapper import addGeoDataFrameToproject
 from ..background_task import finish_background_task, start_background_task
 from ..compatibility import configure_layer_combo
+from ..messages import push_success, push_warning
 
 
 class BasalContactsWidget(QWidget):
@@ -268,16 +269,13 @@ class BasalContactsWidget(QWidget):
                         basal_layer, 'basal_unit'
                     )
             else:
-                QMessageBox.information(
-                    self,
-                    "No Contacts Found",
-                    "No contacts were found with the given parameters.",
+                contact_type = None
+            if contact_type is None:
+                push_warning(
+                    "No Contacts Found", "No contacts were found with the given parameters."
                 )
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Successfully extracted {contact_type}!",
-            )
+            else:
+                push_success("Basal Contacts", f"Successfully extracted {contact_type}.")
             if self._debug and self._debug.is_debug():
                 try:
                     self._debug.save_debug_file(

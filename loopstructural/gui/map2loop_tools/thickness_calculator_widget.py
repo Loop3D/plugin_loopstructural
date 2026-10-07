@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
+from loopstructural.gui.messages import push_success
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ...main.helpers import ColumnMatcher, get_layer_names
@@ -468,9 +469,8 @@ class ThicknessCalculatorWidget(QWidget):
                 addGeoDataFrameToproject(lines, "Thickness Lines")
             if location_tracking is not None:
                 addGeoDataFrameToproject(location_tracking, "Thickness Locations")
-            QMessageBox.information(
-                self,
-                "Success",
+            push_success(
+                "Thickness Calculator",
                 "Thickness calculation completed successfully and added to project.",
             )
             self.task_succeeded.emit()
@@ -478,15 +478,14 @@ class ThicknessCalculatorWidget(QWidget):
 
         if hasattr(result, 'geometry'):
             addGeoDataFrameToproject(result, "Thickness Results")
-            QMessageBox.information(
-                self,
-                "Success",
+            push_success(
+                "Thickness Calculator",
                 "Thickness calculation completed successfully and added to project.",
             )
             self.task_succeeded.emit()
             return
 
-        QMessageBox.information(self, "Success", f"Thickness calculation completed: {result}")
+        push_success("Thickness Calculator", f"Thickness calculation completed: {result}")
         self.task_succeeded.emit()
 
     def _on_calculator_error(self, traceback_text):
