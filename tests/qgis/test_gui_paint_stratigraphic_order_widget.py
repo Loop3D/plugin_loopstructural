@@ -3,6 +3,8 @@ from qgis.core import QgsFeature, QgsField, QgsFields, QgsVectorLayer
 from qgis.testing import start_app
 
 from loopstructural.gui.compatibility import QVariantCompat
+from loopstructural.main.derived_data import DerivedData
+from loopstructural.main.layer_roles import LayerRoles
 
 
 # Monkeypatch uic.loadUi to avoid needing the .ui file and to provide minimal widgets
@@ -104,6 +106,16 @@ class DummyDataManager:
     def __init__(self, names):
         self._names = names
         self.stratigraphic_order = None
+        self.layer_roles = LayerRoles()
+        self.derived = DerivedData()
+
+    def adopt_layer_roles(self, **roles):
+        for role, value in roles.items():
+            if value is not None and self.layer_roles.get(role) is None:
+                self.layer_roles.set(role, value)
+
+    def styled_fields_inputs(self):
+        return {'unit_order': self._names}
 
     def get_stratigraphic_unit_names(self):
         return self._names

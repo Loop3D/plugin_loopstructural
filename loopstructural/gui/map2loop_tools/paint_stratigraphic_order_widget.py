@@ -6,8 +6,10 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from ...main import derived_data, layer_roles
 from ...main.m2l_api import paint_stratigraphic_order
 from ..compatibility import configure_layer_combo
+from .layer_defaults import adopt_geology_role, apply_layer_role_defaults
 
 
 class PaintStratigraphicOrderWidget(QWidget):
@@ -69,6 +71,12 @@ class PaintStratigraphicOrderWidget(QWidget):
 
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+        # The geology layer of the shared role is the default of the tool
+        apply_layer_role_defaults(
+            self.data_manager,
+            {layer_roles.GEOLOGY: self.geologyLayerComboBox},
+            unit_field_combo=self.unitNameFieldComboBox,
+        )
 
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
@@ -159,6 +167,15 @@ class PaintStratigraphicOrderWidget(QWidget):
             paint_stratigraphic_order(
                 geology_layer, stratigraphic_order, unit_name_field, debug_manager=self._debug
             )
+            if self.data_manager:
+                adopt_geology_role(
+                    self.data_manager, geology=geology_layer, unit_field=unit_name_field
+                )
+                self.data_manager.derived.record(
+                    derived_data.STYLED_FIELDS,
+                    inputs=self.data_manager.styled_fields_inputs(),
+                    detail={'layer': geology_layer.name(), 'field': unit_name_field},
+                )
 
             # If requested, duplicate layer and apply style using selected colour ramp
             try:
