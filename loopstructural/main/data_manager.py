@@ -33,7 +33,7 @@ from .derived_data import DerivedData, ThicknessSources
 from .layer_roles import LayerRoles
 from .m2l_api import paint_stratigraphic_order
 from .vectorLayerWrapper import qgsLayerToGeoDataFrame
-from .workflow_mode import WORKFLOW_MODE_MAP, WORKFLOW_MODES
+from .workflow_mode import WORKFLOW_MODE_CONSTRAINTS, WORKFLOW_MODE_MAP, WORKFLOW_MODES
 
 
 def _lookup_colour_ramp(ramp_name):
@@ -214,6 +214,7 @@ class ModellingDataManager:
         self._model_manager.set_fault_boundaries(self._fault_boundaries)
         self._model_manager.set_flipped_fault_boundaries(self._flipped_fault_boundaries)
         self._model_manager.update_bounding_box(self._bounding_box)
+        self._model_manager.set_workflow_mode(self.workflow_mode)
 
     def set_bounding_box(
         self, xmin=None, xmax=None, ymin=None, ymax=None, zmin=None, zmax=None, *, mark_set=True
@@ -312,8 +313,30 @@ class ModellingDataManager:
             raise ValueError(f"Unknown workflow mode '{mode}'.")
         if mode != self.workflow_mode:
             self.workflow_mode = mode
+            if self._model_manager is not None:
+                self._model_manager.set_workflow_mode(mode)
+                if mode != WORKFLOW_MODE_CONSTRAINTS:
+                    self._read_map_data_again()
+            # The layers that the model reads depend on the mode
+            self._changed_layer_ids &= set(self._layers_to_watch())
+            self.refresh_layer_watchers()
+            self._sync_processed_feature_data()
             for callback in list(self._workflow_mode_callbacks):
                 callback(mode)
+
+    def _read_map_data_again(self):
+        """Read the map layers again, after the mode changed back to "map".
+
+        The layers were not watched in the "constraints" mode, so an edit
+        made there is not in the model manager.
+        """
+        try:
+            if self._basal_contacts is not None or self._structural_orientations is not None:
+                self.update_stratigraphy()
+            if self._fault_traces is not None and self._fault_traces.get('layer') is not None:
+                self.update_faults()
+        except Exception as e:
+            self.logger(message=f"Could not read the map layers again: {e}", log_level=2)
 
     def add_workflow_mode_callback(self, callback):
         """Call ``callback(mode)`` each time the start choice changes."""
@@ -1223,7 +1246,13 @@ class ModellingDataManager:
 
     def get_input_layers(self):
         """Return a dict of {role: layer} for every input layer currently
-        configured (basal contacts, fault traces, structural orientations)."""
+        configured (basal contacts, fault traces, structural orientations).
+
+        With "Interpolate surfaces from constraints", the model does not use
+        these layers, so the result is empty.
+        """
+        if self.workflow_mode == WORKFLOW_MODE_CONSTRAINTS:
+            return {}
         layers = {}
         for role, config in (
             ('Basal contacts', self._basal_contacts),
@@ -1264,10 +1293,14 @@ class ModellingDataManager:
     def _layers_to_watch(self):
         """Return {layer id: layer} for every layer the model reads data from."""
         layers = list(self.get_input_layers().values())
-        for entries in self.feature_data.values():
-            for entry in entries.values():
-                if not entry.get('processed') and entry.get('layer') is not None:
-                    layers.append(entry['layer'])
+        # The rows that the user added to a generated feature are not used with
+        # "constraints". The rows of the manual foliations come from
+        # `_manual_foliation_layer_rows`.
+        if self.workflow_mode != WORKFLOW_MODE_CONSTRAINTS:
+            for entries in self.feature_data.values():
+                for entry in entries.values():
+                    if not entry.get('processed') and entry.get('layer') is not None:
+                        layers.append(entry['layer'])
         layers.extend(layer for layer, _ in self._manual_foliation_layer_rows())
         watched = {}
         for layer in layers:
@@ -1655,7 +1688,8 @@ class ModellingDataManager:
             for key in [k for k, v in entries.items() if v.get('processed')]:
                 del entries[key]
 
-        if self._model_manager is None:
+        # With "constraints", the model does not use the column or the traces
+        if self._model_manager is None or self.workflow_mode == WORKFLOW_MODE_CONSTRAINTS:
             return
 
         if self._stratigraphic_column is not None:

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from loopstructural.main.workflow_mode import (
     CONSTRAINT_MODE_HIDDEN_STEPS,
     WORKFLOW_MODE_CONSTRAINTS,
+    WORKFLOW_MODE_MAP,
 )
 
 # The actions of the primary button
@@ -34,6 +35,7 @@ def choose_primary_action(
     derived_out_of_date=(),
     layers_changed=False,
     blocked_reason=None,
+    workflow_mode=WORKFLOW_MODE_MAP,
 ) -> PrimaryAction:
     """Return the action of the primary button.
 
@@ -47,13 +49,21 @@ def choose_primary_action(
         True if an input layer changed after the model data was read.
     blocked_reason : str, optional
         A problem that stops every build, for example no bounding box.
+    workflow_mode : str
+        The start choice of the user. The text and the tooltip name it.
     """
+    constraints = workflow_mode == WORKFLOW_MODE_CONSTRAINTS
+    build_text = "Build model from constraints" if constraints else "Build model"
+    inputs = "the constraints" if constraints else "the column and the map layers"
     if blocked_reason:
-        return PrimaryAction(ACTION_NONE, "Build model", False, blocked_reason)
-    derived_out_of_date = list(derived_out_of_date)
+        return PrimaryAction(ACTION_NONE, build_text, False, blocked_reason)
+    # With constraints only, no result comes from the column
+    derived_out_of_date = [] if constraints else list(derived_out_of_date)
     if model_state == 'empty':
         return PrimaryAction(
-            ACTION_BUILD, "Build model", tooltip="Make the features and solve them."
+            ACTION_BUILD,
+            build_text,
+            tooltip=f"Make the features from {inputs} and solve them.",
         )
     if model_state == 'stale' or derived_out_of_date:
         if derived_out_of_date:

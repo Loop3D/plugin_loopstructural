@@ -369,26 +369,26 @@ Rules:
 
 Tasks:
 
-- [ ] Give the model manager the workflow mode. `update_model` skips
+- [x] Give the model manager the workflow mode. `update_model` skips
       `update_fault_features` (trace faults only), `update_foliation_features`
       and the generated-feature data in the "constraints" mode. It still builds
       the parametric faults and the manual foliations.
-- [ ] `refresh_feature_data` and `model_state` ignore the column, the contacts
+- [x] `refresh_feature_data` and `model_state` ignore the column, the contacts
       and the fault traces in the "constraints" mode. A change to the column
       does not make the model stale.
-- [ ] The data manager does not watch, reload or check the map input layers
+- [x] The data manager does not watch, reload or check the map input layers
       (contacts, structure, fault traces) in the "constraints" mode. This stops
       "Update data and solve" and the "Input layers changed" problem for layers
       that the model does not use. `get_layers_outside_bounding_box` uses the
       same rule.
-- [ ] `sync_extra_constraints` and the read-only "processed" rows are empty in
+- [x] `sync_extra_constraints` and the read-only "processed" rows are empty in
       the "constraints" mode.
-- [ ] Step checks: `check_data` does not ask for the geology and structure
+- [x] Step checks: `check_data` does not ask for the geology and structure
       layers in the "constraints" mode. Move these two items to
       `check_stratigraphy` (see 6.2).
-- [ ] The primary button text and tooltip name the workflow ("Build model from
+- [x] The primary button text and tooltip name the workflow ("Build model from
       constraints").
-- [ ] Save the choice with the state (done in phase 4). Load old state files
+- [x] Save the choice with the state (done in phase 4). Load old state files
       with the "map" mode.
 
 Acceptance: a user has a map project with a column, contacts and faults. The
@@ -429,7 +429,7 @@ Tasks:
 - [ ] Keep the geology picker of the column group in sync with the new picker
       (both use the same roles). Decide in the review if one of them must be
       removed (see the open questions).
-- [ ] Move the "Select the geology layer" and "Select the structure layer"
+- [x] Move the "Select the geology layer" and "Select the structure layer"
       items from `check_data` to `check_stratigraphy`.
 - [ ] Update the text that says "in step 1" for these layers
       (`derived_refresh.py`, `checks.py`, `pages.py`, the docs).
