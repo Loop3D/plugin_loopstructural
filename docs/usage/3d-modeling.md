@@ -25,3 +25,19 @@ In LoopStructural stratigraphic surfaces can be modelled using implicit function
 
 ### Fault modelling
 Faults are modelled in LoopStructural by building three implicit functions defining the fault surface, fault slip vector and the fault extent. Combined with a parametric representation of the fault displacement within these coordinates a kinematic model.
+
+## Push the model to GeoViewer
+
+GeoViewer is the advanced 3D viewer of Loop. It is a separate program. The plugin can send the
+surfaces of the solved model to it. This is optional: the 3D view of the plugin does not change.
+
+1. Start GeoViewer. Open its link popup (in the status bar) and note the port and the token.
+2. In the plugin, build the model (step 4). Open **Export** in step 5 and select the
+   **GeoViewer** tab.
+3. Type the port and the token, choose the surfaces to send, and select
+   **Push model to GeoViewer**.
+
+The plugin saves the port and the token for the next push. The surfaces go into the group
+`LoopStructural model` of the GeoViewer scene. A new push replaces the surfaces of the last push.
+Other objects of the scene stay. The coordinates are in the CRS of the model, and the scene of
+GeoViewer keeps its own origin.

@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -19,6 +20,9 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from loopstructural.main import model_export
+from loopstructural.main.geoviewer import scene as geoviewer_scene
+from loopstructural.main.geoviewer.link import DEFAULT_PORT, GeoViewerLink, LinkError
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ...background_task import finish_background_task, start_background_task
 from ...compatibility import configure_layer_combo
@@ -70,6 +74,7 @@ class ExportPanel(QgsCollapsibleGroupBox):
         self.tabs.addTab(self._surfaces_tab(), "Surfaces")
         self.tabs.addTab(self._block_model_tab(), "Block model")
         self.tabs.addTab(self._cross_section_tab(), "Cross-section")
+        self.tabs.addTab(self._geoviewer_tab(), "GeoViewer")
         layout.addWidget(self.tabs)
         self.set_model_solved(False)
         self.setCollapsed(True)
@@ -149,6 +154,40 @@ class ExportPanel(QgsCollapsibleGroupBox):
         self._update_section_inputs()
         return tab
 
+    def _geoviewer_tab(self):
+        tab = QWidget(self)
+        form = QFormLayout(tab)
+        note = QLabel(
+            "Send the surfaces of the model to GeoViewer, the advanced 3D viewer. "
+            "Start GeoViewer first, and copy the port and the token from its link popup. "
+            "A new push replaces the surfaces of the last push.",
+            tab,
+        )
+        note.setWordWrap(True)
+        self.geoviewer_port = _spin(tab, DEFAULT_PORT, minimum=1, maximum=65535)
+        self.geoviewer_token = QLineEdit(tab)
+        self.geoviewer_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.geoviewer_stratigraphy = QCheckBox("Stratigraphic surfaces", tab)
+        self.geoviewer_stratigraphy.setChecked(True)
+        self.geoviewer_faults = QCheckBox("Fault surfaces", tab)
+        self.geoviewer_faults.setChecked(True)
+        self.geoviewer_button = QPushButton("Push model to GeoViewer", tab)
+        self.geoviewer_button.clicked.connect(self.push_to_geoviewer)
+        self._load_geoviewer_settings()
+        form.addRow(note)
+        form.addRow("Port", self.geoviewer_port)
+        form.addRow("Token", self.geoviewer_token)
+        form.addRow(self.geoviewer_stratigraphy)
+        form.addRow(self.geoviewer_faults)
+        form.addRow(self.geoviewer_button)
+        return tab
+
+    def _load_geoviewer_settings(self):
+        port = PlgOptionsManager.get_value_from_key('geoviewer_port', DEFAULT_PORT, int)
+        token = PlgOptionsManager.get_value_from_key('geoviewer_token', '', str)
+        self.geoviewer_port.setValue(int(port or DEFAULT_PORT))
+        self.geoviewer_token.setText(token or '')
+
     def _update_section_inputs(self, *_args):
         is_line = self.section_kind.currentData() == 'line'
         self.section_line.setVisible(is_line)
@@ -202,6 +241,44 @@ class ExportPanel(QgsCollapsibleGroupBox):
 
     def _warn(self, text):
         QMessageBox.warning(self, "Export", text)
+
+    def push_to_geoviewer(self):
+        """Send the surfaces of the model to a running GeoViewer. The model does not change."""
+        strat = self.geoviewer_stratigraphy.isChecked()
+        faults = self.geoviewer_faults.isChecked()
+        if not (strat or faults):
+            return self._warn("Select the stratigraphic surfaces, the fault surfaces, or both.")
+        port, token = self.geoviewer_port.value(), self.geoviewer_token.text().strip()
+        PlgOptionsManager.set_value_from_key('geoviewer_port', port)
+        PlgOptionsManager.set_value_from_key('geoviewer_token', token)
+        manager = self.model_manager
+        crs = self.data_manager.get_model_crs() if self.data_manager else None
+        crs_text = crs.authid() if crs is not None and crs.isValid() else ''
+
+        def target(progress):
+            model = getattr(manager, 'model', None)
+            if model is None:
+                raise geoviewer_scene.PushError("Build the model in step 4 first.")
+            try:
+                result = GeoViewerLink(port, token).push(
+                    crs_text,
+                    geoviewer_scene.proposed_origin(model),
+                    lambda origin: geoviewer_scene.model_messages(
+                        manager, origin, stratigraphic=strat, faults=faults, progress=progress
+                    ),
+                    replace_prefix=geoviewer_scene.ID_PREFIX,
+                    progress=progress,
+                )
+            except (LinkError, geoviewer_scene.PushError) as error:
+                raise RuntimeError(str(error)) from error
+            if result.refused or result.other_errors:
+                details = "; ".join(text for _id, text in result.refused) or "; ".join(
+                    result.other_errors
+                )
+                return f"{result.summary()} {details}"
+            return result.summary()
+
+        self._run(target, "Push model to GeoViewer")
 
     def export_surfaces(self):
         folder = self.surface_folder.filePath().strip()
