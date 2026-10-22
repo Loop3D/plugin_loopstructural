@@ -37,6 +37,9 @@ class PlgSettingsStructure:
     interpolator_cpw: float = 1.0
     interpolator_npw: float = 1.0
     separate_dock_widgets: bool = False
+    # the link to the GeoViewer application (see `main.geoviewer`)
+    geoviewer_port: int = 47615
+    geoviewer_token: str = ""
 
 
 class PlgOptionsManager:
