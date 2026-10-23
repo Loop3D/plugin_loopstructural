@@ -9,5 +9,5 @@ geoh5py>=0.9 #saving models to hdf5
 dill>=0.4.1     #saving models to python
 shapely
 geopandas
-map2loop~=3.3.1
+map2loop~=3.4.0
 LoopDataConverter==0.3.0
