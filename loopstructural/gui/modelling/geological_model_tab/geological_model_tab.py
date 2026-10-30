@@ -192,6 +192,13 @@ class GeologicalModelTab(QWidget):
         self.problemsLabel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         mainLayout.insertWidget(1, self.problemsLabel, 0)
         self.problemsLabel.hide()
+        # With "constraints", the build does not use the column or the map
+        # layers. This tells the user why a unit of the column is not in the model.
+        self.modeNoteLabel = QLabel("The column and the map layers are not used in this mode.")
+        self.modeNoteLabel.setWordWrap(True)
+        self.modeNoteLabel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        mainLayout.insertWidget(2, self.modeNoteLabel, 0)
+        self.modeNoteLabel.hide()
         self._problems_provider = None
         if self.data_manager is not None:
             self.data_manager.add_layer_data_changed_callback(self.refresh_primary_action)
@@ -297,8 +304,10 @@ class GeologicalModelTab(QWidget):
             derived_out_of_date=self._derived_to_refresh(),
             layers_changed=bool(changed),
             blocked_reason=self._blocked_reason(),
+            workflow_mode=self._workflow_mode(),
         )
         action = self._primary_action
+        self.modeNoteLabel.setVisible(self._workflow_mode() == WORKFLOW_MODE_CONSTRAINTS)
         self.primaryButton.setText(action.text)
         self.primaryButton.setToolTip(action.tooltip)
         if not self._task_running:
