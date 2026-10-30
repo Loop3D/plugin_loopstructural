@@ -9,6 +9,7 @@ from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
+    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -35,6 +36,7 @@ from loopstructural.main.fault_topology_calc import (
     result_message,
 )
 from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from . import checks
 from .export_panel import ExportPanel
@@ -237,8 +239,22 @@ class FaultsStep(StepPage):
 
         self.topology_button = QPushButton("Calculate topology", self)
         self.topology_button.clicked.connect(self._calculate_topology)
+        self.tolerance_spin_box = QDoubleSpinBox(self)
+        self.tolerance_spin_box.setRange(0.0, 1e6)
+        self.tolerance_spin_box.setDecimals(2)
+        self.tolerance_spin_box.setPrefix("End tolerance: ")
+        self.tolerance_spin_box.setSuffix(" map units")
+        self.tolerance_spin_box.setToolTip(
+            "A fault ends at another fault if its end point is this close to the other "
+            "trace. This includes a trace that goes a short distance past the other trace."
+        )
+        self.tolerance_spin_box.setValue(PlgOptionsManager.get_plg_settings().fault_end_tolerance)
+        self.tolerance_spin_box.valueChanged.connect(
+            lambda value: PlgOptionsManager.set_value_from_key('fault_end_tolerance', value)
+        )
         row = QHBoxLayout()
         row.addStretch(1)
+        row.addWidget(self.tolerance_spin_box)
         row.addWidget(self.topology_button)
         layout.addLayout(row)
         # The button follows the fault layer and the name field
@@ -273,7 +289,9 @@ class FaultsStep(StepPage):
     def _calculate_topology(self):
         self.message_bar.clearWidgets()
         try:
-            result = calculate_from_data_manager(self.data_manager)
+            result = calculate_from_data_manager(
+                self.data_manager, self.tolerance_spin_box.value()
+            )
         except FaultTopologyError as error:
             self.message_bar.pushMessage("Fault topology", str(error), level=Qgis.MessageLevel.Critical)
             return
