@@ -124,9 +124,12 @@ class TestState:
         manager.set_workflow_mode(WORKFLOW_MODE_CONSTRAINTS)
         assert manager.model_state == 'stale'
 
-    def test_a_change_of_the_mode_of_an_empty_model_is_not_stale(self, manager):
+    def test_a_change_of_the_mode_of_an_empty_model_is_not_stale(self):
+        # not the fixture: add_foliation puts 's1' into the model
+        manager = GeologicalModelManager(debug_manager=_DebugManager())
         manager.set_workflow_mode(WORKFLOW_MODE_CONSTRAINTS)
         assert manager.model_state == 'empty'
+        assert not manager._column_dirty
 
     def test_the_same_mode_does_not_make_the_model_stale(self, manager):
         manager.update_model(notify_observers=False)

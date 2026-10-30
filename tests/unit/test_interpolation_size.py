@@ -10,7 +10,9 @@ from loopstructural.main.interpolation_size import (
     MAX_NELEMENTS,
     MIN_NELEMENTS,
     DataSummary,
+    _normals_from_strike_dip,
     orientation_spread,
+    point_spacing,
     suggest_nelements,
     summarise_data,
 )
@@ -105,3 +107,40 @@ class TestSummariseData:
     def test_opposite_dip_directions_spread(self):
         a = summarise_data(pd.DataFrame({'strike': [0.0, 180.0], 'dip': [30.0, 30.0]}))
         assert a.spread > 0
+
+
+class TestNormals:
+    def test_the_normal_points_in_the_dip_direction(self):
+        # strike 0 (north) dips to the east, so the normal points east and up
+        normal = _normals_from_strike_dip([0.0], [30.0])[0]
+        assert normal[0] > 0
+        assert abs(normal[1]) < 1e-12
+        assert normal[2] > 0
+        assert np.isclose(np.linalg.norm(normal), 1.0)
+
+
+class TestExtent:
+    def test_point_spacing(self):
+        points = [(x, 0.0, 0.0) for x in (0.0, 10.0, 20.0, 30.0)]
+        assert point_spacing(points) == 10.0
+
+    def test_repeated_points_count_once(self):
+        assert point_spacing([(0.0, 0.0, 0.0)] * 3 + [(5.0, 0.0, 0.0)]) == 5.0
+        assert point_spacing([(0.0, 0.0, 0.0)] * 3) == 0.0
+
+    def test_summary_has_the_spacing(self):
+        df = pd.DataFrame({'X': [0.0, 50.0, 100.0], 'Y': 0.0, 'Z': 0.0, 'val': 0.0})
+        assert summarise_data(df).spacing == 50.0
+
+    def test_a_large_model_with_dense_data_gives_more_elements(self):
+        summary = DataSummary(n_value=20, spacing=100.0)
+        from_rows = suggest_nelements(summary)
+        small = suggest_nelements(summary, volume=1000.0**3)
+        large = suggest_nelements(summary, volume=10_000.0 * 10_000.0 * 2_000.0)
+        assert small == from_rows
+        assert large > from_rows
+        assert large <= MAX_NELEMENTS
+
+    def test_no_spacing_uses_only_the_rows(self):
+        summary = DataSummary(n_value=20)
+        assert suggest_nelements(summary, volume=1e12) == suggest_nelements(summary)

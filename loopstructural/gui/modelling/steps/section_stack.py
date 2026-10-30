@@ -105,9 +105,19 @@ class SectionStack(QWidget):
         """
         if isinstance(widget, QgsCollapsibleGroupBox) and widget.title():
             title = widget.title()
-            self.add_section(widget, title, title, collapsed=widget.isCollapsed())
+            key = self._unique_key(widget.objectName() or title)
+            self.add_section(widget, key, title, collapsed=widget.isCollapsed())
         else:
             self._layout.addWidget(widget)
+
+    def _unique_key(self, base):
+        """Return ``base``, or ``base`` with a number if a section has that key."""
+        key = base
+        number = 2
+        while key in self._sections:
+            key = f"{base}_{number}"
+            number += 1
+        return key
 
     def section(self, key):
         return self._sections[key][0]

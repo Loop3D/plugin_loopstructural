@@ -11,7 +11,9 @@ def push_success(title: str, text: str, duration: int = 5):
     confirmation before a destructive action.
     """
     if iface is not None:
-        iface.messageBar().pushMessage(title, text, level=Qgis.MessageLevel.Success, duration=duration)
+        iface.messageBar().pushMessage(
+            title, text, level=Qgis.MessageLevel.Success, duration=duration
+        )
     else:
         # No main window, for example in the tests
         QgsMessageLog.logMessage(f"{title}: {text}", "LoopStructural", Qgis.MessageLevel.Success)
@@ -28,6 +30,8 @@ def push_info(title: str, text: str, duration: int = 5):
 def push_warning(title: str, text: str, duration: int = 10):
     """Show a warning in the message bar of QGIS, for a result that is not an error."""
     if iface is not None:
-        iface.messageBar().pushMessage(title, text, level=Qgis.MessageLevel.Warning, duration=duration)
+        iface.messageBar().pushMessage(
+            title, text, level=Qgis.MessageLevel.Warning, duration=duration
+        )
     else:
         QgsMessageLog.logMessage(f"{title}: {text}", "LoopStructural", Qgis.MessageLevel.Warning)

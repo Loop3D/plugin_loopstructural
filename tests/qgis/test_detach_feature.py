@@ -5,11 +5,15 @@ the user adds to a generated feature are used together with the data of the
 column.
 """
 
+import json
+from types import SimpleNamespace
+
 import geopandas as gpd
 import pandas as pd
 import pytest
 from LoopStructural import StratigraphicColumn
 
+from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
 
 
@@ -88,6 +92,23 @@ class TestDetach:
         assert manager.is_detached(name)
         assert sorted(manager.detached[name]['X']) == [1.0, 2.0]
 
+    def test_the_detached_data_survives_json(self, manager):
+        name = _group_name(manager)
+        manager.detach_feature(name)
+        before = manager.detached[name].copy()
+        written = json.loads(json.dumps(manager.detached_to_dict()))
+        manager.detached = {}
+        manager.detached_from_dict(written)
+        after = manager.detached[name]
+        assert list(after.columns) == list(before.columns)
+        pd.testing.assert_frame_equal(
+            after.reset_index(drop=True), before.reset_index(drop=True), check_dtype=False
+        )
+
+    def test_no_saved_data_detaches_nothing(self, manager):
+        manager.detached_from_dict(None)
+        assert manager.detached == {}
+
     def test_reset_forgets_detached_features(self, manager):
         manager.detach_feature(_group_name(manager))
         manager.reset()
@@ -126,3 +147,21 @@ class TestAddedRows:
         manager.extra_constraints[name] = spec
         manager.update_foliation_features()
         assert manager._captured[-1][2]['solver'] == 'admm'
+
+    def test_a_bad_row_is_skipped_and_the_other_rows_are_used(self, manager):
+        name = _group_name(manager)
+        spec = self._extra(7.0)
+        bad = dict(spec['data']['values'], layer_name='bad', value_field='no_such_field')
+        spec['data']['bad'] = bad
+        manager.extra_constraints[name] = spec
+        assert _built_x(manager) == [1.0, 2.0, 7.0]
+        assert [layer for layer, _error in manager.skipped_constraints[name]] == ['bad']
+
+    @pytest.mark.parametrize('kind', ['generated', 'manual', 'other'])
+    def test_a_changed_row_makes_the_model_stale_for_a_generated_feature(self, manager, kind):
+        name = {'generated': _group_name(manager), 'manual': 'manual', 'other': 'other'}[kind]
+        if kind == 'manual':
+            manager.manual_foliations['manual'] = {}
+        manager._data_dirty = False
+        ModellingDataManager._feature_rows_changed(SimpleNamespace(_model_manager=manager), name)
+        assert manager._data_dirty == (kind == 'generated')

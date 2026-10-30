@@ -6,7 +6,6 @@ often. They do not change the state.
 """
 
 from loopstructural.main import derived_data, layer_roles
-from loopstructural.main.workflow_mode import WORKFLOW_MODE_CONSTRAINTS
 
 from .status import StepCheck
 
@@ -82,7 +81,10 @@ def check_stratigraphy(data_manager, model_manager=None) -> StepCheck:
 
     contact_units = set(data_manager.get_unique_basal_units())
     if unit_names and contact_units:
-        missing = [name for name in unit_names if name not in contact_units]
+        # map2loop gives each contact the younger unit, so the oldest unit has
+        # no basal contacts. A contact on an unconformity goes to the unit above
+        # the unconformity, so the units on each side still have basal contacts.
+        missing = [name for name in unit_names[:-1] if name not in contact_units]
         if missing:
             count = len(missing)
             names = ', '.join(missing[:3]) + (', ...' if count > 3 else '')
@@ -106,15 +108,12 @@ def check_faults(data_manager, model_manager=None) -> StepCheck:
 
 
 def check_model(data_manager, model_manager=None) -> StepCheck:
-    """Step 4: the model."""
+    """Step 4: the model. Step 2 shows the derived results that are out of date."""
     problems, todo = [], []
     if not data_manager.is_bounding_box_set():
         problems.append("Set the bounding box in step 1.")
     if not data_manager.is_model_crs_valid():
         problems.append("The model CRS must be a projected CRS (in metres).")
-    # With constraints only, there is no column, so no result comes from it
-    if getattr(data_manager, 'workflow_mode', None) != WORKFLOW_MODE_CONSTRAINTS:
-        problems.extend(_out_of_date_messages(data_manager))
     changed = data_manager.get_changed_layers()
     if changed:
         problems.append("Input layers changed after the model was built: " + ", ".join(changed))

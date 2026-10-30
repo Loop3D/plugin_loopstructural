@@ -80,15 +80,14 @@ class StratColumnWidget(QWidget):
         # layer/field is selected, so the name-match warning is skipped.
         self._known_unit_names = None
 
+        # The layer whose features were selected to highlight the selected
+        # unit on the map, so the selection can be cleared later.
+        self._highlighted_layer = None
         # True while the pickers follow a change of the shared geology role,
         # so that the change is not written back
         self._syncing_roles = False
         # The hidden tool widget that an Update button runs
         self._update_widget = None
-
-        # The layer whose features were selected to highlight the selected
-        # unit on the map, so the selection can be cleared later.
-        self._highlighted_layer = None
 
         # The geology layer and its unit name field. The layer is shared with
         # the map2loop tools, and the "Style map layer" group writes to it.
@@ -158,9 +157,14 @@ class StratColumnWidget(QWidget):
         'override_units': 'the basal override units',
         'contacts': 'the basal contacts settings',
         'calculator_type': 'the calculator type',
+        'dtm': 'the DTM layer',
+        'sampling_frequency': 'the sampling frequency',
         'structure': 'the structure layer',
+        'dip_field': 'the dip field',
+        'dipdir_field': 'the dip direction field',
+        'orientation_type': 'the orientation type',
+        'max_line_length': 'the maximum line length',
         'cross_sections': 'the cross-sections layer',
-        'thicknesses': 'a unit thickness',
     }
 
     def _add_derived_data_panel(self, layout):
@@ -277,7 +281,9 @@ class StratColumnWidget(QWidget):
                 "Use 'Apply Stratigraphic Age to Map Layer' to write them again.",
             )
             return
-        if not self.data_manager.refresh_stratigraphic_order_field(layer, field):
+        if not self.data_manager.refresh_stratigraphic_order_field(
+            layer, field, ramp_name=detail.get('ramp')
+        ):
             QMessageBox.warning(
                 self,
                 "Update Map Layer Fields",
@@ -297,7 +303,7 @@ class StratColumnWidget(QWidget):
     def _build_geology_group(self):
         """Build the group with the geology layer, the unit name field and a
         summary of the unit names that have no match in the layer."""
-        group = QgsCollapsibleGroupBox("Geology layer", self)
+        group = self.geologyGroup = QgsCollapsibleGroupBox("Geology layer", self)
         form = QFormLayout(group)
         self.unitsLayerComboBox = QgsMapLayerComboBox()
         configure_layer_combo(
