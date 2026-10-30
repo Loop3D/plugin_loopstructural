@@ -70,13 +70,19 @@ class AddFaultDialog(QDialog):
         size = QGroupBox("Size")
         form = QFormLayout(size)
         self.major_input = _spin(0.01, 1e9)
-        self.major_input.setToolTip("How far the fault extends along its strike.")
+        self.major_input.setToolTip(
+            "The full length of the fault in its plane, at right angles to the slip. "
+            "With a pitch of 90 (dip slip), this is along the strike."
+        )
         self.intermediate_input = _spin(0.01, 1e9)
-        self.intermediate_input.setToolTip("How far the fault extends down its dip.")
+        self.intermediate_input.setToolTip(
+            "How far the fault extends from the centre in the direction of the slip. "
+            "With a pitch of 90 (dip slip), this is down the dip."
+        )
         self.minor_input = _spin(0.01, 1e9)
         self.minor_input.setToolTip("How far the fault changes the field, across the fault.")
-        form.addRow("Length along strike:", self.major_input)
-        form.addRow("Extent down dip:", self.intermediate_input)
+        form.addRow("Length across the slip:", self.major_input)
+        form.addRow("Extent along the slip:", self.intermediate_input)
         form.addRow("Influence distance:", self.minor_input)
         layout.addWidget(size)
 

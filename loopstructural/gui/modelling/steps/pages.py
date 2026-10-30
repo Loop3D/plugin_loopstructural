@@ -166,6 +166,12 @@ class StratigraphyStep(StepPage):
         layout.addLayout(row)
         layout.addWidget(page_scroll_area(self.tab, self), 1)
 
+        # With contacts from the geology polygons, the "Stratigraphic layers"
+        # section has the geology picker, so do not show a second one
+        roles = self.data_manager.layer_roles
+        roles.attach(self._on_layer_role_changed)
+        self._show_column_geology_picker(roles.contacts_source)
+
     def _layers_are_set(self):
         """The section starts collapsed after the first setup."""
         if self.data_manager is None:
@@ -186,6 +192,22 @@ class StratigraphyStep(StepPage):
             if value is not None:
                 parts.append(value.name() if hasattr(value, 'name') else str(value))
         return ", ".join(parts) if parts else "not selected"
+
+    def _show_column_geology_picker(self, source):
+        show = source != layer_roles.CONTACTS_FROM_GEOLOGY
+        column = self.tab.stratigraphic_column_widget
+        if not show:
+            # a hidden open section would count as one of the open sections
+            column.sections.set_open('geology', False)
+        column.geologyGroup.setVisible(show)
+
+    def _on_layer_role_changed(self, role, value):
+        if role == 'contacts_source':
+            try:
+                self._show_column_geology_picker(value)
+            except RuntimeError:
+                # the page was deleted
+                pass
 
 
 class FaultsStep(StepPage):

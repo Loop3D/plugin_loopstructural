@@ -61,6 +61,14 @@ KIND_NORMAL = 'normal'
 
 DEFAULT_WEIGHT = 1.0
 
+# LoopStructural ignores the weight of these types, so they have no weight.
+UNWEIGHTED_TYPES = (INEQUALITY, PAIRWISE_INEQUALITY)
+
+
+def has_weight(layer_type):
+    """Return True if a row of the type `layer_type` has a weight."""
+    return layer_type not in UNWEIGHTED_TYPES
+
 # The keys of a row that name a field of the layer, for each type. A row
 # without these keys is not complete.
 REQUIRED_FIELDS = {
@@ -113,10 +121,11 @@ def add_weight(rows, points, layer_data):
     """Add the weight of the row to ``rows``, a slice of ``points``.
 
     Rows that already have a weight keep it. Without a weight in the row of the
-    constraint list, LoopStructural uses a weight of 1.
+    constraint list, LoopStructural uses a weight of 1. A type with no weight
+    (see `has_weight`) gets no weight.
     """
     weight = layer_data.get('weight')
-    if weight is None or 'w' in rows:
+    if weight is None or 'w' in rows or not has_weight(layer_data.get('type')):
         return rows
     rows = rows.copy()
     rows['w'] = float(weight)

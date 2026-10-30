@@ -71,6 +71,7 @@ class StratigraphicLayersWidget(QWidget):
         source has another (the `basal_contacts` role). Each one is kept.
         """
         from_geology = source == layer_roles.CONTACTS_FROM_GEOLOGY
+        guessed = False
         self._loading = True
         try:
             if from_geology:
@@ -100,6 +101,7 @@ class StratigraphicLayersWidget(QWidget):
                     self._guess_basal_contacts()
                     layer = self.basalContactsLayer.currentLayer()
                     field = self.unitNameField.currentField() or field
+                    guessed = layer is not None
             self.basalContactsLayer.setLayer(layer)
             self.unitNameField.setLayer(layer)
             if field:
@@ -108,6 +110,11 @@ class StratigraphicLayersWidget(QWidget):
             self.useZCoordinateLabel.setVisible(not from_geology)
         finally:
             self._loading = False
+        if guessed:
+            # The guards of the pickers skip a change while `_loading` is set,
+            # so save the guessed layer here
+            self._write_first_picker(layer, field)
+            self._persist_selection()
 
     def _add_contacts_source_combo(self):
         """Add the choice of where the basal contacts come from."""
@@ -287,6 +294,8 @@ class StratigraphicLayersWidget(QWidget):
             layer = self.data_manager.find_layer_by_name(basal_match)
             if layer:
                 self.basalContactsLayer.setLayer(layer)
+                # setField does nothing for a field that is not in the layer of the picker
+                self.unitNameField.setLayer(layer)
                 fields = [f.name() for f in layer.fields()]
                 fmatcher = ColumnMatcher(fields)
                 if unit_match := fmatcher.find_match('UNITNAME'):
