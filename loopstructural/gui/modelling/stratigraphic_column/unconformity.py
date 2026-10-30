@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 
+from qgis.core import QgsApplication
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QEvent, QPoint, Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QWidget
@@ -22,7 +23,8 @@ class UnconformityWidget(QWidget):
     ):
         super().__init__(parent)
         uic.loadUi(os.path.join(os.path.dirname(__file__), 'unconformity.ui'), self)
-        # Add delete button
+        self.buttonDelete.setIcon(QgsApplication.getThemeIcon("mActionRemove.svg"))
+        self.buttonDelete.setAutoRaise(True)
         self.buttonDelete.clicked.connect(self.request_delete)
         self.uuid = uuid
         self.unconformity_type = 'erode'
