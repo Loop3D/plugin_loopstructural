@@ -5,17 +5,13 @@ The existing tabs and dialogs are the contents of the pages.
 """
 
 from qgis.core import QgsApplication
-from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
     QMenu,
-    QFrame,
     QPushButton,
-    QScrollArea,
-    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -36,6 +32,7 @@ from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MOD
 
 from . import checks
 from .export_panel import ExportPanel
+from .section_stack import SectionStack, page_scroll_area
 
 
 class StepPage(QWidget):
@@ -102,8 +99,7 @@ class DataStep(StepPage):
         mode_row.addWidget(self.mode_combo, 1)
         layout.addLayout(mode_row)
         self.tab = ModelDefinitionTab(self, data_manager=self.data_manager)
-        layout.addWidget(self.tab, 1)
-
+        layout.addWidget(page_scroll_area(self.tab, self), 1)
 
     def set_workflow_mode(self, mode):
         index = self.mode_combo.findData(mode)
@@ -141,11 +137,18 @@ class StratigraphyStep(StepPage):
             "Paint the order on the map...", lambda: self._show_tool(launchers.PAINT_STRAT_ORDER)
         ).setToolTip("Show the order of the column on the geology polygons.")
 
+        # The source layers are a section of the column stack, so the page has
+        # at most two open sections and one scroll area.
         self.stratigraphy_layers = StratigraphicLayersWidget(self, self.data_manager)
-        layers_scroll = QScrollArea(self)
-        layers_scroll.setWidgetResizable(True)
-        layers_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        layers_scroll.setWidget(self.stratigraphy_layers)
+        sections = self.tab.stratigraphic_column_widget.sections
+        sections.add_section(
+            self.stratigraphy_layers,
+            'layers',
+            'Stratigraphic layers',
+            summary=self._layers_summary,
+            collapsed=self._layers_are_set(),
+            index=1,
+        )
 
         derive = self._tool_button(
             "Derive from map",
@@ -161,24 +164,42 @@ class StratigraphyStep(StepPage):
         row.addStretch(1)
         row.addWidget(derive)
         layout.addLayout(row)
+        layout.addWidget(page_scroll_area(self.tab, self), 1)
 
-        # Two tabs, so the page is not tall: the source layers and the column
-        self.tabs = QTabWidget(self)
-        self.tabs.addTab(layers_scroll, "Source layers")
-        self.tabs.addTab(self.tab, "Column")
-        self.tabs.setCurrentWidget(self.tab)
-        layout.addWidget(self.tabs, 1)
-
-        # With contacts from the geology polygons, the "Source layers" tab has
-        # the geology picker, so do not show a second one on the column tab
+        # With contacts from the geology polygons, the "Stratigraphic layers"
+        # section has the geology picker, so do not show a second one
         roles = self.data_manager.layer_roles
         roles.attach(self._on_layer_role_changed)
         self._show_column_geology_picker(roles.contacts_source)
 
-    def _show_column_geology_picker(self, source):
-        self.tab.stratigraphic_column_widget.geologyGroup.setVisible(
-            source != layer_roles.CONTACTS_FROM_GEOLOGY
+    def _layers_are_set(self):
+        """The section starts collapsed after the first setup."""
+        if self.data_manager is None:
+            return False
+        return self.data_manager.get_layer_role(layer_roles.STRUCTURE) is not None
+
+    def _layers_summary(self):
+        if self.data_manager is None:
+            return ""
+        roles = self.data_manager.layer_roles
+        role = (
+            layer_roles.GEOLOGY
+            if roles.contacts_source == layer_roles.CONTACTS_FROM_GEOLOGY
+            else layer_roles.BASAL_CONTACTS
         )
+        parts = []
+        for value in (self.data_manager.get_layer_role(role), roles.get(layer_roles.STRUCTURE)):
+            if value is not None:
+                parts.append(value.name() if hasattr(value, 'name') else str(value))
+        return ", ".join(parts) if parts else "not selected"
+
+    def _show_column_geology_picker(self, source):
+        show = source != layer_roles.CONTACTS_FROM_GEOLOGY
+        column = self.tab.stratigraphic_column_widget
+        if not show:
+            # a hidden open section would count as one of the open sections
+            column.sections.set_open('geology', False)
+        column.geologyGroup.setVisible(show)
 
     def _on_layer_role_changed(self, role, value):
         if role == 'contacts_source':
@@ -199,10 +220,11 @@ class FaultsStep(StepPage):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.fault_layers = FaultLayersWidget(self, self.data_manager)
-        group = QgsCollapsibleGroupBox("Fault layer", self)
-        group_layout = QVBoxLayout(group)
-        group_layout.addWidget(self.fault_layers)
-        layout.addWidget(group)
+        self.sections = SectionStack(self, 'faults', self.data_manager)
+        self.sections.add_section(
+            self.fault_layers, 'fault_layer', 'Fault layer', summary=self._fault_layer_summary
+        )
+        layout.addWidget(self.sections)
 
         topology = QPushButton("Calculate topology...", self)
         topology.setToolTip("Find which faults touch each other, from the fault traces.")
@@ -213,7 +235,15 @@ class FaultsStep(StepPage):
         layout.addLayout(row)
 
         self.adjacency = FaultAdjacencyTab(self, data_manager=self.data_manager)
-        layout.addWidget(self.adjacency, 1)
+        layout.addWidget(page_scroll_area(self.adjacency, self), 1)
+
+    def _fault_layer_summary(self):
+        if self.data_manager is None:
+            return ""
+        layer = self.data_manager.get_layer_role(layer_roles.FAULT_TRACES)
+        if layer is None:
+            return "not selected"
+        return layer.name() if hasattr(layer, 'name') else str(layer)
 
 
 class ModelStep(StepPage):

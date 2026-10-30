@@ -3,6 +3,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -18,6 +19,7 @@ from loopstructural.gui.modelling.steps.pages import (
     StratigraphyStep,
     ViewStep,
 )
+from loopstructural.gui.modelling.steps.section_stack import SectionStack
 from loopstructural.gui.modelling.steps.step_bar import StepBar
 
 # How often the checks of the steps run again, in milliseconds. Several
@@ -88,7 +90,10 @@ class ModellingWidget(QWidget):
             self.stack.addWidget(page)
 
         self.footer_label = QLabel(self)
-        self.footer_label.setWordWrap(True)
+        # One line. The tooltip has all messages. The label can be shorter than
+        # its text, so a long message does not make the dock wider or taller.
+        self.footer_label.setWordWrap(False)
+        self.footer_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.back_button = QPushButton("< Back", self)
         self.next_button = QPushButton("Next >", self)
         self.back_button.clicked.connect(lambda _checked=False: self.go_to(self._neighbour(-1)))
@@ -99,6 +104,8 @@ class ModellingWidget(QWidget):
         footer.addWidget(self.next_button)
 
         mainLayout = QVBoxLayout(self)
+        mainLayout.setContentsMargins(4, 2, 4, 2)
+        mainLayout.setSpacing(2)
         mainLayout.addWidget(self.header)
         mainLayout.addWidget(self.step_bar)
         mainLayout.addWidget(self.stack, 1)
@@ -203,6 +210,8 @@ class ModellingWidget(QWidget):
         self.model_step.tab.refresh_primary_action()
         self.view_step.refresh()
         self.next_button.setText(self._next_text(self.current_index))
+        for section_stack in self.findChildren(SectionStack):
+            section_stack.refresh_summaries()
         page = self.pages[self.current_index]
         check = results[page.key]
         if check.messages:
