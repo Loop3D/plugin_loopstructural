@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.1...v0.7.0) (2026-10-30)
+
+
+### Features
+
+* **ui:** highlight the stratigraphic unit on map when clicked in column ([#129](https://github.com/Loop3D/plugin_loopstructural/issues/129)) ([00d8ec4](https://github.com/Loop3D/plugin_loopstructural/commit/00d8ec4ad21046c910bb351501a80da40558f700))
+
+
+### Bug Fixes
+
+* phase 0 quick fixes for the usability plan ([#131](https://github.com/Loop3D/plugin_loopstructural/issues/131)) ([d3718e2](https://github.com/Loop3D/plugin_loopstructural/commit/d3718e2d6946b4aba0de5e2d50e401893413d051))
+
 ## [0.6.1](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.0...v0.6.1) (2026-10-04)
 
 
