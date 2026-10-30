@@ -60,6 +60,7 @@ class DerivedRefresh:
 
     Make the object on the GUI thread (it reads the layers and the settings).
     Call `run` on the background thread. Call `finish` on the GUI thread.
+    `run` does not change the data manager. `finish` puts the results in it.
     """
 
     def __init__(self, data_manager, model_manager, names=None):
@@ -90,13 +91,7 @@ class DerivedRefresh:
             else dm.get_layer_role(layer_roles.FAULT_TRACES)
         )
         unit_field = dm.get_layer_role(layer_roles.GEOLOGY_UNIT_FIELD)
-        inputs = dm.basal_contacts_inputs(
-            geology=geology,
-            unit_field=unit_field,
-            faults=faults,
-            ignore_units=settings.get('ignore_units', []),
-            override_units=settings.get('basal_override_units', []),
-        )
+        inputs = dm.basal_contacts_inputs()
         _check_contacts_inputs(inputs)
         target_crs = dm.get_model_crs()
         if target_crs is None or not target_crs.isValid():
@@ -157,14 +152,7 @@ class DerivedRefresh:
             contacts_layer = dm.get_layer_role(layer_roles.BASAL_CONTACTS)
         elif settings.get('basal_contacts_layer'):
             contacts_layer = dm.find_layer_by_name(settings['basal_contacts_layer'])
-        inputs = dm.thickness_inputs(
-            geology=geology,
-            unit_field=unit_field,
-            contacts_layer=contacts_layer,
-            calculator_type=calculator_type,
-            structure=structure,
-            cross_sections=cross_sections,
-        )
+        inputs = dm.thickness_inputs()
         orientation_types = ("Dip Direction", "Strike")
         index = settings.get('orientation_type_index', 0)
         orientation_type = orientation_types[index] if 0 <= index < len(orientation_types) else None
@@ -234,15 +222,16 @@ class DerivedRefresh:
                 "column. Check the unit name field and the order of the column."
             )
         self._contacts_result = contacts
-        # The model reads the contacts directly. The project layer is only for display.
-        self.data_manager.update_stratigraphy(
-            basal_contacts=contacts, unit_name_field=BASAL_CONTACT_UNIT_FIELD
-        )
 
     def _run_thickness(self, updater):
         from .m2l_api import calculate_thickness
 
-        result = calculate_thickness(updater=updater, **self._thickness['params'])
+        params = dict(self._thickness['params'])
+        if self._contacts_result is not None:
+            # The contacts of this refresh, not the out-of-date project layer
+            params['basal_contacts'] = self._contacts_result
+            params['basal_contacts_unit_name'] = None
+        result = calculate_thickness(updater=updater, **params)
         if not isinstance(result, dict) or result.get('thicknesses') is None:
             raise DerivedRefreshError("The thickness calculation gave no result.")
         self._thickness_result = result
@@ -260,6 +249,10 @@ class DerivedRefresh:
         dm = self.data_manager
         skipped = []
         if self._contacts_result is not None:
+            # The model reads the contacts directly. The project layer is only for display.
+            dm.update_stratigraphy(
+                basal_contacts=self._contacts_result, unit_name_field=BASAL_CONTACT_UNIT_FIELD
+            )
             self._update_contacts_layer(self._contacts_result)
             dm.derived.record(derived_data.BASAL_CONTACTS, inputs=self._contacts['inputs'])
         if self._thickness_result is not None:
