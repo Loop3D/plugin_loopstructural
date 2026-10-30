@@ -41,7 +41,6 @@ def names_to_refresh(data_manager) -> List[str]:
         return names
     if (
         data_manager.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_GEOLOGY
-        and data_manager.get_stratigraphic_unit_names()
         and data_manager.get_layer_role(layer_roles.GEOLOGY) is not None
         and data_manager.get_layer_role(layer_roles.GEOLOGY_UNIT_FIELD)
         and derived.status(derived_data.BASAL_CONTACTS) != derived_data.CURRENT
