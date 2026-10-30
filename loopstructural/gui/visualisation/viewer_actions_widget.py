@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
 from loopstructural.__about__ import DIR_PLUGIN_ROOT
 
 from ..background_task import finish_background_task, start_background_task
+from . import model_task
 from ..compatibility import configure_layer_combo
 from .cross_section_utils import (
     build_block_model_mesh,
@@ -427,6 +428,8 @@ class ViewerActionsWidget(QWidget):
             progress_callback("Sampling DEM...")
             return self.model_manager.sample_dem_grid()
 
+        if not model_task.try_start(self.model_manager, "Topography"):
+            return
         self.addTopographyButton.setEnabled(False)
         self._topography_thread, self._topography_worker, self._topography_progress = (
             start_background_task(
@@ -450,6 +453,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._topography_thread, self._topography_worker, self._topography_progress
         )
+        model_task.finish(self.model_manager)
         self.addTopographyButton.setEnabled(True)
 
         mesh = self.builder.topography_from_grid(*result)
@@ -471,6 +475,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._topography_thread, self._topography_worker, self._topography_progress
         )
+        model_task.finish(self.model_manager)
         self.addTopographyButton.setEnabled(True)
         self.colourTopographyByStratigraphyCheckBox.setEnabled(
             'topography_surface' in self.viewer.registry
@@ -526,6 +531,11 @@ class ViewerActionsWidget(QWidget):
             colours = self.model_manager.get_stratigraphic_column_colours()
             return ids, colours
 
+        if not model_task.try_start(self.model_manager, "Topography colours"):
+            self.colourTopographyByStratigraphyCheckBox.blockSignals(True)
+            self.colourTopographyByStratigraphyCheckBox.setChecked(False)
+            self.colourTopographyByStratigraphyCheckBox.blockSignals(False)
+            return
         self.colourTopographyByStratigraphyCheckBox.setEnabled(False)
         self._topography_thread, self._topography_worker, self._topography_progress = (
             start_background_task(
@@ -543,6 +553,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._topography_thread, self._topography_worker, self._topography_progress
         )
+        model_task.finish(self.model_manager)
         self.colourTopographyByStratigraphyCheckBox.setEnabled(True)
 
         ids, colours = result
@@ -639,6 +650,8 @@ class ViewerActionsWidget(QWidget):
             colours = self.model_manager.get_stratigraphic_column_colours()
             return mesh, ids, colours
 
+        if not model_task.try_start(self.model_manager, "Cross section"):
+            return
         self._pending_cross_section_name = self._unique_cross_section_name('cross_section_plane')
         self.addPlaneCrossSectionButton.setEnabled(False)
         self._cross_section_thread, self._cross_section_worker, self._cross_section_progress = (
@@ -701,6 +714,8 @@ class ViewerActionsWidget(QWidget):
             colours = self.model_manager.get_stratigraphic_column_colours()
             return mesh, ids, colours
 
+        if not model_task.try_start(self.model_manager, "Cross section"):
+            return
         self._pending_cross_section_name = self._unique_cross_section_name(
             f'cross_section_line_{layer.name()}'
         )
@@ -745,6 +760,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._cross_section_thread, self._cross_section_worker, self._cross_section_progress
         )
+        model_task.finish(self.model_manager)
         self.addPlaneCrossSectionButton.setEnabled(True)
         self._add_cross_section_mesh(result, 'cross_section_plane')
 
@@ -752,6 +768,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._cross_section_thread, self._cross_section_worker, self._cross_section_progress
         )
+        model_task.finish(self.model_manager)
         self.addLineCrossSectionButton.setEnabled(True)
         self._add_cross_section_mesh(result, 'cross_section_line')
 
@@ -759,6 +776,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._cross_section_thread, self._cross_section_worker, self._cross_section_progress
         )
+        model_task.finish(self.model_manager)
         self.addPlaneCrossSectionButton.setEnabled(True)
         self.addLineCrossSectionButton.setEnabled(True)
         logger.error(f"Failed to build cross section: {traceback_text}")
@@ -805,6 +823,8 @@ class ViewerActionsWidget(QWidget):
             colours = self.model_manager.get_stratigraphic_column_colours()
             return mesh, ids, colours
 
+        if not model_task.try_start(self.model_manager, "Block model"):
+            return
         self._pending_block_model_name = self._unique_cross_section_name('block_model')
         self.addBlockModelButton.setEnabled(False)
         self._block_model_thread, self._block_model_worker, self._block_model_progress = (
@@ -829,6 +849,7 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._block_model_thread, self._block_model_worker, self._block_model_progress
         )
+        model_task.finish(self.model_manager)
         self.addBlockModelButton.setEnabled(True)
 
         mesh, ids, colours = result
@@ -852,5 +873,6 @@ class ViewerActionsWidget(QWidget):
         finish_background_task(
             self._block_model_thread, self._block_model_worker, self._block_model_progress
         )
+        model_task.finish(self.model_manager)
         self.addBlockModelButton.setEnabled(True)
         logger.error(f"Failed to build block model: {traceback_text}")

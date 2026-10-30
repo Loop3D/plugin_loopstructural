@@ -142,10 +142,12 @@ class LoopPyVistaQTPlotter(QtInteractor):
         obj = self.registry.get(name)
         return obj.source_values() if obj else {}
 
-    def replace_mesh_object(self, name: str, mesh=None, overrides=None, **source_updates) -> None:
+    def replace_mesh_object(
+        self, name: str, mesh=None, overrides=None, *, new_name=None, **source_updates
+    ) -> None:
         """Add the object `name` again, and keep its source values, viewer
         settings (colour map, opacity, colour picked by the user, ...) and
-        visibility.
+        visibility. With `new_name`, the object gets that name.
 
         Parameters
         ----------
@@ -177,17 +179,20 @@ class LoopPyVistaQTPlotter(QtInteractor):
         if user_colour is not None:
             kwargs['color'] = user_colour
         visible = bool(getattr(obj.actor, 'visibility', True))
+        target = new_name or name
 
         try:
-            self.add_mesh_object(mesh, name=name, **source, **kwargs)
+            self.add_mesh_object(mesh, name=target, **source, **kwargs)
         except Exception:
             # e.g. a scalar array selected in the properties panel that the
             # new mesh does not have; add it with the default colouring
             for key in ('scalars', 'cmap', 'clim', 'rgb'):
                 kwargs.pop(key, None)
-            self.add_mesh_object(mesh, name=name, **source, **kwargs)
+            self.add_mesh_object(mesh, name=target, **source, **kwargs)
+        if target != name:
+            self.remove_object(name)
 
-        new_obj = self.registry.get(name)
+        new_obj = self.registry.get(target)
         if user_colour is not None:
             new_obj.color = user_colour
         if not visible and new_obj.actor is not None:

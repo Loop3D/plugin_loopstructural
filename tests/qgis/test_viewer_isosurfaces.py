@@ -26,13 +26,23 @@ class FakeViewer:
                 source_feature=kwargs.get('source_feature'),
                 source_type=kwargs.get('source_type'),
                 isovalue=kwargs.get('isovalue'),
+                out_of_date=kwargs.get('out_of_date', False),
             )
         )
 
-    def replace_mesh_object(self, name, mesh=None, overrides=None, **source_updates):
+    def replace_mesh_object(self, name, mesh=None, overrides=None, *, new_name=None, **updates):
         obj = self.registry.get(name)
+        if new_name and new_name != name:
+            self.registry.remove(name)
+            obj.name = new_name
+            self.registry.add(obj)
         obj.mesh = mesh
-        obj.isovalue = source_updates.get('isovalue', obj.isovalue)
+        obj.isovalue = updates.get('isovalue', obj.isovalue)
+        obj.out_of_date = updates.get('out_of_date', obj.out_of_date)
+
+    def set_out_of_date(self, names, out_of_date=True):
+        for name in names:
+            self.registry.get(name).out_of_date = out_of_date
 
     def out_of_date_objects(self):
         return self.registry.out_of_date()
@@ -84,8 +94,25 @@ def test_changing_a_value_changes_only_that_object(widget):
     other_mesh = other.mesh
     new_mesh = object()
     finish(widget, 'Fault_1', 'Fault_1_iso_0.20', [(0.4, new_mesh, None)])
-    changed = widget.viewer.registry.get('Fault_1_iso_0.20')
+    # the name has the new value
+    assert 'Fault_1_iso_0.20' not in widget.viewer.registry
+    changed = widget.viewer.registry.get('Fault_1_iso_0.40')
     assert changed.isovalue == 0.4
     assert changed.mesh is new_mesh
     assert other.isovalue == 0.8
     assert other.mesh is other_mesh
+
+
+def test_a_surface_built_while_the_model_changed_is_out_of_date(widget):
+    widget._isosurface_thread = object()  # a task is running
+    widget._on_model_update('model_updated')
+    widget._isosurface_thread = None
+    widget._pending_isosurface = ('Fault_1', None)
+    widget._on_isosurfaces_finished([(0.5, object(), None)])
+    assert widget.viewer.registry.get('Fault_1_iso_0.50').out_of_date
+
+
+def test_a_surface_built_without_a_change_is_up_to_date(widget):
+    widget._model_changed_during_isosurface = False
+    finish(widget, 'Fault_1', None, [(0.5, object(), None)])
+    assert not widget.viewer.registry.get('Fault_1_iso_0.50').out_of_date
