@@ -17,8 +17,17 @@ from loopstructural.gui.visualisation.cross_section_utils import (
 )
 
 # The file formats of each kind of result: extension -> label
-SURFACE_FORMATS = {'.vtk': 'VTK legacy (.vtk)', '.vtp': 'VTK PolyData (.vtp)', '.ply': 'PLY (.ply)', '.stl': 'STL (.stl)'}
-BLOCK_MODEL_FORMATS = {'.vtk': 'VTK legacy (.vtk)', '.vti': 'VTK ImageData (.vti)', '.csv': 'CSV (.csv)'}
+SURFACE_FORMATS = {
+    '.vtk': 'VTK legacy (.vtk)',
+    '.vtp': 'VTK PolyData (.vtp)',
+    '.ply': 'PLY (.ply)',
+    '.stl': 'STL (.stl)',
+}
+BLOCK_MODEL_FORMATS = {
+    '.vtk': 'VTK legacy (.vtk)',
+    '.vti': 'VTK ImageData (.vti)',
+    '.csv': 'CSV (.csv)',
+}
 CROSS_SECTION_FORMATS = {'.vtk': 'VTK legacy (.vtk)', '.csv': 'CSV (.csv)'}
 
 STRATIGRAPHY_ID_FIELD = 'stratigraphy_id'
@@ -65,9 +74,7 @@ def unit_names_for_ids(model_manager, ids) -> np.ndarray:
     """Return the unit name for each stratigraphic id. An id of -1 has no unit."""
     names = list(model_manager.get_stratigraphic_unit_names())
     ids = np.asarray(ids, dtype=int)
-    return np.array(
-        [names[i] if 0 <= i < len(names) else '' for i in ids], dtype=object
-    )
+    return np.array([names[i] if 0 <= i < len(names) else '' for i in ids], dtype=object)
 
 
 def add_stratigraphy(model_manager, mesh, *, cells=False):
@@ -79,7 +86,23 @@ def add_stratigraphy(model_manager, mesh, *, cells=False):
     ids = np.asarray(model_manager.evaluate_stratigraphy_on_points(points))
     data = mesh.cell_data if cells else mesh.point_data
     data[STRATIGRAPHY_ID_FIELD] = ids
+    # a VTK string array: '' where there is no unit
+    data[UNIT_FIELD] = unit_names_for_ids(model_manager, ids).astype(str)
     return ids
+
+
+def existing_surface_files(folder, extension):
+    """Return the files in ``folder`` that an export of the surfaces can overwrite."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return []
+    extension = extension.lower()
+    return sorted(
+        path
+        for prefix in ('strat_', 'fault_')
+        for path in folder.glob(f"{prefix}*")
+        if path.suffix.lower() == extension
+    )
 
 
 def _write_csv(path, points, ids, names):
@@ -162,7 +185,7 @@ def export_block_model(model_manager, path, ncells, *, progress=None):
     ids = add_stratigraphy(model_manager, mesh, cells=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     if extension == '.csv':
-        _write_csv(path, mesh.cell_centers().points, ids, unit_names_for_ids(model_manager, ids))
+        _write_csv(path, mesh.cell_centers().points, ids, mesh.cell_data[UNIT_FIELD])
     else:
         mesh.save(str(path))
     return path
@@ -206,7 +229,7 @@ def export_cross_section(
     ids = add_stratigraphy(model_manager, mesh)
     path.parent.mkdir(parents=True, exist_ok=True)
     if extension == '.csv':
-        _write_csv(path, mesh.points, ids, unit_names_for_ids(model_manager, ids))
+        _write_csv(path, mesh.points, ids, mesh.point_data[UNIT_FIELD])
     else:
         mesh.save(str(path))
     return path

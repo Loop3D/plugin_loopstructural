@@ -34,7 +34,11 @@ class FakeDataManager:
         self._fault_topology = SimpleNamespace(faults=[])
         self.inputs = {'unit_order': ['a']}
         self.derived = DerivedData()
-        for name in (derived_data.BASAL_CONTACTS, derived_data.THICKNESS, derived_data.STYLED_FIELDS):
+        for name in (
+            derived_data.BASAL_CONTACTS,
+            derived_data.THICKNESS,
+            derived_data.STYLED_FIELDS,
+        ):
             self.derived.register(name, lambda: self.inputs)
 
     def is_bounding_box_set(self):
@@ -130,7 +134,7 @@ class TestStratigraphyStep:
         assert 'Select the structure layer.' in todo
 
     def test_units_without_contacts_are_a_problem(self, dm):
-        dm.units = ['a', 'b', 'c']
+        dm.units = ['a', 'b', 'c', 'd']
         dm.contact_units = ['a']
         dm.layer_roles.values[layer_roles.BASAL_CONTACTS] = object()
         check = checks.check_stratigraphy(dm)
@@ -138,10 +142,17 @@ class TestStratigraphyStep:
         assert check.problems == ('2 units have no basal contacts: b, c.',)
 
     def test_one_unit_uses_the_singular(self, dm):
+        dm.units = ['a', 'b', 'c']
+        dm.contact_units = ['a', 'c']
+        dm.layer_roles.values[layer_roles.BASAL_CONTACTS] = object()
+        assert checks.check_stratigraphy(dm).problems == ('1 unit has no basal contacts: b.',)
+
+    def test_the_oldest_unit_needs_no_contacts(self, dm):
+        # the units are youngest first, so 'b' is the oldest unit
         dm.units = ['a', 'b']
         dm.contact_units = ['a']
         dm.layer_roles.values[layer_roles.BASAL_CONTACTS] = object()
-        assert checks.check_stratigraphy(dm).problems == ('1 unit has no basal contacts: b.',)
+        assert checks.check_stratigraphy(dm).status == Status.DONE
 
     def test_long_list_of_names_is_cut(self, dm):
         dm.units = ['a', 'b', 'c', 'd', 'e']
@@ -221,12 +232,14 @@ class TestModelStep:
         assert check.status == Status.PROBLEM
         assert check.problems[0] == 'Set the bounding box in step 1.'
 
-    def test_out_of_date_data_is_a_problem_before_the_build(self, dm):
+    def test_out_of_date_data_is_shown_on_step_2_only(self, dm):
         dm.bounding_box_set = True
+        dm.units = ['a']
+        dm.layer_roles.values[layer_roles.BASAL_CONTACTS] = object()
         dm.derived.record(derived_data.THICKNESS)
         dm.inputs = {'unit_order': ['b', 'a']}
-        check = checks.check_model(dm, FakeModelManager('solved'))
-        assert check.status == Status.PROBLEM
+        assert checks.check_stratigraphy(dm).status == Status.PROBLEM
+        assert checks.check_model(dm, FakeModelManager('solved')).status == Status.DONE
 
     def test_changed_layers_are_a_problem(self, dm):
         dm.bounding_box_set = True

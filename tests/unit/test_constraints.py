@@ -101,6 +101,20 @@ class TestWeight:
         rows = points[['X', 'Y', 'Z']].assign(w=0.1)
         assert (constraints.add_weight(rows, points, {'weight': 5})['w'] == 0.1).all()
 
+    @pytest.mark.parametrize(
+        'layer_type', [constraints.INEQUALITY, constraints.PAIRWISE_INEQUALITY]
+    )
+    def test_the_inequality_types_have_no_weight(self, points, layer_type):
+        assert not constraints.has_weight(layer_type)
+        rows = constraints.add_weight(
+            points[['X', 'Y', 'Z']], points, {'type': layer_type, 'weight': 5}
+        )
+        assert 'w' not in rows
+
+    def test_the_other_types_have_a_weight(self):
+        others = set(constraints.CONSTRAINT_TYPES) - set(constraints.UNWEIGHTED_TYPES)
+        assert others and all(constraints.has_weight(t) for t in others)
+
 
 class TestInterface:
     def test_each_feature_is_a_surface_without_a_group_field(self, points):

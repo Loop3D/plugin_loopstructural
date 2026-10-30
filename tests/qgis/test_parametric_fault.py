@@ -12,6 +12,7 @@ from LoopStructural import StratigraphicColumn
 from LoopStructural.datatypes import BoundingBox
 
 from loopstructural.main.model_manager import GeologicalModelManager
+from loopstructural.main.workflow_mode import WORKFLOW_MODE_CONSTRAINTS
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 
@@ -54,6 +55,26 @@ class TestParametricFault:
         manager.add_parametric_fault(_spec())
         manager.update_model(notify_observers=False)
         assert 'F1' in _names(manager)
+
+    def test_the_fault_is_built_with_constraints(self, manager):
+        manager.set_workflow_mode(WORKFLOW_MODE_CONSTRAINTS)
+        manager.add_parametric_fault(_spec())
+        manager.update_model(notify_observers=False)
+        assert 'F1' in _names(manager)
+
+    def test_a_model_of_faults_only_with_an_empty_column(self, manager):
+        column = StratigraphicColumn()
+        column.clear(basement=False)
+        manager.stratigraphic_column = column
+        manager.add_parametric_fault(_spec())
+        manager.update_model(notify_observers=False)
+        manager.update_all_features(notify_observers=False)
+        assert 'F1' in _names(manager)
+        # no stratigraphic feature
+        assert all(name.startswith(('F1', '__')) for name in _names(manager))
+        assert manager.model.stratigraphic_column is column
+        assert manager.valid
+        assert manager.model_state == 'solved'
 
     def test_the_fault_surface_is_where_the_fault_is(self, manager):
         manager.add_parametric_fault(_spec())
