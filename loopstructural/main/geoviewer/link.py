@@ -5,7 +5,7 @@ of the model and closes the connection. Nothing keeps the link open, so the
 plugin has no state to repair when the viewer stops. The viewer keeps the scene.
 """
 
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 from . import protocol
 from .websocket_client import WebSocketClient, WebSocketClosed, WebSocketError
@@ -23,6 +23,12 @@ class LinkError(Exception):
     """The push failed. The text tells the user why."""
 
 
+class SkippedObject(NamedTuple):
+    """Put in place of a frame when an object cannot be made. The push continues."""
+
+    reason: str
+
+
 class PushResult:
     """What happened in one push."""
 
@@ -32,11 +38,15 @@ class PushResult:
         # (object id, text) of each error that the viewer sent about an object
         self.refused: List[Tuple[str, str]] = []
         self.other_errors: List[str] = []
+        # (object id, text) of each object that the plugin could not make
+        self.skipped: List[Tuple[str, str]] = []
 
     def summary(self) -> str:
         text = f"{self.sent} objects sent to GeoViewer"
         if self.removed:
             text += f", {self.removed} old objects removed"
+        if self.skipped:
+            text += f", {len(self.skipped)} objects skipped"
         if self.refused or self.other_errors:
             text += f". The viewer refused {len(self.refused) + len(self.other_errors)} messages"
         return text + "."
@@ -74,7 +84,8 @@ class GeoViewerLink:
             keeps it and says so in its ``hello`` answer.
         build_messages : called with the origin that the viewer uses. It yields
             ``(object id, frame)`` pairs. The coordinates must be relative to
-            this origin.
+            this origin. A ``SkippedObject`` in place of a frame is recorded in
+            ``PushResult.skipped``.
         replace_prefix : after the push, remove the objects of the viewer whose
             id starts with this text and that were not sent again.
         progress : called with a text before each step.
@@ -100,6 +111,9 @@ class GeoViewerLink:
         scene_origin, existing = self._read_hello_answer(client, origin)
         sent_ids = set()
         for object_id, frame in build_messages(scene_origin):
+            if isinstance(frame, SkippedObject):
+                result.skipped.append((object_id, frame.reason))
+                continue
             say(f"Sending {object_id}...")
             client.send_binary(frame)
             sent_ids.add(object_id)
@@ -130,7 +144,8 @@ class GeoViewerLink:
             header = protocol.decode_header(data)
             kind = header.get('type')
             if kind == 'hello':
-                scene_origin = [float(v) for v in header.get('origin', scene_origin)]
+                # an empty scene can answer "origin": null
+                scene_origin = [float(v) for v in header.get('origin') or scene_origin]
                 got_hello = True
             elif kind == 'scene.inventory':
                 ids = protocol.inventory_ids(header)

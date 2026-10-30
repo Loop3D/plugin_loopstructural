@@ -10,6 +10,9 @@ import hashlib
 import socket
 import struct
 import threading
+import time
+
+import numpy as np
 
 from loopstructural.main.geoviewer import protocol
 
@@ -26,9 +29,19 @@ def _read(conn, count, buffer):
 
 
 class FakeViewer:
-    def __init__(self, token='secret', origin=(10.0, 20.0, 0.0), inventory=(), reply_errors=None):
+    def __init__(
+        self,
+        token='secret',
+        origin=(10.0, 20.0, 0.0),
+        inventory=(),
+        reply_errors=None,
+        read_delay=0.0,
+    ):
         self.token = token
-        self.origin = list(origin)
+        # None sends "origin": null, as an empty scene can
+        self.origin = list(origin) if origin is not None else None
+        # seconds to wait after each object, so that the socket of the client fills
+        self.read_delay = read_delay
         self.inventory = list(inventory)
         # object id -> error text; the viewer refuses these objects
         self.reply_errors = dict(reply_errors or {})
@@ -88,6 +101,8 @@ class FakeViewer:
                 continue
             header = protocol.decode_header(payload)
             self.received.append((header, payload))
+            if header['type'] != 'hello' and self.read_delay:
+                time.sleep(self.read_delay)
             if header['type'] == 'hello':
                 self._send(
                     conn,
@@ -140,7 +155,8 @@ class FakeViewer:
             (length,) = struct.unpack('>Q', raw)
         key, buffer = _read(conn, 4, buffer)
         payload, buffer = _read(conn, length, buffer)
-        payload = bytes(b ^ key[i % 4] for i, b in enumerate(payload))
+        mask = np.frombuffer((key * (length // 4 + 1))[:length], dtype=np.uint8)
+        payload = (np.frombuffer(payload, dtype=np.uint8) ^ mask).tobytes()
         return opcode, payload, buffer
 
     @staticmethod

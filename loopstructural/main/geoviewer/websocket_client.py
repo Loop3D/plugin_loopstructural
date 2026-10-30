@@ -27,6 +27,9 @@ MAX_INCOMING_BYTES = 16 * 1024 * 1024
 _HANDSHAKE_MAX_BYTES = 16 * 1024
 # Time for the rest of a frame after its first bytes arrived
 _FRAME_TIMEOUT = 10.0
+# Time to send one frame. A receive can leave a short timeout on the socket,
+# so each send sets this first.
+_SEND_TIMEOUT = 60.0
 
 
 class WebSocketError(Exception):
@@ -51,6 +54,7 @@ class WebSocketClient:
     def __init__(self, sock: socket.socket):
         self._sock = sock
         self._buffer = b''
+        self._partial = False
         self.closed = False
 
     @classmethod
@@ -130,9 +134,11 @@ class WebSocketClient:
             head += struct.pack('>Q', length)
         key = os.urandom(4)
         try:
+            self._sock.settimeout(_SEND_TIMEOUT)
             self._sock.sendall(bytes(head) + key + _mask(payload, key))
         except OSError as error:
-            self.closed = True
+            # also a timeout: part of the frame can be sent, so the stream is broken
+            self._abort()
             raise WebSocketError(f"Cannot send to the viewer: {error}") from error
 
     def send_binary(self, payload: bytes):
@@ -156,6 +162,7 @@ class WebSocketClient:
         # is read to the end, so a timeout cannot leave half a frame behind.
         self._sock.settimeout(wait)
         first, second = self._read_exactly(2)
+        self._partial = True
         self._sock.settimeout(_FRAME_TIMEOUT)
         fin, opcode = bool(first & 0x80), first & 0x0F
         length = second & 0x7F
@@ -179,6 +186,9 @@ class WebSocketClient:
         message_opcode = None
         try:
             while True:
+                # True while a message in parts is read; `_read_frame` also sets
+                # it after the first bytes of a frame
+                self._partial = bool(message)
                 fin, opcode, payload = self._read_frame(timeout if not message else _FRAME_TIMEOUT)
                 if opcode == OP_PING:
                     self._send_frame(OP_PONG, payload)
@@ -202,11 +212,24 @@ class WebSocketClient:
                         return bytes(message)
                     if fin:
                         message = bytearray()
-        except (socket.timeout, TimeoutError):
-            return None
+        except (socket.timeout, TimeoutError) as error:
+            if not self._partial:
+                return None
+            # The bytes of the frame that were read are gone, so the next read
+            # would start in the middle of a frame
+            self._abort()
+            raise WebSocketError("The viewer stopped in the middle of a message.") from error
         except OSError as error:
             self.closed = True
             raise WebSocketError(f"Cannot read from the viewer: {error}") from error
+
+    def _abort(self):
+        """Close the socket without a close frame: the stream is broken."""
+        self.closed = True
+        try:
+            self._sock.close()
+        except OSError:
+            pass
 
     def close(self):
         """Close the connection. It is safe to call it more than one time."""
