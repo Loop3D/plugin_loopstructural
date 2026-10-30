@@ -19,6 +19,7 @@ from qgis.PyQt.QtWidgets import (
 
 from loopstructural.__about__ import DIR_PLUGIN_ROOT
 from loopstructural.gui.compatibility import configure_layer_combo
+from loopstructural.gui.messages import push_success
 from loopstructural.gui.modelling.stratigraphic_column.unconformity import UnconformityWidget
 from loopstructural.main.helpers import ColumnMatcher, get_layer_names
 
@@ -234,7 +235,18 @@ class StratColumnWidget(QWidget):
         return button
 
     def clearColumn(self):
-        """Clear the stratigraphic column."""
+        """Clear the stratigraphic column, after the user confirms."""
+        if self.unitList.count() > 0:
+            reply = QMessageBox.question(
+                self,
+                "Clear Stratigraphic Column",
+                "This removes all units and unconformities from the stratigraphic column. "
+                "This cannot be undone.\n\nContinue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
         # Use the data manager's clear method to ensure callback is triggered
         # This will notify all listening widgets (including this one and others)
         if self.data_manager:
@@ -530,8 +542,7 @@ class StratColumnWidget(QWidget):
             return
         applied = self.data_manager.apply_stratigraphic_colours_to_layer(layer, field_name)
         if applied:
-            QMessageBox.information(
-                self,
+            push_success(
                 "Apply Colours to Map Layer",
                 f"Applied stratigraphic column colours to layer '{layer.name()}'.",
             )
@@ -561,8 +572,7 @@ class StratColumnWidget(QWidget):
             layer, field_name, ramp_name=ramp_name
         )
         if applied:
-            QMessageBox.information(
-                self,
+            push_success(
                 "Apply Stratigraphic Age to Map Layer",
                 f"Applied stratigraphic age and graduated styling to layer '{layer.name()}'.",
             )

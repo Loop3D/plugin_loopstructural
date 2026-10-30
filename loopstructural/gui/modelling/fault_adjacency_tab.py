@@ -38,6 +38,7 @@ class FaultAdjacencyTab(BaseTab):
         )
         self.fault_fault_instructions_label = QLabel(self.fault_fault_instructions)
         self.fault_fault_instructions_label.setWordWrap(True)
+        self.fault_table_layout.addWidget(self.fault_fault_instructions_label)
         self.update_fault_adjacency_table()
         self.layout().addWidget(self.fault_table_group)
 
@@ -51,6 +52,7 @@ class FaultAdjacencyTab(BaseTab):
         )
         self.strat_fault_instructions_label = QLabel(self.strat_fault_instructions)
         self.strat_fault_instructions_label.setWordWrap(True)
+        self.stratigraphic_table_layout.addWidget(self.strat_fault_instructions_label)
         self.update_stratigraphic_units_table()
 
         self.layout().addWidget(self.stratigraphic_table_group)

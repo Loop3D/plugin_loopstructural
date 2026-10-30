@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from loopstructural.gui.messages import push_success
 from loopstructural.gui.modelling.base_tab import BaseTab
 
 from .bounding_box import BoundingBoxWidget
@@ -87,9 +88,7 @@ class ModelDefinitionTab(BaseTab):
                 self, "Save Application State", f"Failed to save application state:\n{err}"
             )
         else:
-            QMessageBox.information(
-                self, "Save Application State", f"Application state saved to:\n{filepath}"
-            )
+            push_success("Save Application State", f"Application state saved to: {filepath}")
 
     def on_load_state_clicked(self):
         """Prompt for a state file and, after confirmation, load it."""

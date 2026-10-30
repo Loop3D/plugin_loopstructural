@@ -236,7 +236,6 @@ class LoopstructuralPlugin:
         self.toolbar.addAction(self.action_basal_contacts)
         self.toolbar.addAction(self.action_thickness)
         self.toolbar.addAction(self.action_paint_strat_order)
-        self.toolbar.addAction(self.action_fault_topology)
 
         self.iface.addPluginToMenu(__title__, self.action_sampler)
         self.iface.addPluginToMenu(__title__, self.action_sorter)
@@ -245,8 +244,6 @@ class LoopstructuralPlugin:
         self.iface.addPluginToMenu(__title__, self.action_thickness)
         self.iface.addPluginToMenu(__title__, self.action_paint_strat_order)
         self.iface.addPluginToMenu(__title__, self.action_fault_topology)
-
-        self.initProcessing()
 
         # -- Help menu
 
