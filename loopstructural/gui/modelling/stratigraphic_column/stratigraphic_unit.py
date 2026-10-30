@@ -197,7 +197,7 @@ class StratigraphicUnitWidget(QWidget):
         self.lineEditName.setStyleSheet("")
         self.spinBoxThickness.setStyleSheet("")
         self.lineEditName.setToolTip("")
-        self.spinBoxThickness.setToolTip("")
+        self.spinBoxThickness.setToolTip("Thickness of the unit")
 
         if not self.name or self.name.strip() == "":
             self.lineEditName.setStyleSheet("border: 2px solid red;")

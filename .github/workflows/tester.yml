@@ -20,12 +20,18 @@ on:
 
 env:
   PROJECT_FOLDER: "loopstructural"
-  PYTHON_VERSION: 3.9
 
 
 jobs:
   tests-unit:
     runs-on: ubuntu-latest
+
+    # 3.10 is the oldest Python of a supported QGIS build (3.44 LTR on Ubuntu 22.04).
+    # 3.12 is the Python of the QGIS Windows (OSGeo4W) installers.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
 
     steps:
       - name: Get source code
@@ -36,7 +42,7 @@ jobs:
         with:
           cache: "pip"
           cache-dependency-path: "requirements/testing.txt"
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python-version }}
 
       - name: Install Python requirements
         run: |
@@ -54,7 +60,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-unit
+          name: coverage-unit-py${{ matrix.python-version }}
           path: |
             coverage.xml
             htmlcov/
@@ -64,8 +70,14 @@ jobs:
   test-qgis:
     runs-on: ubuntu-latest
 
+    # 3.44-jammy: the current LTR, with Python 3.10. 4.2: the latest release, with Qt6.
+    strategy:
+      fail-fast: false
+      matrix:
+        qgis-image: ["3.44-jammy", "4.2"]
+
     container:
-      image: qgis/qgis:release-3_28
+      image: qgis/qgis:${{ matrix.qgis-image }}
       env:
         CI: true
         DISPLAY: ":1"
@@ -88,12 +100,19 @@ jobs:
           set -e
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential gdal-bin libgdal-dev proj-bin libproj-dev libgeos-dev python3-dev xvfb
+            build-essential gdal-bin libgdal-dev proj-bin libproj-dev libgeos-dev python3-dev python3-venv xvfb
           rm -rf /var/lib/apt/lists/*
 
       - name: Setup plugin
         run: bash /tests_directory/scripts/qgis_setup.sh loopstructural
 
+
+      # Install into a venv that can see the system packages (QGIS). Then pip and setuptools
+      # can be upgraded without changes to the Debian packages (PEP 668, no RECORD files).
+      - name: Create virtual environment
+        run: |
+          python3 -m venv --system-site-packages /opt/venv
+          echo "/opt/venv/bin" >> "$GITHUB_PATH"
 
       - name: Install Python requirements
         run: |
@@ -114,7 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-qgis
+          name: coverage-qgis-${{ matrix.qgis-image }}
           path: |
             coverage.xml
             htmlcov/

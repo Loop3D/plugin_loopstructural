@@ -9,7 +9,8 @@ import json
 from unittest.mock import Mock
 
 import pytest
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import QgsFeature, QgsGraduatedSymbolRenderer, QgsProject, QgsVectorLayer
+from qgis.testing import start_app
 
 from loopstructural.main import derived_data, layer_roles
 from loopstructural.main.data_manager import ModellingDataManager
@@ -173,8 +174,8 @@ class TestDerivedData:
             'basal_contacts_widget', {'ignore_units': ['middle'], 'basal_override_units': []}
         )
         assert with_contacts.derived.is_out_of_date(derived_data.BASAL_CONTACTS)
-        # the thickness uses the contacts, so it is out of date too
-        assert with_contacts.derived.is_out_of_date(derived_data.THICKNESS)
+        # the thickness calculates its contacts without these settings
+        assert not with_contacts.derived.is_out_of_date(derived_data.THICKNESS)
 
     def test_a_change_of_the_thickness_settings_marks_only_the_thickness(self, with_contacts):
         with_contacts.set_widget_settings(
@@ -182,19 +183,47 @@ class TestDerivedData:
         )
         assert with_contacts.derived.out_of_date() == [derived_data.THICKNESS]
 
-    def test_the_inputs_of_the_run_are_recorded(self, data_manager, geology):
-        data_manager.layer_roles.set(layer_roles.GEOLOGY, geology)
-        # a tool gives its own inputs for the run
-        inputs = data_manager.basal_contacts_inputs(geology=geology, unit_field='UNITNAME')
-        data_manager.layer_roles.set(layer_roles.GEOLOGY_UNIT_FIELD, 'UNITNAME')
-        data_manager.derived.record(derived_data.BASAL_CONTACTS, inputs=inputs)
-        assert data_manager.derived.status(derived_data.BASAL_CONTACTS) == derived_data.CURRENT
+    def test_a_setting_that_the_calculator_type_does_not_use_is_not_an_input(self, data_manager):
+        settings = {'calculator_type': 'AlongSection', 'max_line_length': 100}
+        data_manager.set_widget_settings('thickness_calculator_widget', settings)
+        data_manager.derived.record(derived_data.THICKNESS)
+        settings = dict(settings, max_line_length=500)
+        data_manager.set_widget_settings('thickness_calculator_widget', settings)
+        assert not data_manager.derived.is_out_of_date(derived_data.THICKNESS)
 
-    def test_styled_fields_follow_the_order_and_the_thickness(self, data_manager):
+    def test_an_empty_field_is_the_same_as_no_field(self, data_manager):
+        data_manager.set_widget_settings('thickness_calculator_widget', {'dip_field': None})
+        data_manager.derived.record(derived_data.THICKNESS)
+        data_manager.set_widget_settings('thickness_calculator_widget', {'dip_field': ''})
+        assert not data_manager.derived.is_out_of_date(derived_data.THICKNESS)
+
+    def test_styled_fields_follow_the_order(self, data_manager):
+        data_manager.derived.record(derived_data.STYLED_FIELDS)
+        _reorder(data_manager, ['middle', 'oldest', 'youngest'])
+        assert data_manager.derived.is_out_of_date(derived_data.STYLED_FIELDS)
+
+    def test_a_thickness_does_not_mark_the_styled_fields_out_of_date(self, data_manager):
         data_manager.derived.record(derived_data.STYLED_FIELDS)
         _unit(data_manager, 'middle').thickness = 12.0
         data_manager.stratigraphic_column_callback()
-        assert data_manager.derived.is_out_of_date(derived_data.STYLED_FIELDS)
+        assert not data_manager.derived.is_out_of_date(derived_data.STYLED_FIELDS)
+
+    def test_update_of_the_styled_fields_makes_the_classes_again(self, data_manager, geology):
+        features = []
+        for name in ('oldest', 'middle', 'youngest', 'new'):
+            feature = QgsFeature(geology.fields())
+            feature['UNITNAME'] = name
+            features.append(feature)
+        geology.dataProvider().addFeatures(features)
+        assert data_manager.apply_stratigraphic_age_to_layer(geology, 'UNITNAME')
+        assert len(geology.renderer().ranges()) == 3
+
+        data_manager.get_stratigraphic_column().add_unit(name='new', colour='#ff0000')
+        assert data_manager.refresh_stratigraphic_order_field(geology, 'UNITNAME')
+        renderer = geology.renderer()
+        assert isinstance(renderer, QgsGraduatedSymbolRenderer)
+        assert len(renderer.ranges()) == 4
+        assert data_manager.derived.status(derived_data.STYLED_FIELDS) == derived_data.CURRENT
 
     def test_the_records_are_saved_and_loaded(self, with_contacts, project):
         state = json.loads(json.dumps(with_contacts.to_dict()))
@@ -210,6 +239,52 @@ class TestDerivedData:
         with_contacts.derived.record(derived_data.THICKNESS)
         with_contacts.layer_roles.contacts_source = layer_roles.CONTACTS_FROM_LAYER
         assert with_contacts.derived.is_out_of_date(derived_data.THICKNESS)
+
+
+class TestRunRecords:
+    """A tool records the inputs of a run from the same source as the status check."""
+
+    @pytest.fixture(autouse=True)
+    def no_background_task(self, monkeypatch):
+        # the tool widgets need a QApplication
+        start_app()
+        from loopstructural.gui.map2loop_tools import (
+            basal_contacts_widget,
+            thickness_calculator_widget,
+        )
+
+        for module in (basal_contacts_widget, thickness_calculator_widget):
+            monkeypatch.setattr(module, 'start_background_task', lambda *a, **k: (None,) * 3)
+            monkeypatch.setattr(module, 'finish_background_task', lambda *a, **k: None)
+            monkeypatch.setattr(module, 'push_success', lambda *a, **k: None)
+
+    @pytest.fixture
+    def with_geology_role(self, data_manager, geology):
+        data_manager.layer_roles.set(layer_roles.GEOLOGY, geology)
+        data_manager.layer_roles.set(layer_roles.GEOLOGY_UNIT_FIELD, 'UNITNAME')
+        return data_manager
+
+    def test_a_layer_for_one_run_does_not_make_the_contacts_out_of_date(self, with_geology_role):
+        from loopstructural.gui.map2loop_tools.basal_contacts_widget import BasalContactsWidget
+
+        widget = BasalContactsWidget(data_manager=with_geology_role)
+        widget.geologyLayerComboBox.setLayer(_layer('geology for one run'))
+        widget._run_extractor()
+        with_geology_role.derived.record(derived_data.BASAL_CONTACTS, inputs=widget._run_inputs)
+        assert with_geology_role.derived.status(derived_data.BASAL_CONTACTS) == derived_data.CURRENT
+
+    def test_a_layer_for_one_run_does_not_make_the_thickness_out_of_date(self, with_geology_role):
+        from loopstructural.gui.map2loop_tools.thickness_calculator_widget import (
+            ThicknessCalculatorWidget,
+        )
+
+        widget = ThicknessCalculatorWidget(data_manager=with_geology_role)
+        widget.geologyLayerComboBox.setLayer(_layer('geology for one run'))
+        widget.basalContactsComboBox.setLayer(_layer('contacts for one run', 'LineString'))
+        assert widget._run_calculator() is None
+        # a result that is not a dict is also recorded
+        widget._on_calculator_finished('done')
+        assert with_geology_role.derived.status(derived_data.THICKNESS) == derived_data.CURRENT
 
 
 class TestThicknessSource:
