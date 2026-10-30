@@ -194,7 +194,8 @@ of date with its contacts, and update it at build time.
 3. Each step has a check function. The step header shows its result.
 4. Use QGIS widgets and theme icons: `QgsColorButton`, `QgsCollapsibleGroupBox`,
    `QgsApplication.getThemeIcon`. Do not use emoji as icons.
-5. Do not put a scroll area around a widget that scrolls.
+5. A list that scrolls must fill its tab. If the tab has an outer scroll area,
+   the scroll area must scroll only when the dock is shorter than the tab.
 6. Derived data records its inputs. The UI shows when it is out of date. A
    model build never uses out-of-date derived data.
 
@@ -275,7 +276,8 @@ styling) is merged.
 - [x] Rows: use `QgsColorButton`, a theme delete icon, and no repeated
       "Thickness:" label. Give unconformity rows a different style.
 - [x] Show text in the empty list.
-- [x] Remove the outer scroll area from the tab.
+- [x] Make the unit list fill the tab. The outer scroll area scrolls only in a
+      dock that is shorter than the column.
 
 Files: `stratigraphic_column/*.py`, `stratigraphic_column/*.ui`,
 `geological_history_tab.py`.

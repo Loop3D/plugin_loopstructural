@@ -21,7 +21,7 @@ from qgis.PyQt.QtWidgets import (
 from ....main.derived_refresh import DerivedRefresh, DerivedRefreshError, names_to_refresh
 from ....main.model_manager import ModelSolveCancelled
 from ....main.workflow_mode import DEFAULT_WORKFLOW_MODE, WORKFLOW_MODE_CONSTRAINTS
-from ...messages import push_info
+from ...messages import push_info, push_warning
 from ..steps import build_plan
 from .add_fault_dialog import AddFaultDialog
 from .add_foliation_dialog import AddFoliationDialog
@@ -400,7 +400,22 @@ class GeologicalModelTab(QWidget):
             target,
             title="Building Model",
             initial_label="Building geological model...",
+            on_success=self._report_skipped_constraints,
         )
+
+    def _report_skipped_constraints(self):
+        """Tell the user which added rows the build left out, and why."""
+        skipped = getattr(self.model_manager, 'skipped_constraints', None) or {}
+        lines = [
+            f"{feature}: '{layer_name}' ({error})"
+            for feature, rows in skipped.items()
+            for layer_name, error in rows
+        ]
+        if lines:
+            push_warning(
+                "Constraints not used",
+                "The build did not use these added constraints: " + "; ".join(lines) + ".",
+            )
 
     def _validate_before_build(self):
         if self.data_manager is None:
