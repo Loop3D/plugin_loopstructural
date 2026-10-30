@@ -337,6 +337,7 @@ class ThicknessCalculatorWidget(QWidget):
             ),
             'calculator_type': self.calculatorTypeComboBox.currentText(),
             'calculator_type_index': self.calculatorTypeComboBox.currentIndex(),
+            'orientation_type': self.orientationTypeComboBox.currentText(),
             'orientation_type_index': self.orientationTypeComboBox.currentIndex(),
             'max_line_length': self.maxLineLengthSpinBox.value(),
             'sampling_frequency': self.samplingFrequencySpinBox.value(),
@@ -408,19 +409,9 @@ class ThicknessCalculatorWidget(QWidget):
             unit_field=self.unitNameFieldComboBox.currentField(),
         )
         # The inputs of this run, read before the run starts. A change during
-        # the run makes the result out of date.
-        self._run_inputs = (
-            self.data_manager.thickness_inputs(
-                geology=self.geologyLayerComboBox.currentLayer(),
-                unit_field=self.unitNameFieldComboBox.currentField(),
-                contacts_layer=self.basalContactsComboBox.currentLayer(),
-                calculator_type=calculator_type,
-                structure=self.structureLayerComboBox.currentLayer(),
-                cross_sections=self.crossSectionLayerComboBox.currentLayer(),
-            )
-            if self.data_manager
-            else None
-        )
+        # the run makes the result out of date. These are read from the same
+        # source as the status check, after the settings were saved.
+        self._run_inputs = self.data_manager.thickness_inputs() if self.data_manager else None
 
         def target(progress_callback):
             return calculate_thickness(updater=progress_callback, **params)
@@ -466,8 +457,7 @@ class ThicknessCalculatorWidget(QWidget):
             # A thickness that the user typed does not change.
             if thicknesses is not None and self.data_manager:
                 skipped = self._apply_thicknesses(thicknesses)
-            if self.data_manager and getattr(self, '_run_inputs', None) is not None:
-                self.data_manager.derived.record(derived_data.THICKNESS, inputs=self._run_inputs)
+            self._record_run()
             # if thicknesses is not None:
             #     addGeoDataFrameToproject(thicknesses, "Thickness Results")
             if lines is not None:
@@ -483,6 +473,7 @@ class ThicknessCalculatorWidget(QWidget):
             self.task_succeeded.emit()
             return
 
+        self._record_run()
         if hasattr(result, 'geometry'):
             addGeoDataFrameToproject(result, "Thickness Results")
             push_success(
@@ -494,6 +485,11 @@ class ThicknessCalculatorWidget(QWidget):
 
         push_success("Thickness Calculator", f"Thickness calculation completed: {result}")
         self.task_succeeded.emit()
+
+    def _record_run(self):
+        """Record the inputs of the run that finished."""
+        if self.data_manager and getattr(self, '_run_inputs', None) is not None:
+            self.data_manager.derived.record(derived_data.THICKNESS, inputs=self._run_inputs)
 
     def _apply_thicknesses(self, thicknesses):
         """Set the calculated thicknesses on the units of the column.

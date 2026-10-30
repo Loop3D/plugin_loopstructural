@@ -13,7 +13,7 @@ jobs:
   check-and-bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Get latest LoopStructural release
         id: latest
@@ -23,7 +23,11 @@ jobs:
           # can return whichever component's release was published last, not
           # necessarily the LoopStructural package. Read the manifest instead —
           # it maps package name to version unambiguously.
-          latest=$(curl -s https://raw.githubusercontent.com/Loop3D/LoopStructural/master/.release-please-manifest.json | jq -r '.["LoopStructural"]')
+          latest=$(curl -fsS https://raw.githubusercontent.com/Loop3D/LoopStructural/master/.release-please-manifest.json | jq -r '.["LoopStructural"] // empty')
+          if ! [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not read a valid LoopStructural version from the release manifest (got '${latest}')."
+            exit 1
+          fi
           echo "version=$latest" >> "$GITHUB_OUTPUT"
 
       - name: Bump pins if minor version changed
@@ -44,7 +48,7 @@ jobs:
 
       - name: Open pull request
         if: steps.bump.outputs.changed == '1'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "fix: bump LoopStructural pin to ${{ steps.latest.outputs.version }}"
           title: "Bump LoopStructural pin to ${{ steps.latest.outputs.version }}"
