@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from qgis.core import (
     QgsFeature,
     QgsGeometry,
@@ -211,6 +212,15 @@ class TestBasalContactOverrides(unittest.TestCase):
         contacts = self._extract(['A', 'D', 'B', 'C'], overrides=['D'])
         self.assertAlmostEqual(self._length(contacts, 'D'), 300, delta=10)
         self.assertAlmostEqual(self._length(contacts, 'A'), 100, delta=5)
+
+    def test_extraction_error_is_raised(self):
+        # An error in map2loop must not give an empty result.
+        with patch(
+            'loopstructural.main.m2l_api.ContactExtractor.extract_all_contacts',
+            side_effect=ValueError('bad geology'),
+        ):
+            with self.assertRaisesRegex(RuntimeError, 'bad geology'):
+                self._extract(['A', 'B', 'C'])
 
 
 if __name__ == '__main__':

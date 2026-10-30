@@ -295,6 +295,11 @@ def extract_basal_contacts(
     -------
     dict
         Dictionary containing 'basal_contacts' GeoDataFrame and optionally 'all_contacts' GeoDataFrame.
+
+    Raises
+    ------
+    RuntimeError
+        If map2loop cannot extract the contacts.
     """
     geology = qgsLayerToGeoDataFrame(geology, target_crs=target_crs)
     if unit_name_field and unit_name_field in geology.columns:
@@ -400,10 +405,11 @@ def extract_basal_contacts(
             all_contacts_result.shape,
             basal_contacts.shape,
         )
-    except Exception:
+    except Exception as err:
+        # Do not hide the error with an empty result. The caller shows the
+        # message to the user.
         logger.exception("Error during contact extraction")
-        basal_contacts = pd.DataFrame()
-        all_contacts_result = pd.DataFrame()
+        raise RuntimeError(f"Could not extract the basal contacts: {err}") from err
 
     if ignore_units and basal_contacts.empty is False:
         basal_contacts = basal_contacts[
