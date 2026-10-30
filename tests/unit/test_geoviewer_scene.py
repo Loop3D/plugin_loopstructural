@@ -6,6 +6,7 @@ import pyvista as pv
 import pytest
 
 from loopstructural.main.geoviewer import protocol, scene
+from loopstructural.main.geoviewer.link import SkippedObject
 
 
 class FakeSurface:
@@ -91,3 +92,23 @@ def test_triangles_of_a_quad_mesh_are_triangulated():
     quad = pv.PolyData([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], faces=[4, 0, 1, 2, 3])
     vertices, triangles = scene.triangles_of(quad)
     assert triangles.shape == (2, 3) and triangles.max() < len(vertices)
+
+
+class BrokenSurface(FakeSurface):
+    def vtk(self):
+        raise ValueError('no mesh')
+
+
+def test_a_bad_surface_is_skipped_and_the_push_continues():
+    manager = SimpleNamespace(model=FakeModel([BrokenSurface('bad'), FakeSurface('a')]))
+    messages = list(scene.model_messages(manager, (0, 0, 0)))
+    by_id = dict(messages)
+    assert isinstance(by_id['loopstructural/model/stratigraphy/bad'], SkippedObject)
+    assert 'no mesh' in by_id['loopstructural/model/stratigraphy/bad'].reason
+    assert protocol.decode_header(by_id['loopstructural/model/stratigraphy/a'])['type']
+
+
+def test_only_bad_surfaces_is_an_error():
+    manager = SimpleNamespace(model=FakeModel([BrokenSurface('bad')]))
+    with pytest.raises(scene.PushError, match='no mesh'):
+        list(scene.model_messages(manager, (0, 0, 0)))

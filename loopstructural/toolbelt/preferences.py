@@ -39,7 +39,10 @@ class PlgSettingsStructure:
     separate_dock_widgets: bool = False
     # the link to the GeoViewer application (see `main.geoviewer`)
     geoviewer_port: int = 47615
+    # an old version kept the token here in plain text; see `toolbelt.auth_store`
     geoviewer_token: str = ""
+    # the id of the QGIS authentication configuration that has the token
+    geoviewer_token_authcfg: str = ""
     # map units; see `fault_topology_calc.fault_pair_direction`
     fault_end_tolerance: float = 10.0
 

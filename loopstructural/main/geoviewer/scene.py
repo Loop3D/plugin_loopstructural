@@ -10,6 +10,7 @@ from typing import Iterator, List, Optional, Sequence, Tuple
 import numpy as np
 
 from . import protocol
+from .link import SkippedObject
 
 # Every object of the plugin has an id that starts with this text, so that a new
 # push can replace the objects of the old push.
@@ -77,7 +78,8 @@ def model_messages(
     """Yield ``(object id, frame)`` for the groups and the surfaces of the model.
 
     The groups come first, so the viewer knows the parent of each surface. A
-    surface with no triangles is skipped, as in the file export.
+    surface with no triangles is skipped, as in the file export. A surface that
+    cannot be read gives a ``SkippedObject`` in place of its frame.
     """
     model = getattr(model_manager, 'model', None)
     if model is None:
@@ -98,25 +100,35 @@ def model_messages(
 
     used = set()
     pushed = 0
+    skipped = []
     for kind, surface in surfaces:
         if progress is not None:
             progress(f"Reading {surface.name}...")
-        vertices, triangles = triangles_of(surface.vtk())
-        if len(triangles) == 0:
-            continue
         parent = STRATIGRAPHY_ID if kind == 'stratigraphy' else FAULTS_ID
         object_id = _unique_id(f"{parent}/{surface.name}", used)
-        style = {'colour': FAULT_COLOUR} if kind == 'faults' else None
-        yield object_id, protocol.surface_message(
-            object_id,
-            str(surface.name),
-            vertices,
-            triangles,
-            origin=origin,
-            parent=parent,
-            revision=revision,
-            style=style,
-        )
+        # one bad surface does not stop the push of the others
+        try:
+            vertices, triangles = triangles_of(surface.vtk())
+            if len(triangles) == 0:
+                continue
+            style = {'colour': FAULT_COLOUR} if kind == 'faults' else None
+            frame = protocol.surface_message(
+                object_id,
+                str(surface.name),
+                vertices,
+                triangles,
+                origin=origin,
+                parent=parent,
+                revision=revision,
+                style=style,
+            )
+        except Exception as error:
+            skipped.append(f"{surface.name}: {error}")
+            yield object_id, SkippedObject(str(error))
+            continue
+        yield object_id, frame
         pushed += 1
     if pushed == 0:
+        if skipped:
+            raise PushError("No surface could be read: " + "; ".join(skipped))
         raise PushError("All surfaces are empty. Check the bounding box and the data.")

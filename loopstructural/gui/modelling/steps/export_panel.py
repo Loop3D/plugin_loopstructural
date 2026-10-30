@@ -23,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
 from loopstructural.main import model_export
 from loopstructural.main.geoviewer import scene as geoviewer_scene
 from loopstructural.main.geoviewer.link import DEFAULT_PORT, GeoViewerLink, LinkError
+from loopstructural.toolbelt import auth_store
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ...background_task import finish_background_task, start_background_task
@@ -184,9 +185,33 @@ class ExportPanel(QgsCollapsibleGroupBox):
 
     def _load_geoviewer_settings(self):
         port = PlgOptionsManager.get_value_from_key('geoviewer_port', DEFAULT_PORT, int)
-        token = PlgOptionsManager.get_value_from_key('geoviewer_token', '', str)
         self.geoviewer_port.setValue(int(port or DEFAULT_PORT))
-        self.geoviewer_token.setText(token or '')
+        # The token is read from the QGIS authentication database at the push,
+        # so QGIS does not ask for its master password when the dock opens
+        if self._has_saved_geoviewer_token():
+            self.geoviewer_token.setPlaceholderText("Saved. Type a new token to change it.")
+
+    @staticmethod
+    def _has_saved_geoviewer_token():
+        return bool(
+            PlgOptionsManager.get_value_from_key('geoviewer_token_authcfg', '', str)
+            or PlgOptionsManager.get_value_from_key('geoviewer_token', '', str)
+        )
+
+    def _geoviewer_token(self):
+        """Return the token of the field, or the saved token. Save a new token."""
+        token = self.geoviewer_token.text().strip()
+        # an old version kept the token in plain text in the settings
+        legacy = PlgOptionsManager.get_value_from_key('geoviewer_token', '', str)
+        if not token and legacy:
+            token = legacy
+        if token:
+            if auth_store.save_secret(
+                'geoviewer_token_authcfg', 'LoopStructural GeoViewer link', token
+            ):
+                PlgOptionsManager.set_value_from_key('geoviewer_token', '')
+            return token
+        return auth_store.load_secret('geoviewer_token_authcfg')
 
     def _update_section_inputs(self, *_args):
         is_line = self.section_kind.currentData() == 'line'
@@ -298,9 +323,9 @@ class ExportPanel(QgsCollapsibleGroupBox):
         faults = self.geoviewer_faults.isChecked()
         if not (strat or faults):
             return self._warn("Select the stratigraphic surfaces, the fault surfaces, or both.")
-        port, token = self.geoviewer_port.value(), self.geoviewer_token.text().strip()
+        port = self.geoviewer_port.value()
         PlgOptionsManager.set_value_from_key('geoviewer_port', port)
-        PlgOptionsManager.set_value_from_key('geoviewer_token', token)
+        token = self._geoviewer_token()
         manager = self.model_manager
         crs = self.data_manager.get_model_crs() if self.data_manager else None
         crs_text = crs.authid() if crs is not None and crs.isValid() else ''
@@ -321,11 +346,10 @@ class ExportPanel(QgsCollapsibleGroupBox):
                 )
             except (LinkError, geoviewer_scene.PushError) as error:
                 raise RuntimeError(str(error)) from error
-            if result.refused or result.other_errors:
-                details = "; ".join(text for _id, text in result.refused) or "; ".join(
-                    result.other_errors
-                )
-                return f"{result.summary()} {details}"
+            details = [f"{object_id}: {text}" for object_id, text in result.skipped]
+            details += [text for _id, text in result.refused] + list(result.other_errors)
+            if details:
+                return f"{result.summary()} {'; '.join(details)}"
             return result.summary()
 
         self._run(target, "Push model to GeoViewer")
