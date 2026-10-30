@@ -1730,6 +1730,11 @@ class GeologicalModelManager(Observable):
                 # Update the model with stratigraphy
                 self.update_fault_features()
                 self.update_foliation_features()
+            else:
+                # The parametric faults are not map data, so build them in
+                # both modes. With "map", update_fault_features builds them.
+                self._build_parametric_faults()
+                self.apply_fault_abutting_relationships()
             # after the stratigraphy, so each gets the same unconformity
             # regions as when the user added it
             self._build_manual_foliations()
