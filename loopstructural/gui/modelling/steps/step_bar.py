@@ -51,7 +51,7 @@ class StepBar(QWidget):
     def __init__(self, steps, parent=None):
         super().__init__(parent)
         self._keys = [key for key, _title in steps]
-        self._titles = {key: title for key, title in steps}
+        self._titles = dict(steps)
         self._checks = {}
         self._buttons = []
         self._group = QButtonGroup(self)
@@ -59,7 +59,7 @@ class StepBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
-        for index, (key, title) in enumerate(steps):
+        for index, (_key, title) in enumerate(steps):
             button = QToolButton(self)
             button.setCheckable(True)
             button.setText(f"{index + 1} {title}")
