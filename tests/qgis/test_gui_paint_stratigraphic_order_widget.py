@@ -186,3 +186,28 @@ def test_widget_paint_stratigraphic_order(tmp_path):
     vals = [f['strat_order'] for f in layer.getFeatures()]
     # at least one value should be not None (matching provided order)
     assert any(v is not None for v in vals)
+
+
+def test_a_duplicated_layer_is_the_recorded_styled_layer():
+    start_app()
+    from qgis.core import QgsProject
+
+    from loopstructural.gui.map2loop_tools.paint_stratigraphic_order_widget import (
+        PaintStratigraphicOrderWidget,
+    )
+    from loopstructural.main.derived_data import STYLED_FIELDS
+
+    data_manager = DummyDataManager(['Unit_A', 'Unit_B', 'Unit_C'])
+    widget = PaintStratigraphicOrderWidget(
+        parent=None, data_manager=data_manager, debug_manager=DummyDebug()
+    )
+    layer = make_geology_layer()
+    widget.geologyLayerComboBox.setLayer(layer)
+    widget.unitNameFieldComboBox.setField('UNITNAME')
+    widget.duplicateLayerCheckBox.setChecked(True)
+
+    try:
+        assert widget._run_painter() is True
+        assert data_manager.derived.detail(STYLED_FIELDS)['layer'] == 'geology_strat'
+    finally:
+        QgsProject.instance().removeAllMapLayers()

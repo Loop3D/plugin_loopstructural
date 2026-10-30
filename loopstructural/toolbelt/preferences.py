@@ -40,6 +40,8 @@ class PlgSettingsStructure:
     # the link to the GeoViewer application (see `main.geoviewer`)
     geoviewer_port: int = 47615
     geoviewer_token: str = ""
+    # map units; see `fault_topology_calc.fault_pair_direction`
+    fault_end_tolerance: float = 10.0
 
 
 class PlgOptionsManager:

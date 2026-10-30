@@ -432,7 +432,9 @@ class LoopstructuralPlugin:
         )
 
         try:
-            result = calculate_from_data_manager(self.data_manager)
+            result = calculate_from_data_manager(
+                self.data_manager, PlgOptionsManager.get_plg_settings().fault_end_tolerance
+            )
         except FaultTopologyError as error:
             push_warning("Fault topology", str(error))
             return

@@ -13,6 +13,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..background_task import finish_background_task, start_background_task
+from . import model_task
 from ..messages import push_info, push_warning
 from .isosurface_dialog import IsosurfaceDialog
 from .isovalues import isosurface_name
@@ -68,6 +69,7 @@ class FeatureListWidget(QWidget):
         self._isosurface_worker = None
         self._isosurface_progress = None
         self._pending_isosurface = None
+        self._model_changed_during_isosurface = False
 
         # Populate the feature list
         self.update_feature_list()
@@ -262,6 +264,8 @@ class FeatureListWidget(QWidget):
             return
         if not values:
             return
+        if not model_task.try_start(self.model_manager, "Isosurfaces"):
+            return
 
         def target(progress_callback):
             results = []
@@ -274,6 +278,7 @@ class FeatureListWidget(QWidget):
             return results
 
         self._pending_isosurface = (feature_name, existing_name)
+        self._model_changed_during_isosurface = False
         self._isosurface_thread, self._isosurface_worker, self._isosurface_progress = (
             start_background_task(
                 self,
@@ -299,21 +304,33 @@ class FeatureListWidget(QWidget):
         self._isosurface_thread = None
         self._isosurface_worker = None
         self._isosurface_progress = None
+        model_task.finish(self.model_manager)
 
     def _on_isosurfaces_finished(self, results):
         self._finish_isosurface_task()
         feature_name, existing_name = self._pending_isosurface
         self._pending_isosurface = None
+        # The model changed while the surfaces were built from it
+        out_of_date = self._model_changed_during_isosurface
         added, failed = [], []
-        for value, mesh, error in results:
+        for value, mesh, _error in results:
             if mesh is None:
                 failed.append(value)
                 continue
             if existing_name is not None:
                 if existing_name not in self.viewer.registry:
                     continue  # removed from the viewer while the surface was built
+                # the name has the value, so give the object the name of the new value
+                new_name = isosurface_name(feature_name, value)
+                if new_name != existing_name:
+                    new_name = self.viewer.registry.unique_name(new_name)
                 self.viewer.replace_mesh_object(
-                    existing_name, mesh, None, isovalue=float(value), out_of_date=False
+                    existing_name,
+                    mesh,
+                    None,
+                    new_name=new_name,
+                    isovalue=float(value),
+                    out_of_date=out_of_date,
                 )
             else:
                 name = self.viewer.registry.unique_name(isosurface_name(feature_name, value))
@@ -323,9 +340,11 @@ class FeatureListWidget(QWidget):
                     source_feature=feature_name,
                     source_type='feature_isosurface',
                     isovalue=float(value),
+                    out_of_date=out_of_date,
                 )
             added.append(value)
         self._render_viewer()
+        self._refresh_update_objects_button()
         if failed:
             values_text = ", ".join(f"{v:.4g}" for v in failed)
             push_warning(
@@ -361,6 +380,8 @@ class FeatureListWidget(QWidget):
             return
         if event not in ('model_updated', 'feature_updated'):
             return
+        if self._isosurface_thread is not None:
+            self._model_changed_during_isosurface = True
         names = [obj.name for obj in self.viewer.registry.rebuildable()]
         self.viewer.set_out_of_date(names, True)
 
@@ -424,6 +445,8 @@ class FeatureListWidget(QWidget):
                     + "\n\nSet a colour for each unit and try again.",
                 )
                 return
+        if not model_task.try_start(self.model_manager, "Update Viewer Objects"):
+            return
 
         def target(progress_callback):
             results = []
@@ -462,6 +485,7 @@ class FeatureListWidget(QWidget):
         self._update_objects_thread = None
         self._update_objects_worker = None
         self._update_objects_progress = None
+        model_task.finish(self.model_manager)
 
     def _on_update_objects_finished(self, results):
         self._finish_update_objects_task()
