@@ -53,6 +53,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
     INPUT_MAX_LINE_LENGTH = 'MAX_LINE_LENGTH'
     INPUT_STRATI_COLUMN = 'STRATIGRAPHIC_COLUMN'
     INPUT_BASAL_CONTACTS = 'BASAL_CONTACTS'
+    INPUT_FAULTS = 'FAULTS'
     INPUT_STRUCTURE_DATA = 'STRUCTURE_DATA'
     INPUT_DIPDIR_FIELD = 'DIPDIR_FIELD'
     INPUT_DIP_FIELD = 'DIP_FIELD'
@@ -143,6 +144,16 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
                 self.INPUT_GEOLOGY,
                 "GEOLOGY",
                 [QgsProcessing.SourceType.TypeVectorPolygon],
+            )
+        )
+        # Faults are only used when the basal contacts are extracted from the
+        # geology layer.
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.INPUT_FAULTS,
+                "Faults (optional, used to extract basal contacts)",
+                [QgsProcessing.SourceType.TypeVectorLine],
+                optional=True,
             )
         )
 
@@ -251,7 +262,10 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
         bounding_box_type = self.parameterAsEnum(parameters, self.INPUT_BOUNDING_BOX_TYPE, context)
         max_line_length = self.parameterAsSource(parameters, self.INPUT_MAX_LINE_LENGTH, context)
         basal_contacts = self.parameterAsSource(parameters, self.INPUT_BASAL_CONTACTS, context)
-        geology_data = self.parameterAsSource(parameters, self.INPUT_GEOLOGY, context)
+        geology_source = self.parameterAsSource(parameters, self.INPUT_GEOLOGY, context)
+        if geology_source is None:
+            raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT_GEOLOGY))
+        faults_source = self.parameterAsSource(parameters, self.INPUT_FAULTS, context)
         structure_data = self.parameterAsSource(parameters, self.INPUT_STRUCTURE_DATA, context)
         orientation_type = self.parameterAsEnum(parameters, self.INPUT_ORIENTATION_TYPE, context)
         is_strike = orientation_type == 1
@@ -262,15 +276,19 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
 
         sampled_contacts = self.parameterAsSource(parameters, self.INPUT_SAMPLED_CONTACTS, context)
         unit_name_field = self.parameterAsString(parameters, self.INPUT_UNIT_NAME_FIELD, context)
-        geology_layer = self.parameterAsVectorLayer(parameters, self.INPUT_GEOLOGY, context)
+        # Use the geology source for the units, the bounding box and the basal
+        # contacts. The source follows "selected features only", and it is
+        # also correct when the input is not a map layer.
+        units = qgsLayerToDataFrame(geology_source)
+        geology_data = qgsLayerToGeoDataFrame(geology_source)
 
         if bounding_box_type == 0:
-            extent = geology_layer.extent()
+            minx, miny, maxx, maxy = geology_data.total_bounds
             bounding_box = {
-                'minx': extent.xMinimum(),
-                'miny': extent.yMinimum(),
-                'maxx': extent.xMaximum(),
-                'maxy': extent.yMaximum(),
+                'minx': minx,
+                'miny': miny,
+                'maxx': maxx,
+                'maxy': maxy,
             }
             feedback.pushInfo("Using bounding box from geology layer")
         else:
@@ -314,21 +332,30 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
             strati_column_settings = QgsSettings()
             strati_column_settings.setValue('m2l/strati_column', matrix)
         # convert layers to dataframe or geodataframe
-        units = qgsLayerToDataFrame(geology_data)
-        geology_data = qgsLayerToGeoDataFrame(geology_data)
         if basal_contacts is not None:
             basal_contacts = qgsLayerToGeoDataFrame(basal_contacts)
         else:
             feedback.pushInfo(
                 "No basal contacts layer supplied; extracting basal contacts from geology layer..."
             )
-            basal_contacts = extract_basal_contacts(
-                geology=geology_layer,
-                stratigraphic_order=stratigraphic_order,
-                unit_name_field=unit_name_field,
-                updater=feedback.pushInfo,
-                target_crs=geology_layer.crs() if geology_layer else None,
-            )['basal_contacts']
+            # Reproject the faults to the CRS of the geology, so that the two
+            # layers align.
+            try:
+                basal_contacts = extract_basal_contacts(
+                    geology=geology_source,
+                    stratigraphic_order=stratigraphic_order,
+                    faults=faults_source,
+                    unit_name_field=unit_name_field,
+                    updater=feedback.pushInfo,
+                    target_crs=geology_source.sourceCrs(),
+                )['basal_contacts']
+            except Exception as err:
+                raise QgsProcessingException(str(err)) from err
+            if basal_contacts.empty:
+                raise QgsProcessingException(
+                    "No basal contacts were found in the geology layer. Make sure that "
+                    "the units in the stratigraphic column are in the geology layer."
+                )
         structure_data = qgsLayerToDataFrame(structure_data)
         rename_map = {}
         missing_fields = []
