@@ -32,7 +32,7 @@ from loopstructural.toolbelt.preferences import PlgOptionsManager
 from ..main import constraints, parametric_fault
 from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
-from ..main.interpolation_size import suggest_nelements, summarise_data
+from ..main.interpolation_size import DataSummary, suggest_nelements, summarise_data
 from ..main.workflow_mode import WORKFLOW_MODE_CONSTRAINTS, WORKFLOW_MODE_MAP, WORKFLOW_MODES
 
 
@@ -246,6 +246,8 @@ class GeologicalModelManager(Observable):
         # feature name -> (number of elements, True if automatic) of the last
         # build, for the feature panel.
         self.nelements_used: Dict[str, tuple] = {}
+        # feature name -> DataSummary of the data of the last build
+        self._data_summaries: Dict[str, DataSummary] = {}
 
     @property
     def uses_map_data(self) -> bool:
@@ -322,6 +324,7 @@ class GeologicalModelManager(Observable):
         self.parametric_faults = {}
         self.nelements_overrides = {}
         self.nelements_used = {}
+        self._data_summaries = {}
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
@@ -1005,14 +1008,12 @@ class GeologicalModelManager(Observable):
         saved settings, not from the class defaults.
         """
         settings = PlgOptionsManager.get_plg_settings()
-        automatic = False
+        self._data_summaries[name] = summarise_data(data)
         if self.nelements_overrides.get(name):
             nelements = int(self.nelements_overrides[name])
-        elif settings.interpolator_nelements_auto:
-            nelements = suggest_nelements(summarise_data(data))
-            automatic = True
+            automatic = False
         else:
-            nelements = int(settings.interpolator_nelements)
+            nelements, automatic = self.default_nelements(name)
         self.nelements_used[name] = (nelements, automatic)
         return {
             'nelements': nelements,
@@ -1020,6 +1021,31 @@ class GeologicalModelManager(Observable):
             'cpw': settings.interpolator_cpw,
             'regularisation': settings.interpolator_regularisation,
         }
+
+    def default_nelements(self, name) -> tuple:
+        """Return (number of elements, True if automatic) for the feature
+        `name` without the number that the user set for it.
+
+        With the saved setting "automatic", the number comes from the data of
+        the last build of the feature. Otherwise it is the saved fixed number.
+        """
+        settings = PlgOptionsManager.get_plg_settings()
+        if not settings.interpolator_nelements_auto:
+            return int(settings.interpolator_nelements), False
+        summary = self._data_summaries.get(name, DataSummary())
+        return suggest_nelements(summary, self._model_volume()), True
+
+    def _model_volume(self) -> float:
+        """Return the volume of the model box, or 0 if the box is not set."""
+        bounding_box = getattr(self.model, 'bounding_box', None)
+        try:
+            lengths = np.asarray(bounding_box.maximum, dtype=float) - np.asarray(
+                bounding_box.origin, dtype=float
+            )
+        except (AttributeError, TypeError, ValueError):
+            return 0.0
+        volume = float(np.prod(lengths))
+        return volume if np.isfinite(volume) and volume > 0 else 0.0
 
     def nelements_overrides_to_dict(self) -> dict:
         """Return `nelements_overrides` in a form that `json.dump` can write."""
