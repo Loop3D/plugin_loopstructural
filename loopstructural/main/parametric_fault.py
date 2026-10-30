@@ -68,6 +68,27 @@ def plane_vectors(strike: float, dip: float, pitch: float) -> Tuple[np.ndarray, 
     return normal, slip / np.linalg.norm(slip)
 
 
+def axis_vectors(strike: float, dip: float, pitch: float) -> dict:
+    """Return the unit vector of each size of the fault, as LoopStructural uses them.
+
+    LoopStructural puts the fault ellipsoid on the slip, not on the strike:
+
+    - ``major_axis`` is the full length along ``cross(normal, slip)``, in the
+      plane at right angles to the slip;
+    - ``intermediate_axis`` is the extent from the centre along the slip;
+    - ``minor_axis`` is along the normal.
+
+    With a pitch of 90 (dip slip), the major axis is along the strike and the
+    intermediate axis is down the dip.
+    """
+    normal, slip = plane_vectors(strike, dip, pitch)
+    return {
+        'major_axis': np.cross(normal, slip),
+        'intermediate_axis': slip,
+        'minor_axis': normal,
+    }
+
+
 def default_spec(origin: Iterable[float], maximum: Iterable[float]) -> dict:
     """Return the start values for a fault in the model area (the centre and the sizes)."""
     origin = np.asarray(list(origin), dtype=float)
@@ -98,8 +119,8 @@ def problems(spec: dict, taken_names: Iterable[str] = ()) -> List[str]:
     if not 0 < float(spec.get('dip', 0)) <= 90:
         found.append("The dip must be above 0 and not more than 90 degrees.")
     for key, label in (
-        ('major_axis', "The length along strike"),
-        ('intermediate_axis', "The extent down dip"),
+        ('major_axis', "The length across the slip"),
+        ('intermediate_axis', "The extent along the slip"),
         ('minor_axis', "The influence distance"),
     ):
         if not float(spec.get(key) or 0) > 0:
