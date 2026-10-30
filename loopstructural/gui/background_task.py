@@ -74,9 +74,14 @@ def start_background_task(
     on_progress,
     on_finished,
     on_error,
+    modal=False,
 ):
-    """Start `target(progress_callback)` on a background QThread, with a
-    non-modal indeterminate QProgressDialog parented to `widget`.
+    """Start `target(progress_callback)` on a background QThread, with an
+    indeterminate QProgressDialog parented to `widget`.
+
+    The dialog is non-modal unless `modal` is True. A modal dialog blocks the
+    window of `widget` until the task ends, so the user cannot start other
+    work (for example a model build) that changes the data of the task.
 
     `on_progress`, `on_finished` and `on_error` MUST be bound methods of
     `widget` (e.g. `self._on_sampler_finished`), never lambdas/closures --
@@ -90,7 +95,9 @@ def start_background_task(
     the thread is running, the thread is destroyed with it.
     """
     progress_dialog = QProgressDialog(initial_label, "Cancel", 0, 0, widget)
-    progress_dialog.setWindowModality(Qt.WindowModality.NonModal)
+    progress_dialog.setWindowModality(
+        Qt.WindowModality.WindowModal if modal else Qt.WindowModality.NonModal
+    )
     progress_dialog.setWindowTitle(title)
     progress_dialog.setCancelButton(None)
     progress_dialog.setMinimumDuration(0)

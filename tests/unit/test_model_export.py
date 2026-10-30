@@ -63,9 +63,7 @@ def test_export_surfaces_writes_one_file_each_and_skips_empty(tmp_path):
 
 def test_export_surfaces_can_select_kinds(tmp_path):
     model = FakeModel(strat=[FakeSurface('a')], faults=[FakeSurface('F1')])
-    files = model_export.export_surfaces(
-        FakeManager(model), tmp_path, '.vtp', stratigraphic=False
-    )
+    files = model_export.export_surfaces(FakeManager(model), tmp_path, '.vtp', stratigraphic=False)
     assert [f.name for f in files] == ['fault_F1.vtp']
 
 
@@ -79,7 +77,9 @@ def test_export_surfaces_errors(tmp_path):
             FakeManager(FakeModel(strat=[FakeSurface('a', empty=True)])), tmp_path
         )
     with pytest.raises(model_export.ExportError):
-        model_export.export_surfaces(FakeManager(FakeModel(strat=[FakeSurface('a')])), tmp_path, '.xyz')
+        model_export.export_surfaces(
+            FakeManager(FakeModel(strat=[FakeSurface('a')])), tmp_path, '.xyz'
+        )
 
 
 def test_export_block_model_vtk_has_stratigraphy(tmp_path):
@@ -89,6 +89,38 @@ def test_export_block_model_vtk_has_stratigraphy(tmp_path):
     mesh = pv.read(str(path))
     assert mesh.n_cells == 8
     assert sorted(set(mesh.cell_data[model_export.STRATIGRAPHY_ID_FIELD])) == [0, 1]
+
+
+@pytest.mark.parametrize('extension', ['.vtk', '.vti'])
+def test_export_block_model_vtk_has_unit_names(tmp_path, extension):
+    path = model_export.export_block_model(
+        FakeManager(FakeModel()), tmp_path / f'block{extension}', (1, 1, 2)
+    )
+    mesh = pv.read(str(path))
+    ids = mesh.cell_data[model_export.STRATIGRAPHY_ID_FIELD]
+    units = mesh.cell_data[model_export.UNIT_FIELD]
+    assert dict(zip(ids.tolist(), units.tolist())) == {0: 'lower', 1: 'upper'}
+
+
+def test_cross_section_vtk_has_unit_names(tmp_path):
+    path = model_export.export_cross_section(
+        FakeManager(FakeModel()),
+        tmp_path / 'plane.vtk',
+        origin=(5, 5, 5),
+        normal=(0, 1, 0),
+        size=10,
+        resolution=5,
+    )
+    units = set(pv.read(str(path)).point_data[model_export.UNIT_FIELD].tolist())
+    assert units == {'lower', 'upper'}
+
+
+def test_existing_surface_files(tmp_path):
+    assert model_export.existing_surface_files(tmp_path / 'missing', '.vtk') == []
+    for name in ('strat_a.vtk', 'fault_F1.VTK', 'strat_b.ply', 'other.vtk'):
+        (tmp_path / name).write_text('', encoding='utf-8')
+    found = model_export.existing_surface_files(tmp_path, '.vtk')
+    assert [p.name for p in found] == ['fault_F1.VTK', 'strat_a.vtk']
 
 
 def test_export_block_model_csv(tmp_path):

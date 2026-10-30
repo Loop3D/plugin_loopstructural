@@ -58,6 +58,41 @@ class TestPlaneVectors:
         assert np.allclose(down, [0, 0, -1], atol=1e-9)
 
 
+class TestAxisVectors:
+    """LoopStructural puts the ellipsoid on the slip: the major axis is along
+    cross(normal, slip) and the intermediate axis is along the slip."""
+
+    def test_with_dip_slip_the_major_axis_is_along_the_strike(self):
+        axes = parametric_fault.axis_vectors(0, 60, 90)
+        assert np.allclose(np.abs(axes['major_axis']), [0, 1, 0], atol=1e-9)
+        _, down_dip = parametric_fault.plane_vectors(0, 60, 90)
+        assert np.allclose(axes['intermediate_axis'], down_dip, atol=1e-9)
+
+    def test_with_strike_slip_the_major_axis_is_down_the_dip(self):
+        axes = parametric_fault.axis_vectors(0, 60, 0)
+        _, down_dip = parametric_fault.plane_vectors(0, 60, 90)
+        assert np.allclose(np.abs(axes['major_axis']), np.abs(down_dip), atol=1e-9)
+        assert np.allclose(axes['intermediate_axis'], [0, 1, 0], atol=1e-9)
+
+    @pytest.mark.parametrize('strike, dip, pitch', [(0, 90, 0), (45, 60, 30), (300, 20, 75)])
+    def test_the_axes_are_unit_vectors_at_right_angles(self, strike, dip, pitch):
+        axes = parametric_fault.axis_vectors(strike, dip, pitch)
+        matrix = np.array([axes[k] for k in ('major_axis', 'intermediate_axis', 'minor_axis')])
+        assert np.allclose(matrix @ matrix.T, np.eye(3), atol=1e-9)
+
+    def test_the_extents_go_to_the_axes_of_loopstructural(self):
+        spec = good_spec(pitch=0.0)
+        arguments = parametric_fault.fault_arguments(spec)
+        axes = parametric_fault.axis_vectors(spec['strike'], spec['dip'], spec['pitch'])
+        assert np.allclose(arguments['fault_slip_vector'], axes['intermediate_axis'])
+        assert np.allclose(
+            np.cross(arguments['fault_normal_vector'], arguments['fault_slip_vector']),
+            axes['major_axis'],
+        )
+        assert arguments['major_axis'] == spec['major_axis']
+        assert arguments['intermediate_axis'] == spec['intermediate_axis']
+
+
 class TestProblems:
     def test_a_good_fault_has_no_problem(self):
         assert parametric_fault.problems(good_spec()) == []

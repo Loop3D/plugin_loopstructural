@@ -171,11 +171,11 @@ class PaintStratigraphicOrderWidget(QWidget):
                 adopt_geology_role(
                     self.data_manager, geology=geology_layer, unit_field=unit_name_field
                 )
-                self.data_manager.derived.record(
-                    derived_data.STYLED_FIELDS,
-                    inputs=self.data_manager.styled_fields_inputs(),
-                    detail={'layer': geology_layer.name(), 'field': unit_name_field},
-                )
+                run_inputs = self.data_manager.styled_fields_inputs()
+            # The layer that has the field at the end: the geology layer, or
+            # its styled copy
+            styled_layer = geology_layer
+            ramp_name = None
 
             # If requested, duplicate layer and apply style using selected colour ramp
             try:
@@ -242,6 +242,7 @@ class PaintStratigraphicOrderWidget(QWidget):
                     mem_dp.addFeatures(new_feats)
                     mem_layer.updateExtents()
                     QgsProject.instance().addMapLayer(mem_layer)
+                    styled_layer = mem_layer
                 except Exception as e:
                     QMessageBox.warning(self, 'Duplicate Layer', f'Failed to create copy: {e}')
                     return False
@@ -345,6 +346,18 @@ class PaintStratigraphicOrderWidget(QWidget):
                     QMessageBox.warning(
                         self, 'Duplicate Layer', f'Failed to apply graduated styling: {e}'
                     )
+
+            if self.data_manager:
+                # Update writes the field again to the layer that is recorded
+                self.data_manager.derived.record(
+                    derived_data.STYLED_FIELDS,
+                    inputs=run_inputs,
+                    detail={
+                        'layer': styled_layer.name(),
+                        'field': unit_name_field,
+                        'ramp': ramp_name,
+                    },
+                )
 
         except Exception as e:
             QMessageBox.warning(self, 'Paint Stratigraphic Order', f'Operation failed: {e}')
