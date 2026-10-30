@@ -64,15 +64,16 @@ def _colour_to_qcolor(colour):
 
 
 __title__ = "LoopStructural"
-# Marks an argument that the caller did not give, because None is a value
-# for some of them (for example, no faults layer).
-_UNSET = object()
 
 
 def _layer_name(layer):
-    """Return the name of a layer, the same string, or None."""
+    """Return the name of a layer, the same string, or None.
+
+    An empty string is None, because a combo box with no selection gives
+    an empty string and a saved setting gives None.
+    """
     if layer is None or isinstance(layer, str):
-        return layer
+        return layer or None
     try:
         return layer.name()
     except RuntimeError:
@@ -321,113 +322,112 @@ class ModellingDataManager:
 
     # -- derived data --------------------------------------------------
 
-    def _settings_layer_name(self, settings, key, role):
-        """Return the layer name that a tool used last, or the role value."""
-        if key in settings:
-            return settings[key]
-        return _layer_name(self.layer_roles.get(role))
+    def _role_or_setting(self, role, settings, key):
+        """Return the layer name of a role, or the layer name that a tool used last.
 
-    def basal_contacts_inputs(
-        self,
-        *,
-        geology=_UNSET,
-        unit_field=_UNSET,
-        faults=_UNSET,
-        ignore_units=_UNSET,
-        override_units=_UNSET,
-    ):
-        """Return the inputs of the basal contacts calculation.
-
-        A value that is not given comes from the layer roles and from the
-        last settings of the Basal Contacts tool. A tool that runs gives its
-        own values, so the record is the inputs of the run.
+        A tool shows the layer of the role when the role has a layer, so
+        the Update button runs the tool with that layer.
         """
+        layer = _layer_name(self.layer_roles.get(role))
+        if layer is not None:
+            return layer
+        return _layer_name(settings.get(key))
+
+    # The inputs of a run are the inputs that the Update button would use:
+    # the layer roles and the last settings of the tool. A tool records these
+    # values, not the values in its dialog, so that a layer that the user
+    # selects for one run does not make the result out of date.
+
+    def basal_contacts_inputs(self):
+        """Return the inputs of the basal contacts calculation."""
         settings = self.get_widget_settings('basal_contacts_widget', {}) or {}
-        if geology is _UNSET:
-            geology = self.layer_roles.get(layer_roles.GEOLOGY)
-        if unit_field is _UNSET:
-            unit_field = self.layer_roles.get(layer_roles.GEOLOGY_UNIT_FIELD)
-        if faults is _UNSET:
-            faults = self._settings_layer_name(settings, 'faults_layer', layer_roles.FAULT_TRACES)
-        if ignore_units is _UNSET:
-            ignore_units = settings.get('ignore_units', [])
-        if override_units is _UNSET:
-            override_units = settings.get('basal_override_units', [])
         return {
             'unit_order': self.get_stratigraphic_unit_names(),
-            'geology': _layer_name(geology),
-            'unit_field': unit_field,
-            'faults': _layer_name(faults),
-            'ignore_units': sorted(ignore_units or []),
-            'override_units': sorted(override_units or []),
+            'geology': _layer_name(self.layer_roles.get(layer_roles.GEOLOGY)),
+            'unit_field': self.layer_roles.get(layer_roles.GEOLOGY_UNIT_FIELD) or None,
+            'faults': self._role_or_setting(layer_roles.FAULT_TRACES, settings, 'faults_layer'),
+            'ignore_units': sorted(settings.get('ignore_units') or []),
+            'override_units': sorted(settings.get('basal_override_units') or []),
         }
 
-    def thickness_inputs(
-        self,
-        *,
-        geology=_UNSET,
-        unit_field=_UNSET,
-        contacts_layer=_UNSET,
-        calculator_type=_UNSET,
-        structure=_UNSET,
-        cross_sections=_UNSET,
-    ):
+    def thickness_inputs(self):
         """Return the inputs of the thickness calculation.
 
-        Without a contacts layer, the calculation makes the contacts from
-        the geology layer, so the inputs of the contacts are inputs of the
-        thickness.
+        Only the settings that the calculator type uses are inputs. With the
+        contacts source "Calculate from geology polygons", the calculation
+        makes the contacts from the geology layer, the unit field and the
+        unit order. It does not use the faults or the unit lists of the
+        Basal Contacts tool.
         """
         settings = self.get_widget_settings('thickness_calculator_widget', {}) or {}
-        if geology is _UNSET:
-            geology = self.layer_roles.get(layer_roles.GEOLOGY)
-        if unit_field is _UNSET:
-            unit_field = self.layer_roles.get(layer_roles.GEOLOGY_UNIT_FIELD)
-        if contacts_layer is _UNSET:
-            if self.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_LAYER:
-                contacts_layer = self.layer_roles.get(layer_roles.BASAL_CONTACTS)
-            else:
-                contacts_layer = settings.get('basal_contacts_layer')
-        if calculator_type is _UNSET:
-            calculator_type = settings.get('calculator_type')
-        if structure is _UNSET:
-            structure = self._settings_layer_name(
-                settings, 'structure_layer', layer_roles.STRUCTURE
-            )
-        if cross_sections is _UNSET:
-            cross_sections = settings.get('cross_sections_layer')
-        contacts_layer = _layer_name(contacts_layer)
-        if contacts_layer is not None:
-            contacts = {'layer': contacts_layer}
+        if self.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_LAYER:
+            contacts_layer = _layer_name(self.layer_roles.get(layer_roles.BASAL_CONTACTS))
+            contacts_field = (self.get_basal_contacts() or {}).get('unitname_field') or None
         else:
-            contacts = {
-                'calculated': self.basal_contacts_inputs(geology=geology, unit_field=unit_field)
-            }
-        return {
+            contacts_layer = contacts_field = None
+        if contacts_layer is not None:
+            contacts = {'layer': contacts_layer, 'unit_field': contacts_field}
+        else:
+            contacts = 'calculated'
+        calculator_type = settings.get('calculator_type') or None
+        inputs = {
             'unit_order': self.get_stratigraphic_unit_names(),
-            'geology': _layer_name(geology),
-            'unit_field': unit_field,
+            'geology': _layer_name(self.layer_roles.get(layer_roles.GEOLOGY)),
+            'unit_field': self.layer_roles.get(layer_roles.GEOLOGY_UNIT_FIELD) or None,
             'contacts': contacts,
             'calculator_type': calculator_type,
-            'structure': _layer_name(structure),
-            'cross_sections': _layer_name(cross_sections),
+            'dtm': self._role_or_setting(layer_roles.DEM, settings, 'dtm_layer'),
+            'sampling_frequency': settings.get('sampling_frequency'),
+            'structure': self._role_or_setting(layer_roles.STRUCTURE, settings, 'structure_layer'),
+            'dip_field': settings.get('dip_field') or None,
+            'dipdir_field': settings.get('dipdir_field') or None,
+            'orientation_type': settings.get('orientation_type') or None,
         }
+        if calculator_type in ('StructuralPoint', 'InterpolatedStructure'):
+            inputs['max_line_length'] = settings.get('max_line_length')
+        if calculator_type == 'AlongSection':
+            inputs['cross_sections'] = _layer_name(settings.get('cross_sections_layer'))
+        return inputs
 
     def styled_fields_inputs(self):
-        """Return the inputs of the `strat_order` / `strat_thickness` fields."""
-        thicknesses = {}
-        for unit in self._stratigraphic_column.order:
-            if unit.element_type == StratigraphicColumnElementType.UNIT:
-                thickness = unit.thickness
-                thicknesses[unit.name] = (
-                    round(float(thickness), 6) if derived_data.thickness_is_set(thickness) else None
-                )
-        return {'unit_order': self.get_stratigraphic_unit_names(), 'thicknesses': thicknesses}
+        """Return the inputs of the `strat_order` field.
 
-    def refresh_stratigraphic_order_field(self, layer, field_name):
+        The `strat_thickness` field is not recorded, so a thickness change
+        does not make this result out of date.
+        """
+        return {'unit_order': self.get_stratigraphic_unit_names()}
+
+    def _strat_order_renderer(self, layer, ramp_name=None):
+        """Make a graduated renderer with one class for each `strat_order` value of a layer.
+
+        Returns None if no feature has a value.
+        """
+        unique_values = set()
+        for feature in layer.getFeatures():
+            value = feature["strat_order"]
+            if value is None or (hasattr(value, 'isNull') and value.isNull()):
+                continue
+            unique_values.add(int(value))
+        unique_values = sorted(unique_values)
+        if not unique_values:
+            return None
+
+        ramp = _lookup_colour_ramp(ramp_name)
+        n = len(unique_values)
+        ranges = []
+        for i, value in enumerate(unique_values):
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            if ramp is not None:
+                symbol.setColor(ramp.color(i / (n - 1) if n > 1 else 0))
+            ranges.append(QgsRendererRange(value - 0.5, value + 0.5, symbol, str(value)))
+        return QgsGraduatedSymbolRenderer("strat_order", ranges)
+
+    def refresh_stratigraphic_order_field(self, layer, field_name, ramp_name=None):
         """Write the order of the column to the `strat_order` field of a layer again.
 
-        The style of the layer does not change.
+        If the layer is styled by `strat_order`, the classes of the style are
+        made again, because the number of units can change. A layer with a
+        different style keeps its style.
 
         Returns
         -------
@@ -442,10 +442,19 @@ class ModellingDataManager:
         except Exception as err:
             self.logger(message=f"Failed to write stratigraphic order onto layer: {err}")
             return False
+        renderer = layer.renderer()
+        if (
+            isinstance(renderer, QgsGraduatedSymbolRenderer)
+            and renderer.classAttribute() == "strat_order"
+        ):
+            new_renderer = self._strat_order_renderer(layer, ramp_name)
+            if new_renderer is not None:
+                layer.setRenderer(new_renderer)
+                layer.triggerRepaint()
         self.derived.record(
             derived_data.STYLED_FIELDS,
             inputs=self.styled_fields_inputs(),
-            detail={'layer': layer.name(), 'field': field_name},
+            detail={'layer': layer.name(), 'field': field_name, 'ramp': ramp_name},
         )
         return True
 
@@ -870,31 +879,14 @@ class ModellingDataManager:
             self.logger(message=f"Failed to write stratigraphic order onto layer: {err}")
             return False
 
-        unique_values = set()
-        for feature in layer.getFeatures():
-            value = feature[age_field_name]
-            if value is None or (hasattr(value, 'isNull') and value.isNull()):
-                continue
-            unique_values.add(int(value))
-        unique_values = sorted(unique_values)
-
-        if not unique_values:
+        renderer = self._strat_order_renderer(layer, ramp_name)
+        if renderer is None:
             self.logger(
                 message="No features matched a stratigraphic unit, cannot style layer by age."
             )
             return False
 
-        ramp = _lookup_colour_ramp(ramp_name)
-
-        n = len(unique_values)
-        ranges = []
-        for i, value in enumerate(unique_values):
-            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
-            if ramp is not None:
-                symbol.setColor(ramp.color(i / (n - 1) if n > 1 else 0))
-            ranges.append(QgsRendererRange(value - 0.5, value + 0.5, symbol, str(value)))
-
-        layer.setRenderer(QgsGraduatedSymbolRenderer(age_field_name, ranges))
+        layer.setRenderer(renderer)
         layer.triggerRepaint()
         self.logger(
             message=f"Applied stratigraphic age field '{age_field_name}' and graduated "
@@ -903,7 +895,7 @@ class ModellingDataManager:
         self.derived.record(
             derived_data.STYLED_FIELDS,
             inputs=self.styled_fields_inputs(),
-            detail={'layer': layer.name(), 'field': field_name},
+            detail={'layer': layer.name(), 'field': field_name, 'ramp': ramp_name},
         )
         return True
 
