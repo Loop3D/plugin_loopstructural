@@ -2166,6 +2166,25 @@ class ModellingDataManager:
         self.feature_data[feature_name][feature_data['layer_name']] = feature_data
         self.logger(message=f"Updated feature data for '{feature_name}'.")
         self.refresh_layer_watchers()
+        self._feature_rows_changed(feature_name)
+
+    def remove_feature_data(self, feature_name: str, layer_name: str):
+        """Remove the row `layer_name` from the data of a feature."""
+        if self.feature_data.get(feature_name, {}).pop(layer_name, None) is None:
+            return
+        self.logger(message=f"Removed '{layer_name}' from the data of '{feature_name}'.")
+        self.refresh_layer_watchers()
+        self._feature_rows_changed(feature_name)
+
+    def _feature_rows_changed(self, feature_name: str):
+        """The rows of a generated feature are used at the next build, so the model is stale.
+
+        A feature that the user added (a manual foliation) is not changed here.
+        """
+        mm = self._model_manager
+        if mm is None or feature_name in mm.manual_foliations or not mm.is_generated(feature_name):
+            return
+        mm.mark_data_dirty()
 
     def set_widget_settings(self, widget_name: str, settings: dict):
         """Store widget settings for persistence.
