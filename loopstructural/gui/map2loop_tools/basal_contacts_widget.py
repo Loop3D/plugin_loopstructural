@@ -247,18 +247,9 @@ class BasalContactsWidget(QWidget):
         unit_name_field = self.unitNameFieldComboBox.currentField()
         adopt_geology_role(self.data_manager, geology=geology, unit_field=unit_name_field)
         # The inputs of this run, read before the run starts. A change during
-        # the run makes the result out of date.
-        self._run_inputs = (
-            self.data_manager.basal_contacts_inputs(
-                geology=geology,
-                unit_field=unit_name_field,
-                faults=self.faultsLayerComboBox.currentLayer(),
-                ignore_units=self._units_from_line_edit(self.ignoreUnitsLineEdit),
-                override_units=self._units_from_line_edit(self.basalOverrideUnitsLineEdit),
-            )
-            if self.data_manager
-            else None
-        )
+        # the run makes the result out of date. These are read from the same
+        # source as the status check, after the settings were saved.
+        self._run_inputs = self.data_manager.basal_contacts_inputs() if self.data_manager else None
 
         self.setEnabled(False)
         self._extractor_thread, self._extractor_worker, self._extractor_progress = (

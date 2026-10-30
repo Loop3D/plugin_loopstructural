@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 from qgis.core import QgsMapLayerProxyModel
 from qgis.gui import QgsCollapsibleGroupBox, QgsFileWidget, QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
@@ -61,6 +62,7 @@ class ExportPanel(QgsCollapsibleGroupBox):
         self.data_manager = data_manager
         self._task = None  # (thread, worker, progress dialog) of the run
         self._model_solved = False
+        self._plane_defaults = None  # the plane values set from the last bounding box
 
         layout = QVBoxLayout(self)
         self.hint = QLabel(self)
@@ -142,9 +144,7 @@ class ExportPanel(QgsCollapsibleGroupBox):
         form.addRow("Resolution", self.section_resolution)
         form.addRow("File", self.section_file)
         form.addRow(self.section_button)
-        self._section_plane_rows = (
-            self.section_origin + self.section_normal + [self.section_size]
-        )
+        self._section_plane_rows = self.section_origin + self.section_normal + [self.section_size]
         self._section_form = form
         self._update_section_inputs()
         return tab
@@ -179,6 +179,8 @@ class ExportPanel(QgsCollapsibleGroupBox):
         self.tabs.setTabEnabled(1, has_units)
         if not has_units:
             self.hint.setText("The model has faults only, so the block model is not offered.")
+        if self._model_solved:
+            self._set_plane_defaults()
 
     def _has_stratigraphic_features(self):
         """Return False if every feature of the model is a fault."""
@@ -191,14 +193,62 @@ class ExportPanel(QgsCollapsibleGroupBox):
         names = [f.name for f in manager.features() if not f.name.startswith('__')]
         return any(name not in faults for name in names)
 
+    def _plane_values(self):
+        return tuple(w.value() for w in self.section_origin) + (self.section_size.value(),)
+
+    def _set_plane_defaults(self):
+        """Put the plane at the centre of the bounding box, with the size of its diagonal.
+
+        The values change only if the user did not edit them since the last time.
+        """
+        model = getattr(self.model_manager, 'model', None)
+        bounding_box = getattr(model, 'bounding_box', None)
+        if bounding_box is None:
+            return
+        try:
+            origin = np.asarray(bounding_box.origin, dtype=float)
+            maximum = np.asarray(bounding_box.maximum, dtype=float)
+        except (TypeError, ValueError):
+            return
+        current = self._plane_values()
+        initial = (0.0, 0.0, 0.0, 1000.0)
+        if current != initial and current != self._plane_defaults:
+            return
+        for widget, value in zip(self.section_origin, (origin + maximum) / 2.0):
+            widget.setValue(float(value))
+        self.section_size.setValue(float(np.linalg.norm(maximum - origin)))
+        self._plane_defaults = self._plane_values()
+
     # -- actions ------------------------------------------------------------
 
     def _with_extension(self, file_widget, format_combo):
-        """Return the output path with the extension of the format, or None if empty."""
+        """Return the output path with the extension of the format, or None.
+
+        None means that the path is empty, or that the user does not want to
+        overwrite the file. The file dialog asks about the name that the user
+        selected, so ask again if the extension changes the name.
+        """
         text = file_widget.filePath().strip()
         if not text:
+            self._warn("Select a file.")
             return None
-        return Path(text).with_suffix(format_combo.currentData())
+        path = Path(text).with_suffix(format_combo.currentData())
+        if path != Path(text) and path.exists() and not self._confirm_overwrite([path]):
+            return None
+        return path
+
+    def _confirm_overwrite(self, paths):
+        names = "\n".join(p.name for p in paths[:10])
+        if len(paths) > 10:
+            names += f"\n... and {len(paths) - 10} more"
+        answer = QMessageBox.question(
+            self,
+            "Export",
+            f"These files exist and the export will overwrite them:\n\n{names}\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def _warn(self, text):
         QMessageBox.warning(self, "Export", text)
@@ -210,6 +260,9 @@ class ExportPanel(QgsCollapsibleGroupBox):
         if not (self.surface_strat.isChecked() or self.surface_faults.isChecked()):
             return self._warn("Select the stratigraphic surfaces, the fault surfaces, or both.")
         extension = self.surface_format.currentData()
+        existing = model_export.existing_surface_files(folder, extension)
+        if existing and not self._confirm_overwrite(existing):
+            return
         strat, faults = self.surface_strat.isChecked(), self.surface_faults.isChecked()
 
         def target(progress):
@@ -228,7 +281,7 @@ class ExportPanel(QgsCollapsibleGroupBox):
     def export_block_model(self):
         path = self._with_extension(self.block_file, self.block_format)
         if path is None:
-            return self._warn("Select a file for the block model.")
+            return
         ncells = (self.block_nx.value(), self.block_ny.value(), self.block_nz.value())
 
         def target(progress):
@@ -240,7 +293,7 @@ class ExportPanel(QgsCollapsibleGroupBox):
     def export_cross_section(self):
         path = self._with_extension(self.section_file, self.section_format)
         if path is None:
-            return self._warn("Select a file for the cross-section.")
+            return
         resolution = self.section_resolution.value()
         if self.section_kind.currentData() == 'line':
             layer = self.section_line.currentLayer()
@@ -279,6 +332,8 @@ class ExportPanel(QgsCollapsibleGroupBox):
             on_progress=self._on_progress,
             on_finished=self._on_finished,
             on_error=self._on_error,
+            # block the dock (and Build) while the export reads the model
+            modal=True,
         )
         self.set_model_solved(self._model_solved)
 

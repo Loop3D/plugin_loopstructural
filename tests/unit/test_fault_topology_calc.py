@@ -62,13 +62,15 @@ def test_update_writes_the_abutting_fault_first():
     bar, stem = t_junction()
     topology = make_topology()
     # the table order is "bar" then "stem": the wrong way round
-    skipped = calc.update_topology(topology, {'bar': bar, 'stem': stem}, [('bar', 'stem')])
-    assert skipped == []
+    result = calc.update_topology(topology, {'bar': bar, 'stem': stem}, [('bar', 'stem')])
+    assert result.undetermined == [] and result.kept == []
     assert topology.adjacency == {('stem', 'bar'): ABUTTING}
 
 
 def test_update_keeps_the_layer_order_of_the_faults():
-    traces = {name: LineString([(i * 20, 0), (i * 20 + 1, 0)]) for i, name in enumerate(['10', '2', '1'])}
+    traces = {
+        name: LineString([(i * 20, 0), (i * 20 + 1, 0)]) for i, name in enumerate(['10', '2', '1'])
+    }
     topology = make_topology()
     calc.update_topology(topology, traces, [])
     assert topology.faults == ['10', '2', '1']
@@ -78,8 +80,8 @@ def test_pair_without_direction_is_listed():
     a = LineString([(0, 5), (10, 5)])
     b = LineString([(5, 0), (5, 10)])
     topology = make_topology()
-    skipped = calc.update_topology(topology, {'a': a, 'b': b}, [('a', 'b')])
-    assert skipped == [('a', 'b')]
+    result = calc.update_topology(topology, {'a': a, 'b': b}, [('a', 'b')])
+    assert result.undetermined == [('a', 'b')]
     assert topology.adjacency == {}
 
 
@@ -87,11 +89,68 @@ def test_second_calculation_keeps_user_relationship():
     bar, stem = t_junction()
     topology = make_topology()
     traces = {'bar': bar, 'stem': stem}
-    calc.update_topology(topology, traces, [('bar', 'stem')])
+    auto_pairs = {}
+    calc.update_topology(topology, traces, [('bar', 'stem')], auto_pairs=auto_pairs)
     topology.update_fault_relationship('stem', 'bar', FAULTED)
-    skipped = calc.update_topology(topology, traces, [('bar', 'stem')])
+    result = calc.update_topology(topology, traces, [('bar', 'stem')], auto_pairs=auto_pairs)
     assert topology.adjacency == {('stem', 'bar'): FAULTED}
-    assert skipped == [('bar', 'stem')]
+    # the pair of the user is kept, and it is not a pair without a direction
+    assert result.kept == [('bar', 'stem')]
+    assert result.undetermined == []
+    assert auto_pairs == {}
+
+
+def test_second_calculation_replaces_its_own_pairs():
+    bar, stem = t_junction()
+    topology = make_topology()
+    auto_pairs = {}
+    calc.update_topology(
+        topology, {'bar': bar, 'stem': stem}, [('bar', 'stem')], auto_pairs=auto_pairs
+    )
+    assert auto_pairs == {('stem', 'bar'): ABUTTING}
+    # the traces change: now "bar" ends on "stem"
+    new_bar = LineString([(0, 5), (5, 5)])
+    new_stem = LineString([(5, 0), (5, 10)])
+    result = calc.update_topology(
+        topology, {'bar': new_bar, 'stem': new_stem}, [('bar', 'stem')], auto_pairs=auto_pairs
+    )
+    assert topology.adjacency == {('bar', 'stem'): ABUTTING}
+    assert auto_pairs == {('bar', 'stem'): ABUTTING}
+    assert result.kept == []
+
+
+def test_a_pair_that_is_not_found_again_is_removed():
+    bar, stem = t_junction()
+    topology = make_topology()
+    auto_pairs = {}
+    traces = {'bar': bar, 'stem': stem}
+    calc.update_topology(topology, traces, [('bar', 'stem')], auto_pairs=auto_pairs)
+    calc.update_topology(topology, traces, [], auto_pairs=auto_pairs)
+    assert topology.adjacency == {}
+    assert auto_pairs == {}
+
+
+def test_duplicate_and_self_pairs_are_removed():
+    assert calc.unique_pairs([('a', 'b'), ('b', 'a'), ('a', 'a'), (1, 2), ('1', '2')]) == [
+        ('a', 'b'),
+        ('1', '2'),
+    ]
+
+
+def test_the_tolerance_is_in_map_units():
+    bar = LineString([(0, 0), (1000, 0)])
+    # stops 5 map units short of "bar"
+    stem = LineString([(500, 5), (500, 1000)])
+    assert calc.fault_pair_direction(stem, bar, tolerance=10.0) == 0
+    assert calc.fault_pair_direction(stem, bar, tolerance=1.0) is None
+
+
+def test_an_overshoot_shorter_than_the_tolerance_abuts():
+    bar = LineString([(0, 0), (1000, 0)])
+    # goes 5 map units past "bar"
+    stem = LineString([(500, -5), (500, 1000)])
+    assert calc.fault_pair_direction(stem, bar, tolerance=10.0) == 0
+    assert calc.fault_pair_direction(stem, bar, tolerance=1.0) is None
 
 
 def test_user_relationship_in_the_other_direction_is_kept():
@@ -110,6 +169,39 @@ class FakeLayer:
 
     def getFeatures(self):
         return iter(self._features)
+
+
+class FakeCrs:
+    def __init__(self, authid, geographic):
+        self._authid = authid
+        self._geographic = geographic
+
+    def isValid(self):
+        return True
+
+    def authid(self):
+        return self._authid
+
+    def isGeographic(self):
+        return self._geographic
+
+
+class FakeLayerWithCrs(FakeLayer):
+    def __init__(self, crs):
+        super().__init__()
+        self._crs = crs
+
+    def crs(self):
+        return self._crs
+
+
+def test_layer_crs():
+    assert calc._layer_crs(FakeLayer()) == (None, False)
+    assert calc._layer_crs(FakeLayerWithCrs(FakeCrs('EPSG:28350', False))) == (
+        'EPSG:28350',
+        False,
+    )
+    assert calc._layer_crs(FakeLayerWithCrs(FakeCrs('EPSG:4326', True))) == ('EPSG:4326', True)
 
 
 def test_missing_layer():
@@ -142,3 +234,7 @@ def test_result_message():
     assert text == "Calculated fault topology for 12 pairs." and not warn
     text, warn = calc.result_message(calc.TopologyResult(2, [('a', 'b')]))
     assert 'a-b' in text and warn
+    text, warn = calc.result_message(calc.TopologyResult(2, [], [('c', 'd')]))
+    assert 'c-d' in text and not warn
+    text, warn = calc.result_message(calc.TopologyResult(2, [], [], ['The layer uses degrees.']))
+    assert 'degrees' in text and warn

@@ -9,6 +9,7 @@ from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
+    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -35,10 +36,11 @@ from loopstructural.main.fault_topology_calc import (
     result_message,
 )
 from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from . import checks
 from .export_panel import ExportPanel
-from .section_stack import SectionStack, page_scroll_area
+from .section_stack import SectionStack
 
 
 class StepPage(QWidget):
@@ -105,7 +107,7 @@ class DataStep(StepPage):
         mode_row.addWidget(self.mode_combo, 1)
         layout.addLayout(mode_row)
         self.tab = ModelDefinitionTab(self, data_manager=self.data_manager)
-        layout.addWidget(page_scroll_area(self.tab, self), 1)
+        layout.addWidget(self.tab, 1)
 
     def set_workflow_mode(self, mode):
         index = self.mode_combo.findData(mode)
@@ -144,7 +146,7 @@ class StratigraphyStep(StepPage):
         ).setToolTip("Show the order of the column on the geology polygons.")
 
         # The source layers are a section of the column stack, so the page has
-        # at most two open sections and one scroll area.
+        # at most two open sections. The dock puts each page in a scroll area.
         self.stratigraphy_layers = StratigraphicLayersWidget(self, self.data_manager)
         sections = self.tab.stratigraphic_column_widget.sections
         sections.add_section(
@@ -170,7 +172,13 @@ class StratigraphyStep(StepPage):
         row.addStretch(1)
         row.addWidget(derive)
         layout.addLayout(row)
-        layout.addWidget(page_scroll_area(self.tab, self), 1)
+        layout.addWidget(self.tab, 1)
+
+        # With contacts from the geology polygons, the "Stratigraphic layers"
+        # section has the geology picker, so do not show a second one
+        roles = self.data_manager.layer_roles
+        roles.attach(self._on_layer_role_changed)
+        self._show_column_geology_picker(roles.contacts_source)
 
     def _layers_are_set(self):
         """The section starts collapsed after the first setup."""
@@ -192,6 +200,22 @@ class StratigraphyStep(StepPage):
             if value is not None:
                 parts.append(value.name() if hasattr(value, 'name') else str(value))
         return ", ".join(parts) if parts else "not selected"
+
+    def _show_column_geology_picker(self, source):
+        show = source != layer_roles.CONTACTS_FROM_GEOLOGY
+        column = self.tab.stratigraphic_column_widget
+        if not show:
+            # a hidden open section would count as one of the open sections
+            column.sections.set_open('geology', False)
+        column.geologyGroup.setVisible(show)
+
+    def _on_layer_role_changed(self, role, value):
+        if role == 'contacts_source':
+            try:
+                self._show_column_geology_picker(value)
+            except RuntimeError:
+                # the page was deleted
+                pass
 
 
 class FaultsStep(StepPage):
@@ -215,8 +239,22 @@ class FaultsStep(StepPage):
 
         self.topology_button = QPushButton("Calculate topology", self)
         self.topology_button.clicked.connect(self._calculate_topology)
+        self.tolerance_spin_box = QDoubleSpinBox(self)
+        self.tolerance_spin_box.setRange(0.0, 1e6)
+        self.tolerance_spin_box.setDecimals(2)
+        self.tolerance_spin_box.setPrefix("End tolerance: ")
+        self.tolerance_spin_box.setSuffix(" map units")
+        self.tolerance_spin_box.setToolTip(
+            "A fault ends at another fault if its end point is this close to the other "
+            "trace. This includes a trace that goes a short distance past the other trace."
+        )
+        self.tolerance_spin_box.setValue(PlgOptionsManager.get_plg_settings().fault_end_tolerance)
+        self.tolerance_spin_box.valueChanged.connect(
+            lambda value: PlgOptionsManager.set_value_from_key('fault_end_tolerance', value)
+        )
         row = QHBoxLayout()
         row.addStretch(1)
+        row.addWidget(self.tolerance_spin_box)
         row.addWidget(self.topology_button)
         layout.addLayout(row)
         # The button follows the fault layer and the name field
@@ -227,7 +265,7 @@ class FaultsStep(StepPage):
         self.update_topology_button()
 
         self.adjacency = FaultAdjacencyTab(self, data_manager=self.data_manager)
-        layout.addWidget(page_scroll_area(self.adjacency, self), 1)
+        layout.addWidget(self.adjacency, 1)
 
     def _fault_traces(self):
         traces = self.data_manager.get_fault_traces() if self.data_manager is not None else None
@@ -251,7 +289,9 @@ class FaultsStep(StepPage):
     def _calculate_topology(self):
         self.message_bar.clearWidgets()
         try:
-            result = calculate_from_data_manager(self.data_manager)
+            result = calculate_from_data_manager(
+                self.data_manager, self.tolerance_spin_box.value()
+            )
         except FaultTopologyError as error:
             self.message_bar.pushMessage("Fault topology", str(error), level=Qgis.MessageLevel.Critical)
             return

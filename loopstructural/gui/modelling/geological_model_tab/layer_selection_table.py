@@ -223,10 +223,7 @@ class LayerSelectionTable(QWidget):
         select_btn = self.table.cellWidget(row, 1)
         if hasattr(select_btn, 'selected_layer'):
             layer_name = select_btn.selected_layer
-            feature_name = self.get_feature_name()
-            if feature_name in self.data_manager.feature_data:
-                self.data_manager.feature_data[feature_name].pop(layer_name, None)
-                print(f'Removing layer: {layer_name} for feature: {feature_name}')
+            self.data_manager.remove_feature_data(self.get_feature_name(), layer_name)
 
         # Remove the row from table
         self.table.removeRow(row)
@@ -526,15 +523,23 @@ class LayerSelectionDialog(QDialog):
         self.field_combos = {'pair_field': self.pair_field_combo}
 
     def _setup_common_fields(self, layout):
-        """Setup the weight and the source of Z. Every type has them."""
+        """Setup the weight and the source of Z.
+
+        Every type has a source of Z. The inequality types have no weight,
+        because LoopStructural ignores it.
+        """
         form = QFormLayout()
-        self.weight_spin = QDoubleSpinBox()
-        self.weight_spin.setDecimals(3)
-        self.weight_spin.setRange(0.001, 1000.0)
-        self.weight_spin.setSingleStep(0.1)
-        self.weight_spin.setValue(self.existing_data.get('weight', constraints.DEFAULT_WEIGHT))
-        self.weight_spin.setToolTip("How much the constraint counts in the interpolation.")
-        form.addRow("Weight:", self.weight_spin)
+        self.weight_spin = None
+        if constraints.has_weight(self.layer_type):
+            self.weight_spin = QDoubleSpinBox()
+            self.weight_spin.setDecimals(3)
+            self.weight_spin.setRange(0.001, 1000.0)
+            self.weight_spin.setSingleStep(0.1)
+            self.weight_spin.setValue(
+                self.existing_data.get('weight', constraints.DEFAULT_WEIGHT)
+            )
+            self.weight_spin.setToolTip("How much the constraint counts in the interpolation.")
+            form.addRow("Weight:", self.weight_spin)
 
         self.z_source_combo = QComboBox()
         for source in constraints.Z_SOURCES:
@@ -789,9 +794,10 @@ class LayerSelectionDialog(QDialog):
             'layer': self.layer_combo.currentLayer(),
             'layer_name': self._unique_layer_name(self.layer_combo.currentLayer()),
             'type': self.layer_type,
-            'weight': self.weight_spin.value(),
             'z_source': self.z_source_combo.currentData(),
         }
+        if self.weight_spin is not None:
+            self.layer_data['weight'] = self.weight_spin.value()
         if self.layer_data['z_source'] == constraints.Z_CONSTANT:
             self.layer_data['z_value'] = self.z_value_spin.value()
 
