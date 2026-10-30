@@ -31,6 +31,7 @@ from loopstructural.gui.modelling.model_definition.stratigraphic_layers import (
     StratigraphicLayersWidget,
 )
 
+from loopstructural.main import layer_roles
 from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
 
 from . import checks
@@ -167,6 +168,25 @@ class StratigraphyStep(StepPage):
         self.tabs.addTab(self.tab, "Column")
         self.tabs.setCurrentWidget(self.tab)
         layout.addWidget(self.tabs, 1)
+
+        # With contacts from the geology polygons, the "Source layers" tab has
+        # the geology picker, so do not show a second one on the column tab
+        roles = self.data_manager.layer_roles
+        roles.attach(self._on_layer_role_changed)
+        self._show_column_geology_picker(roles.contacts_source)
+
+    def _show_column_geology_picker(self, source):
+        self.tab.stratigraphic_column_widget.geologyGroup.setVisible(
+            source != layer_roles.CONTACTS_FROM_GEOLOGY
+        )
+
+    def _on_layer_role_changed(self, role, value):
+        if role == 'contacts_source':
+            try:
+                self._show_column_geology_picker(value)
+            except RuntimeError:
+                # the page was deleted
+                pass
 
 
 class FaultsStep(StepPage):

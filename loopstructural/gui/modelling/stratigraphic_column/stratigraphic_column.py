@@ -289,7 +289,7 @@ class StratColumnWidget(QWidget):
     def _build_geology_group(self):
         """Build the group with the geology layer, the unit name field and a
         summary of the unit names that have no match in the layer."""
-        group = QGroupBox("Geology layer", self)
+        group = self.geologyGroup = QGroupBox("Geology layer", self)
         form = QFormLayout(group)
         self.unitsLayerComboBox = QgsMapLayerComboBox()
         configure_layer_combo(
