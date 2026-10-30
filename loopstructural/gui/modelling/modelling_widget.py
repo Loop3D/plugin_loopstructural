@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from loopstructural.gui.messages import push_success
 from loopstructural.gui.modelling.steps import build_plan, checks
 from loopstructural.gui.modelling.steps.header import DockHeader
 from loopstructural.gui.modelling.steps.pages import (
@@ -106,6 +107,7 @@ class ModellingWidget(QWidget):
         self.step_bar.currentChanged.connect(self.go_to)
         self._last_checks = {}
         self.model_step.tab.set_problems_provider(self.problems)
+        self.model_step.tab.model_solved.connect(self._on_model_solved)
         if self.data_manager is not None:
             self.data_manager.add_workflow_mode_callback(self._apply_workflow_mode)
         self._timer = QTimer(self)
@@ -156,6 +158,26 @@ class ModellingWidget(QWidget):
         else:
             self.refresh_status()
 
+    def _on_model_solved(self):
+        """After a successful build, offer the 3D view as the next action."""
+        self.refresh_status()
+        push_success("Model solved", "Go to step 5 to see the model in 3D and to export it.")
+
+    def _next_text(self, index):
+        """The text of the Next button. After a solve, it names the 3D view."""
+        next_index = self._neighbour(1, index)
+        if (
+            next_index != index
+            and self.pages[index].key == checks.STEP_MODEL
+            and self.pages[next_index].key == checks.STEP_VIEW
+            and self._is_solved()
+        ):
+            return "Open 3D view >"
+        return "Next >"
+
+    def _is_solved(self):
+        return self.model_manager is not None and self.model_manager.model_state == 'solved'
+
     def problems(self):
         """Return the problems of the steps that show, as ``(step_key, message)`` pairs."""
         visible = self._visible_indices()
@@ -179,6 +201,8 @@ class ModellingWidget(QWidget):
         self._last_checks = results
         self.step_bar.set_checks(results)
         self.model_step.tab.refresh_primary_action()
+        self.view_step.refresh()
+        self.next_button.setText(self._next_text(self.current_index))
         page = self.pages[self.current_index]
         check = results[page.key]
         if check.messages:

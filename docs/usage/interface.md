@@ -7,7 +7,18 @@ The LoopStructural dock has five steps. The step buttons are at the top of the d
 2. **Stratigraphy**: the stratigraphic column. The **Build column** menu has the sorters and Paint Order. The **Derive from map** menu has Basal Contacts, Thickness and Sampler.
 3. **Faults**: the fault layer, **Calculate topology...** and the adjacency tables. This step is optional.
 4. **Model**: the features and the build of the model.
-5. **View**: the 3D view. With the setting "separate dock widgets", this step has a button that opens the 3D view dock.
+5. **View**: the 3D view and the **Export** panel. With the setting "separate dock widgets", this step has a button that opens the 3D view dock.
+
+When a build finishes, a message tells you to go to step 5, and the **Next** button in step 4 changes to **Open 3D view**.
+
+### Export
+The **Export** panel in step 5 is open when the model is solved. It has three tabs:
+
+- **Surfaces**: one file for each stratigraphic surface and fault surface, in a folder. Formats: VTK (.vtk, .vtp), PLY and STL. A surface with no geometry is skipped.
+- **Block model**: a grid that fills the bounding box. Set the number of cells in X, Y and Z. Each cell has the fields `stratigraphy_id` and `unit`. Formats: VTK (.vtk, .vti) and CSV.
+- **Cross-section**: a vertical section under a line layer (the selected line, or the first line), or a plane from an origin and a normal. Formats: VTK and CSV.
+
+The exports run in the background and show a message when they finish.
 
 The header of the dock has **Save**, **Open**, **Reset** and **Settings**. They apply to all of the plugin.
 

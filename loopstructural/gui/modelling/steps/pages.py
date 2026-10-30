@@ -28,6 +28,7 @@ from loopstructural.gui.modelling.model_definition.fault_layers import FaultLaye
 from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
 
 from . import checks
+from .export_panel import ExportPanel
 
 
 class StepPage(QWidget):
@@ -193,7 +194,7 @@ class ModelStep(StepPage):
 
 
 class ViewStep(StepPage):
-    """Step 5: the 3D view.
+    """Step 5: the 3D view and the export of the results.
 
     In one dock, the visualisation widget is in this page. With separate docks,
     the page has a button that shows the visualisation dock.
@@ -218,3 +219,12 @@ class ViewStep(StepPage):
             layout.addWidget(label)
             layout.addWidget(button)
             layout.addStretch(1)
+        self.export_panel = ExportPanel(
+            self, model_manager=self.model_manager, data_manager=self.data_manager
+        )
+        layout.addWidget(self.export_panel)
+
+    def refresh(self):
+        """Enable the exports when the model is solved."""
+        state = self.model_manager.model_state if self.model_manager is not None else 'empty'
+        self.export_panel.set_model_solved(state == 'solved')
