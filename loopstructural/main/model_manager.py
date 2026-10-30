@@ -206,6 +206,8 @@ class GeologicalModelManager(Observable):
         # They have no fault trace, so they are not in `faults`.
         self.parametric_faults: Dict[str, dict] = {}
         self.extra_constraints: Dict[str, dict] = {}
+        # feature name -> [(layer name, error)] of the added rows that the last build left out
+        self.skipped_constraints: Dict[str, list] = {}
         # Observers managed by Observable base class
         self.dem_function = lambda x, y: 0
         # internal flag to temporarily suppress notifications (used when
@@ -316,6 +318,7 @@ class GeologicalModelManager(Observable):
         self.manual_foliations = {}
         self.detached = {}
         self.extra_constraints = {}
+        self.skipped_constraints = {}
         self.parametric_faults = {}
         self.nelements_overrides = {}
         self.nelements_used = {}
@@ -1172,20 +1175,26 @@ class GeologicalModelManager(Observable):
         return data
 
     def _extra_data(self, name) -> Optional[pd.DataFrame]:
-        """Return the rows that the user added to the generated feature `name`."""
+        """Return the rows that the user added to the generated feature `name`.
+
+        A bad row is left out and recorded in `skipped_constraints`. The other
+        rows are used.
+        """
         spec = self.extra_constraints.get(name)
         if not spec or not spec.get('data'):
             return None
-        try:
-            data, _kwargs = self._foliation_data(
-                name, spec['data'], AllSampler(), spec.get('use_z_coordinate', True)
-            )
-        except Exception as e:
+        skipped = []
+        data, _kwargs = self._foliation_data(
+            name, spec['data'], AllSampler(), spec.get('use_z_coordinate', True), skipped=skipped
+        )
+        if skipped:
+            self.skipped_constraints[name] = skipped
             if self._debug_manager is not None:
-                self._debug_manager.log(
-                    f"Could not read the added constraints of '{name}': {e}", log_level=2
-                )
-            return None
+                for layer_name, error in skipped:
+                    self._debug_manager.log(
+                        f"Could not read the added constraint '{layer_name}' of '{name}': {error}",
+                        log_level=2,
+                    )
         return data
 
     def _extra_kwargs(self, name) -> dict:
@@ -1492,6 +1501,11 @@ class GeologicalModelManager(Observable):
         self._data_dirty = True
         self._emit('model_updated')
 
+    def mark_data_dirty(self):
+        """The input data changed. The model is stale until the next build."""
+        self._data_dirty = True
+        self._emit('model_updated')
+
     def remove_parametric_fault(self, name: str):
         """Stop building the parametric fault `name`. The model is stale until the next build."""
         if self.parametric_faults.pop(name, None) is not None:
@@ -1717,6 +1731,7 @@ class GeologicalModelManager(Observable):
 
         self.model.features = []
         self.model.feature_name_index = {}
+        self.skipped_constraints = {}
 
         # Notify start (if requested) so UI can react
         if notify_observers:
@@ -1756,6 +1771,11 @@ class GeologicalModelManager(Observable):
                 # Update the model with stratigraphy
                 self.update_fault_features()
                 self.update_foliation_features()
+            else:
+                # The parametric faults are not map data, so build them in
+                # both modes. With "map", update_fault_features builds them.
+                self._build_parametric_faults()
+                self.apply_fault_abutting_relationships()
             # after the stratigraphy, so each gets the same unconformity
             # regions as when the user added it
             self._build_manual_foliations()
@@ -2154,86 +2174,108 @@ class GeologicalModelManager(Observable):
                 r for r in foliation.regions if not isinstance(r, UnconformityFeature)
             ]
 
-    def _foliation_data(self, name, data, sampler=AllSampler(), use_z_coordinate=False):
+    def _foliation_data(
+        self, name, data, sampler=AllSampler(), use_z_coordinate=False, skipped=None
+    ):
         """Return the data frame and the extra `create_and_add_foliation`
-        arguments for the foliation `name` from its layer dicts `data`."""
+        arguments for the foliation `name` from its layer dicts `data`.
+
+        Without `skipped`, a bad row raises an error. With a list `skipped`, a
+        bad row is left out and ``(layer name, error)`` is added to the list.
+        The data frame is None if no row is left.
+        """
         dfs = []
         kwargs = {}
         interface_offset = 0
-        for layer_data in data.values():
+        for key, layer_data in data.items():
             if layer_data.get('processed'):
                 # auto-synced rows from the map2loop workflow (type values
                 # like 'Contact (auto)') aren't meant for this manual path
                 continue
-            layer_type = layer_data['type']
-            if layer_type not in constraints.CONSTRAINT_TYPES:
-                raise ValueError(f"Unknown layer type: {layer_type}")
-            df = constraints.sample_layer(sampler, layer_data, self.dem_function, use_z_coordinate)
-            if layer_type == 'Orientation':
-                df['strike'] = df[layer_data['strike_field']]
-                if layer_data.get('orientation_format') == 'Dip Direction':
-                    df['strike'] = df['strike'] - 90
-                df['dip'] = df[layer_data['dip_field']]
-                df['feature_name'] = name
-                rows = df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']]
-                dfs.append(constraints.add_weight(rows, df, layer_data))
-            elif layer_type == 'Form Line':
-                df['feature_name'] = name
-                if layer_data.get('form_line_constraint') == 'strike':
-                    df[['tx', 'ty', 'tz']] = _form_line_tangent_vectors(df)
-                    df = df.dropna(subset=['tx', 'ty', 'tz'])
-                    rows = df[['X', 'Y', 'Z', 'tx', 'ty', 'tz', 'feature_name']]
+            row_count, row_offset = len(dfs), interface_offset
+            try:
+                layer_type = layer_data['type']
+                if layer_type not in constraints.CONSTRAINT_TYPES:
+                    raise ValueError(f"Unknown layer type: {layer_type}")
+                df = constraints.sample_layer(
+                    sampler, layer_data, self.dem_function, use_z_coordinate
+                )
+                if layer_type == 'Orientation':
+                    df['strike'] = df[layer_data['strike_field']]
+                    if layer_data.get('orientation_format') == 'Dip Direction':
+                        df['strike'] = df['strike'] - 90
+                    df['dip'] = df[layer_data['dip_field']]
+                    df['feature_name'] = name
+                    rows = df[['X', 'Y', 'Z', 'strike', 'dip', 'feature_name']]
                     dfs.append(constraints.add_weight(rows, df, layer_data))
-                    dip = layer_data.get('form_line_dip')
-                    if dip is not None and not df.empty:
-                        # The line's own direction is a precisely known hard
-                        # fact (the tangent constraint above), but a fixed
-                        # dip magnitude is usually only a rough regional
-                        # estimate -- so it's added as a *low-weight*
-                        # constraint that nudges the field towards that dip
-                        # rather than rigidly enforcing it at every vertex.
-                        strike = np.degrees(np.arctan2(df['tx'], df['ty'])) % 360
-                        if layer_data.get('form_line_reverse_dip'):
-                            # A form line's strike is only known up to 180
-                            # degrees (it depends on digitising direction),
-                            # and unlike the tangent-only constraint above,
-                            # a fixed dip *magnitude* makes that ambiguity
-                            # matter: the two mirror-image planes sharing
-                            # this strike and dip differ by 180 degrees of
-                            # strike.
-                            strike = (strike + 180) % 360
-                        dip_df = df[['X', 'Y', 'Z', 'feature_name']].copy()
-                        dip_df['strike'] = strike
-                        dip_df['dip'] = dip
-                        dip_df['w'] = layer_data.get('form_line_dip_weight', 0.1)
-                        dfs.append(dip_df[['X', 'Y', 'Z', 'strike', 'dip', 'w', 'feature_name']])
-                else:
+                elif layer_type == 'Form Line':
+                    df['feature_name'] = name
+                    if layer_data.get('form_line_constraint') == 'strike':
+                        df[['tx', 'ty', 'tz']] = _form_line_tangent_vectors(df)
+                        df = df.dropna(subset=['tx', 'ty', 'tz'])
+                        rows = df[['X', 'Y', 'Z', 'tx', 'ty', 'tz', 'feature_name']]
+                        dfs.append(constraints.add_weight(rows, df, layer_data))
+                        dip = layer_data.get('form_line_dip')
+                        if dip is not None and not df.empty:
+                            # The line's own direction is a precisely known hard
+                            # fact (the tangent constraint above), but a fixed
+                            # dip magnitude is usually only a rough regional
+                            # estimate -- so it's added as a *low-weight*
+                            # constraint that nudges the field towards that dip
+                            # rather than rigidly enforcing it at every vertex.
+                            strike = np.degrees(np.arctan2(df['tx'], df['ty'])) % 360
+                            if layer_data.get('form_line_reverse_dip'):
+                                # A form line's strike is only known up to 180
+                                # degrees (it depends on digitising direction),
+                                # and unlike the tangent-only constraint above,
+                                # a fixed dip *magnitude* makes that ambiguity
+                                # matter: the two mirror-image planes sharing
+                                # this strike and dip differ by 180 degrees of
+                                # strike.
+                                strike = (strike + 180) % 360
+                            dip_df = df[['X', 'Y', 'Z', 'feature_name']].copy()
+                            dip_df['strike'] = strike
+                            dip_df['dip'] = dip
+                            dip_df['w'] = layer_data.get('form_line_dip_weight', 0.1)
+                            columns = ['X', 'Y', 'Z', 'strike', 'dip', 'w', 'feature_name']
+                            dfs.append(dip_df[columns])
+                    else:
+                        rows, interface_offset = constraints.interface_rows(
+                            df, {}, name, interface_offset
+                        )
+                        dfs.append(constraints.add_weight(rows, df, layer_data))
+                elif layer_type == 'Interface':
                     rows, interface_offset = constraints.interface_rows(
-                        df, {}, name, interface_offset
+                        df, layer_data, name, interface_offset
                     )
                     dfs.append(constraints.add_weight(rows, df, layer_data))
-            elif layer_type == 'Interface':
-                rows, interface_offset = constraints.interface_rows(
-                    df, layer_data, name, interface_offset
-                )
-                dfs.append(constraints.add_weight(rows, df, layer_data))
-            elif layer_type == 'Value':
-                df['val'] = df[layer_data['value_field']]
-                df['feature_name'] = name
-                dfs.append(
-                    constraints.add_weight(df[['X', 'Y', 'Z', 'val', 'feature_name']], df, layer_data)
-                )
-            elif layer_type == 'Inequality':
-                df['l'] = df[layer_data['lower_field']]
-                df['u'] = df[layer_data['upper_field']]
-                df['feature_name'] = name
-                rows = df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']]
-                dfs.append(constraints.add_weight(rows, df, layer_data))
-            else:
-                dfs.append(constraints.constraint_rows(df, layer_data, name))
-            solver = constraints.solver_for(layer_type)
-            if solver:
-                kwargs['solver'] = solver
+                elif layer_type == 'Value':
+                    df['val'] = df[layer_data['value_field']]
+                    df['feature_name'] = name
+                    dfs.append(
+                        constraints.add_weight(
+                            df[['X', 'Y', 'Z', 'val', 'feature_name']], df, layer_data
+                        )
+                    )
+                elif layer_type == 'Inequality':
+                    df['l'] = df[layer_data['lower_field']]
+                    df['u'] = df[layer_data['upper_field']]
+                    df['feature_name'] = name
+                    rows = df[['X', 'Y', 'Z', 'l', 'u', 'feature_name']]
+                    dfs.append(constraints.add_weight(rows, df, layer_data))
+                else:
+                    dfs.append(constraints.constraint_rows(df, layer_data, name))
+                solver = constraints.solver_for(layer_type)
+                if solver:
+                    kwargs['solver'] = solver
+            except Exception as e:
+                if skipped is None:
+                    raise
+                del dfs[row_count:]
+                interface_offset = row_offset
+                skipped.append((layer_data.get('layer_name') or key, f"{type(e).__name__}: {e}"))
+        if skipped is not None and not dfs:
+            return None, kwargs
         return pd.concat(dfs, ignore_index=True), kwargs
 
     def add_unconformity(

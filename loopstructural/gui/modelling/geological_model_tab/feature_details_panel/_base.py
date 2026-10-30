@@ -2,7 +2,6 @@ import numpy as np
 from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip
 from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
-from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
