@@ -9,7 +9,10 @@ from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
 from loopstructural.gui.background_task import finish_background_task, start_background_task
 from loopstructural.gui.compatibility import configure_layer_combo
+from loopstructural.main import layer_roles
 from loopstructural.toolbelt.preferences import PlgOptionsManager
+
+from .layer_defaults import apply_layer_role_defaults
 
 
 class SamplerWidget(QWidget):
@@ -55,6 +58,14 @@ class SamplerWidget(QWidget):
             QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer,
         )
         # spatialData can be any type, leave default
+        # The layers of the shared roles are the defaults of the tool
+        apply_layer_role_defaults(
+            self.data_manager,
+            {
+                layer_roles.DEM: self.dtmLayerComboBox,
+                layer_roles.GEOLOGY: self.geologyLayerComboBox,
+            },
+        )
 
         # Initialize sampler types
         self.sampler_types = ["Decimator", "Spacing"]

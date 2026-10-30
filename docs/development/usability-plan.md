@@ -223,26 +223,26 @@ visible. No modal dialog opens for a successful action.
 
 ### Phase 1: Shared layer roles
 
-- [ ] Add layer roles to the data manager: `geology`, `geology_unit_field`,
+- [x] Add layer roles to the data manager: `geology`, `geology_unit_field`,
       `fault_traces`, `structure`, `basal_contacts`, `dem`. Save them with the
       application state.
-- [ ] Add a signal or observer event when a role changes.
-- [ ] Make the "Load Data" widgets write to the roles.
-- [ ] Make each map2loop dialog read the roles as its default values. The user
+- [x] Add a signal or observer event when a role changes.
+- [x] Make the "Load Data" widgets write to the roles.
+- [x] Make each map2loop dialog read the roles as its default values. The user
       can still change the value in the dialog.
-- [ ] When Basal Contacts makes a new layer, set it as the `basal_contacts`
+- [x] When Basal Contacts makes a new layer, set it as the `basal_contacts`
       role.
-- [ ] The stratigraphic column "geology layer" pickers use the `geology` role.
-- [ ] Add the contacts source setting: "Calculate from geology polygons" or
+- [x] The stratigraphic column "geology layer" pickers use the `geology` role.
+- [x] Add the contacts source setting: "Calculate from geology polygons" or
       "Use a contacts layer". Save it with the application state.
-- [ ] Add a derived-data record to the data manager. For each result (basal
+- [x] Add a derived-data record to the data manager. For each result (basal
       contacts, calculated thickness, styled fields), keep a hash of its inputs
       and a status: current or out of date.
-- [ ] Compare the hash when the column, a layer role or a tool setting changes.
+- [x] Compare the hash when the column, a layer role or a tool setting changes.
       Send an event when a status changes.
-- [ ] Record the source of each unit thickness: "typed" or "calculated". A
+- [x] Record the source of each unit thickness: "typed" or "calculated". A
       thickness that the user types in the column list is "typed".
-- [ ] In step 2 (until phase 3, in the Stratigraphic Column tab), show the
+- [x] In step 2 (until phase 3, in the Stratigraphic Column tab), show the
       out-of-date results and an **Update** button.
 
 Files: `main/data_manager.py`,
