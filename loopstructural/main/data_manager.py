@@ -129,6 +129,9 @@ class ModellingDataManager:
         self.logger = logger
         self._stratigraphic_column = StratigraphicColumn()
         self._fault_topology = FaultTopology(self._stratigraphic_column)
+        # (abutting, other) -> relationship of the pairs that the fault topology
+        # button set; see `fault_topology_calc.update_topology`
+        self.auto_fault_pairs = {}
         # Maps a stratigraphic-column unconformity's uuid to the name of an
         # existing fault that should realise that boundary, instead of a
         # flat isovalue surface -- see `set_fault_boundary`. Kept as a plain
@@ -1783,6 +1786,7 @@ class ModellingDataManager:
 
         self._fault_topology.faults = []
         self._fault_topology.adjacency = {}
+        self.auto_fault_pairs = {}
         self._fault_topology.stratigraphy_fault_relationships = {}
         self._fault_topology.notify('fault_topology_reset')
 
