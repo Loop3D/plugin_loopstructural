@@ -176,6 +176,13 @@ class TestNamesToRefresh:
         dm.units = []
         assert names_to_refresh(dm) == []
 
+    def test_no_column_calculates_no_thickness_even_if_out_of_date(self, dm):
+        dm.derived.record(derived_data.BASAL_CONTACTS)
+        dm.derived.record(derived_data.THICKNESS)
+        dm.inputs = {'unit_order': []}
+        dm.units = []
+        assert names_to_refresh(dm) == []
+
     def test_no_geology_layer_calculates_no_contacts(self, dm):
         dm.layer_roles.values[layer_roles.GEOLOGY] = None
         assert names_to_refresh(dm) == []
