@@ -53,7 +53,7 @@ def test_the_number_of_the_user_comes_first(manager, monkeypatch):
 
 def test_automatic_uses_the_data(manager, monkeypatch):
     _use_settings(monkeypatch, interpolator_nelements_auto=True, interpolator_nelements=7000)
-    expected = suggest_nelements(summarise_data(DATA), 100.0 * 100.0 * 100.0)
+    expected = suggest_nelements(summarise_data(DATA), 100.0 * 100.0)
     assert manager.interpolator_arguments('s1', DATA)['nelements'] == expected
     assert manager.nelements_used['s1'] == (expected, True)
 
@@ -68,7 +68,7 @@ def test_the_default_is_not_the_number_of_the_user(manager, monkeypatch):
     _use_settings(monkeypatch, interpolator_nelements_auto=True, interpolator_nelements=7000)
     manager.set_nelements_override('s1', 12345)
     manager.interpolator_arguments('s1', DATA)
-    expected = suggest_nelements(summarise_data(DATA), 100.0 * 100.0 * 100.0)
+    expected = suggest_nelements(summarise_data(DATA), 100.0 * 100.0)
     assert manager.default_nelements('s1') == (expected, True)
 
 

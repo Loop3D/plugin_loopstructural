@@ -13,6 +13,7 @@ ROUND_TO = 1_000
 ELEMENTS_PER_EQUATION = 25
 MAX_SURFACES = 10
 SURFACE_STEP = 0.1
+MAX_EXTENT_FACTOR = 2.0
 
 
 @dataclass
@@ -20,15 +21,15 @@ class DataSummary:
     """The measures of the data of one feature.
 
     `spread` is 0 for parallel planes and 1 for orientations in all
-    directions. `spacing` is the median distance from a data point to the
-    nearest other data point (0 if there are fewer than two points).
+    directions. `area` is the map (XY) area of the box around the data points
+    (0 if it is not known).
     """
 
     n_value: int = 0
     n_orientation: int = 0
     n_surfaces: int = 0
     spread: float = 0.0
-    spacing: float = 0.0
+    area: float = 0.0
 
 
 def _normals_from_strike_dip(strike, dip) -> np.ndarray:
@@ -67,21 +68,14 @@ def orientation_spread(normals) -> float:
     return float(np.clip((1.0 - largest) / (2.0 / 3.0), 0.0, 1.0))
 
 
-def point_spacing(points) -> float:
-    """Return the median distance from each point to the nearest other point.
-
-    Points at the same location count as one point. Returns 0 for fewer than
-    two points.
-    """
-    from scipy.spatial import cKDTree
-
-    points = np.asarray(points, dtype=float).reshape(-1, 3)
+def xy_area(points) -> float:
+    """Return the map (XY) area of the box around the points, or 0."""
+    points = np.asarray(points, dtype=float).reshape(-1, 2)
     points = points[np.all(np.isfinite(points), axis=1)]
-    points = np.unique(points, axis=0)
     if len(points) < 2:
         return 0.0
-    distances, _ = cKDTree(points).query(points, k=2)
-    return float(np.median(distances[:, 1]))
+    width, height = points.max(axis=0) - points.min(axis=0)
+    return float(width * height)
 
 
 def _has(df, columns) -> np.ndarray:
@@ -128,32 +122,33 @@ def summarise_data(df) -> DataSummary:
         n_surfaces = int(df.loc[_has(df, ['val']), 'val'].nunique())
     if 'interface' in df.columns and df['interface'].notna().any():
         n_surfaces = max(n_surfaces, int(df['interface'].nunique()))
-    spacing = 0.0
-    if all(column in df.columns for column in ('X', 'Y', 'Z')):
-        spacing = point_spacing(df[['X', 'Y', 'Z']].to_numpy(dtype=float))
+    area = 0.0
+    if 'X' in df.columns and 'Y' in df.columns:
+        area = xy_area(df[['X', 'Y']].to_numpy(dtype=float))
     return DataSummary(
         n_value=int(value.sum()),
         n_orientation=int(orientation.sum()),
         n_surfaces=n_surfaces,
         spread=spread,
-        spacing=spacing,
+        area=area,
     )
 
 
-def suggest_nelements(summary: DataSummary, volume: float = 0.0) -> int:
+def suggest_nelements(summary: DataSummary, model_area: float = 0.0) -> int:
     """Return the number of elements for a feature with the data `summary`.
 
-    From the number of data rows: elements = equations x 25 x surface factor
-    x spread factor, where an orientation is two equations, the surface
-    factor is 1 + 0.1 for each surface after the first (at most 10 surfaces)
-    and the spread factor is 1 + spread.
+    elements = equations x 25 x surface factor x spread factor x extent
+    factor, where an orientation is two equations, the surface factor is
+    1 + 0.1 for each surface after the first (at most 10 surfaces) and the
+    spread factor is 1 + spread.
 
-    From the model extent: if `volume` (the volume of the model box) and the
-    data spacing are known, elements = volume / spacing^3, so that an element
-    is not larger than the distance between the data points.
+    The extent factor is the map area of the model (`model_area`) divided by
+    the map area of the data, limited to 1 .. 2. When the data cover only a
+    part of the model, the elements are spread over a larger area, so more
+    elements keep the resolution near the data. The limit keeps the solve
+    time low. The factor is 1 if an area is not known.
 
-    The result is the larger of the two, rounded to 1 000 and limited to
-    5 000 .. 250 000.
+    The result is rounded to 1 000 and limited to 5 000 .. 250 000.
     """
     equations = summary.n_value + 2 * summary.n_orientation
     if equations <= 0:
@@ -162,7 +157,7 @@ def suggest_nelements(summary: DataSummary, volume: float = 0.0) -> int:
     surface_factor = 1 + SURFACE_STEP * (surfaces - 1)
     spread_factor = 1 + min(max(summary.spread, 0.0), 1.0)
     elements = equations * ELEMENTS_PER_EQUATION * surface_factor * spread_factor
-    if volume > 0 and summary.spacing > 0:
-        elements = max(elements, min(volume / summary.spacing**3, MAX_NELEMENTS))
+    if model_area > 0 and summary.area > 0:
+        elements *= min(max(model_area / summary.area, 1.0), MAX_EXTENT_FACTOR)
     elements = int(round(elements / ROUND_TO)) * ROUND_TO
     return int(min(max(elements, MIN_NELEMENTS), MAX_NELEMENTS))
