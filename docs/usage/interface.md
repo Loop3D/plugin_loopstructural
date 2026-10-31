@@ -115,4 +115,11 @@ Units that don't match the stratigraphic column will have null values, helping y
 Once the layers have been selected, stratigraphic column defined and the fault topology relationships set, the LoopStructural model can be initialised.
 
 Initialise model will create a LoopStructural model with all of the geological features in the model. For each feature in the model the number of interpolation elements (degrees of freedom), the weighting of the regularisation, contact points and orientation weight can be changed.
+
+#### Number of interpolation elements
+
+By default the number of elements is "Automatic". The plugin chooses it for each feature from the data of the feature: more constraints, more surfaces and a wider spread of orientations give more elements. The number is rounded to 1 000 and kept between 5 000 and 250 000. The panel of the feature shows the number that was used.
+
+- To keep a number for one feature, clear the "Automatic" check box in the panel of the feature and enter the number. The feature keeps it, and the project file saves it, until you select "Automatic" again.
+- To use one fixed number for all features, clear "Automatic" in the plugin settings and enter the number. Features that you set by hand keep their own number.
 ![Model Parameters](../static/model-setup.png)

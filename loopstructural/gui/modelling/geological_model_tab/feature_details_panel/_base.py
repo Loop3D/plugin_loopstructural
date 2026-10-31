@@ -3,6 +3,7 @@ from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip
 from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -21,6 +22,7 @@ from loopstructural.main import preview
 
 from ....background_task import finish_background_task, start_background_task
 from ....messages import push_info, push_warning
+from .....toolbelt.preferences import PlgOptionsManager
 from ...steps.section_stack import SectionStack
 from ..bounding_box_widget import BoundingBoxWidget
 from ..layer_selection_table import LayerSelectionTable
@@ -133,8 +135,25 @@ class BaseFeatureDetailsPanel(QWidget):
         self.n_elements_spinbox.setRange(100, 1000000)
         self.n_elements_spinbox.setValue(self.getNelements(feature))
         self.n_elements_spinbox.setPrefix("Number of Elements: ")
+        # The check box uses the number of the settings: automatic from the
+        # data, or the fixed number, as the global "Automatic" setting gives
+        if PlgOptionsManager.get_plg_settings().interpolator_nelements_auto:
+            self.n_elements_auto_check = QCheckBox("Automatic")
+            self.n_elements_auto_check.setToolTip(
+                "Choose the number of elements from the data of the feature. "
+                "Clear the check box to keep the number that you enter."
+            )
+        else:
+            self.n_elements_auto_check = QCheckBox("Use the number of the settings")
+            self.n_elements_auto_check.setToolTip(
+                "Use the fixed number of elements of the plugin settings. "
+                "Clear the check box to keep the number that you enter."
+            )
+        self.n_elements_auto_check.setChecked(not self._has_nelements_override())
+        self.n_elements_spinbox.setEnabled(not self.n_elements_auto_check.isChecked())
 
         self.n_elements_spinbox.valueChanged.connect(self.updateNelements)
+        self.n_elements_auto_check.toggled.connect(self._on_nelements_auto_toggled)
 
         table_group_box = QgsCollapsibleGroupBox('Data Layers')
         self.layer_table = LayerSelectionTable(
@@ -159,6 +178,7 @@ class BaseFeatureDetailsPanel(QWidget):
         form_layout = QFormLayout()
         form_layout.addRow(self.interpolator_type_label, self.interpolator_type_combo)
         form_layout.addRow("Number of Elements:", self.n_elements_spinbox)
+        form_layout.addRow("", self.n_elements_auto_check)
         form_layout.addRow('Regularisation', self.regularisation_spin_box)
         form_layout.addRow('Contact points weight', self.cpw_spin_box)
         form_layout.addRow('Orientation point weight', self.npw_spin_box)
@@ -171,6 +191,7 @@ class BaseFeatureDetailsPanel(QWidget):
             summary=lambda: (
                 f"{self.interpolator_type_combo.currentText()}, "
                 f"{int(self.n_elements_spinbox.value())} elements"
+                f"{' (automatic)' if self._nelements_are_automatic() else ''}"
             ),
         )
         self.layout.add_section(self._build_preview_widget(), 'preview', 'Preview', collapsed=True)
@@ -564,8 +585,46 @@ class BaseFeatureDetailsPanel(QWidget):
                 except Exception:
                     pass
 
-    def updateNelements(self, value):
-        """Update the number of elements in the feature's interpolator."""
+    def _has_nelements_override(self):
+        """Return True if the user set the number of elements of this feature."""
+        manager = self.model_manager
+        name = getattr(self.feature, 'name', None)
+        return manager is not None and name in getattr(manager, 'nelements_overrides', {})
+
+    def _nelements_are_automatic(self):
+        """Return True if the number of elements comes from the data."""
+        return (
+            self.n_elements_auto_check.isChecked()
+            and PlgOptionsManager.get_plg_settings().interpolator_nelements_auto
+        )
+
+    def _on_nelements_auto_toggled(self, automatic):
+        """Use the number of the settings again, or keep the number that is shown."""
+        manager = self.model_manager
+        name = getattr(self.feature, 'name', None)
+        self.n_elements_spinbox.setEnabled(not automatic)
+        if manager is None or name is None:
+            return
+        if automatic:
+            manager.set_nelements_override(name, None)
+            # not `nelements_used`: after a build with the number of the user,
+            # it has that number
+            nelements, _automatic = manager.default_nelements(name)
+            self.n_elements_spinbox.blockSignals(True)
+            self.n_elements_spinbox.setValue(nelements)
+            self.n_elements_spinbox.blockSignals(False)
+            self.updateNelements(nelements, keep=False)
+        else:
+            manager.set_nelements_override(name, int(self.n_elements_spinbox.value()))
+
+    def updateNelements(self, value, keep=True):
+        """Update the number of elements in the feature's interpolator.
+
+        With `keep`, the feature keeps this number in the next builds, until
+        the user selects "Automatic".
+        """
+        if keep and self.model_manager is not None and self.feature is not None:
+            self.model_manager.set_nelements_override(self.feature.name, int(value))
         if self.feature:
             if issubclass(type(self.feature), StructuralFrame):
                 for i in range(3):
@@ -586,6 +645,11 @@ class BaseFeatureDetailsPanel(QWidget):
     def getNelements(self, feature):
         """Get the number of elements from the feature's interpolator."""
         if feature:
+            used = getattr(self.model_manager, 'nelements_used', {}).get(
+                getattr(feature, 'name', None)
+            )
+            if used is not None:
+                return used[0]
             if issubclass(type(feature), StructuralFrame):
                 return feature[0].interpolator.n_elements
             elif feature.interpolator is not None:

@@ -81,6 +81,10 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         if hasattr(self, "btn_open_debug_directory"):
             self.btn_open_debug_directory.pressed.connect(self._open_debug_directory)
 
+        self.n_elements_auto_check_box.toggled.connect(
+            lambda checked: self.n_elements_spin_box.setEnabled(not checked)
+        )
+
         # load previously saved settings
         self.load_settings()
 
@@ -92,6 +96,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         settings.debug_mode = self.opt_debug.isChecked()
         settings.separate_dock_widgets = self.opt_separate_dock_widgets.isChecked()
         settings.interpolator_nelements = self.n_elements_spin_box.value()
+        settings.interpolator_nelements_auto = self.n_elements_auto_check_box.isChecked()
         settings.interpolator_npw = self.npw_spin_box.value()
         settings.interpolator_cpw = self.cpw_spin_box.value()
         settings.interpolator_regularisation = self.regularisation_spin_box.value()
@@ -121,6 +126,8 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.lbl_version_saved_value.setText(settings.version)
         # self.interpolator_type_combo.setCurrentText(settings.interpolator_type)
         self.n_elements_spin_box.setValue(settings.interpolator_nelements)
+        self.n_elements_auto_check_box.setChecked(settings.interpolator_nelements_auto)
+        self.n_elements_spin_box.setEnabled(not settings.interpolator_nelements_auto)
         self.regularisation_spin_box.setValue(settings.interpolator_regularisation)
         self.cpw_spin_box.setValue(settings.interpolator_cpw)
         self.npw_spin_box.setValue(settings.interpolator_npw)

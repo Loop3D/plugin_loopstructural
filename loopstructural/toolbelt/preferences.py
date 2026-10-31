@@ -32,6 +32,7 @@ class PlgSettingsStructure:
     version: str = __version__
     interpolator_type: str = 'FDI'
     interpolator_nelements: int = 50000
+    interpolator_nelements_auto: bool = True
     interpolator_regularisation: float = 1.0
     interpolator_cpw: float = 1.0
     interpolator_npw: float = 1.0
