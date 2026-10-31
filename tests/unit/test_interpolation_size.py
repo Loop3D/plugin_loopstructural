@@ -12,7 +12,7 @@ from loopstructural.main.interpolation_size import (
     DataSummary,
     _normals_from_strike_dip,
     orientation_spread,
-    point_spacing,
+    xy_area,
     suggest_nelements,
     summarise_data,
 )
@@ -120,27 +120,36 @@ class TestNormals:
 
 
 class TestExtent:
-    def test_point_spacing(self):
-        points = [(x, 0.0, 0.0) for x in (0.0, 10.0, 20.0, 30.0)]
-        assert point_spacing(points) == 10.0
+    def test_xy_area(self):
+        assert xy_area([(0.0, 0.0), (10.0, 5.0), (3.0, 2.0)]) == 50.0
+        assert xy_area([(1.0, 1.0)]) == 0.0
 
-    def test_repeated_points_count_once(self):
-        assert point_spacing([(0.0, 0.0, 0.0)] * 3 + [(5.0, 0.0, 0.0)]) == 5.0
-        assert point_spacing([(0.0, 0.0, 0.0)] * 3) == 0.0
+    def test_summary_has_the_area(self):
+        df = pd.DataFrame({'X': [0.0, 50.0, 100.0], 'Y': [0.0, 20.0, 40.0], 'Z': 0.0, 'val': 0.0})
+        assert summarise_data(df).area == 4000.0
 
-    def test_summary_has_the_spacing(self):
-        df = pd.DataFrame({'X': [0.0, 50.0, 100.0], 'Y': 0.0, 'Z': 0.0, 'val': 0.0})
-        assert summarise_data(df).spacing == 50.0
-
-    def test_a_large_model_with_dense_data_gives_more_elements(self):
-        summary = DataSummary(n_value=20, spacing=100.0)
+    def test_data_in_part_of_the_model_gives_more_elements(self):
+        summary = DataSummary(n_value=2000, area=100.0 * 100.0)
         from_rows = suggest_nelements(summary)
-        small = suggest_nelements(summary, volume=1000.0**3)
-        large = suggest_nelements(summary, volume=10_000.0 * 10_000.0 * 2_000.0)
-        assert small == from_rows
-        assert large > from_rows
-        assert large <= MAX_NELEMENTS
+        same = suggest_nelements(summary, model_area=100.0 * 100.0)
+        quarter = suggest_nelements(summary, model_area=200.0 * 200.0)
+        assert same == from_rows
+        # the factor is at most 2
+        assert quarter == 2 * from_rows
 
-    def test_no_spacing_uses_only_the_rows(self):
+    def test_dense_map_data_do_not_give_the_maximum(self):
+        # five contact lines sampled every 50 m on a 10 km map
+        x = np.arange(0.0, 10_000.0, 50.0)
+        df = pd.concat(
+            pd.DataFrame({'X': x, 'Y': y, 'Z': 0.0, 'val': k * 100.0})
+            for k, y in enumerate(np.linspace(1_000.0, 9_000.0, 5))
+        )
+        summary = summarise_data(df)
+        from_rows = suggest_nelements(summary)
+        with_extent = suggest_nelements(summary, model_area=10_000.0 * 10_000.0)
+        assert from_rows <= with_extent <= 2 * from_rows
+        assert with_extent < MAX_NELEMENTS
+
+    def test_no_area_uses_only_the_rows(self):
         summary = DataSummary(n_value=20)
-        assert suggest_nelements(summary, volume=1e12) == suggest_nelements(summary)
+        assert suggest_nelements(summary, model_area=1e12) == suggest_nelements(summary)
