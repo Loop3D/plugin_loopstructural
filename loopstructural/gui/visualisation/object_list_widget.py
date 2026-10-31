@@ -6,7 +6,7 @@ from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QFileDialog,
-    QHBoxLayout,  # Add missing import
+    QHBoxLayout,
     QLabel,
     QMenu,
     QPushButton,
@@ -18,8 +18,43 @@ from qgis.PyQt.QtWidgets import (
 
 logger = logging.getLogger(__name__)
 
+# Text for the type of an object in the list, by source type
+SOURCE_TYPE_LABELS = {
+    'feature_scalar': 'scalar field',
+    'feature_surface': 'surface',
+    'feature_isosurface': 'isosurface',
+    'feature_vector': 'vector field',
+    'feature_vectors': 'vector field',
+    'feature_points': 'data',
+    'feature_data': 'data',
+    'bounding_box': 'bounding box',
+    'fault_surface': 'fault surface',
+    'stratigraphic_surface': 'stratigraphic surface',
+    'cross_section_plane': 'cross section',
+    'cross_section_line': 'cross section',
+    'block_model': 'block model',
+    'topography_surface': 'topography',
+}
+
+
+def describe_object(obj) -> str:
+    """Short text for the list: the type of the object and its isovalue."""
+    source_type = obj.source_type or ''
+    if source_type.startswith('fold_constraint_'):
+        text = 'fold constraint'
+    else:
+        text = SOURCE_TYPE_LABELS.get(source_type, '')
+    if obj.isovalue is not None and source_type in ('feature_isosurface', 'feature_surface'):
+        text = f"{text}, value {obj.isovalue:.4g}"
+    return text
+
 
 class ObjectListWidget(QWidget):
+    """The objects in the viewer, in groups by source feature.
+
+    The list reads the objects from the registry of the viewer.
+    """
+
     def __init__(self, parent=None, *, viewer=None, properties_widget=None):
         super().__init__(parent)
         self.mainLayout = QVBoxLayout(self)
@@ -36,239 +71,111 @@ class ObjectListWidget(QWidget):
         self.viewer = viewer
         self.viewer.objectAdded.connect(self.update_object_list)
         self.viewer.outOfDateChanged.connect(self._on_out_of_date_changed)
+        # groups that the user closed; they stay closed when the list is built again
+        self._collapsed_groups = set()
         self.treeWidget.installEventFilter(self)
         self.treeWidget.itemSelectionChanged.connect(self.on_object_selected)
         self.treeWidget.itemDoubleClicked.connect(self.onDoubleClick)
+        self.treeWidget.itemCollapsed.connect(self._on_group_collapsed)
+        self.treeWidget.itemExpanded.connect(self._on_group_expanded)
 
     def onDoubleClick(self, item, column):
         self.viewer.reset_camera()
 
-    def _selected_top_level_items(self):
-        """Return only the selected items that represent objects (top-level
-        rows with a checkbox/label widget), ignoring child rows such as
-        'Point Data'/'Cell Data' entries which have no such widget.
-        """
-        items = []
-        for item in self.treeWidget.selectedItems():
-            if item.parent() is not None:
-                continue
-            if self.treeWidget.itemWidget(item, 0) is None:
-                continue
-            items.append(item)
-        return items
+    def _on_group_collapsed(self, item):
+        if item.parent() is None:
+            self._collapsed_groups.add(item.text(0))
 
-    def _object_label_for_item(self, item):
-        item_widget = self.treeWidget.itemWidget(item, 0)
-        if item_widget is None:
-            return None
-        label = item_widget.findChild(QLabel)
-        return label.text() if label else None
+    def _on_group_expanded(self, item):
+        if item.parent() is None:
+            self._collapsed_groups.discard(item.text(0))
+
+    def _selected_object_items(self):
+        """Return the selected items that are objects (rows with a
+        checkbox/label widget), not the group rows."""
+        return [
+            item
+            for item in self.treeWidget.selectedItems()
+            if self.treeWidget.itemWidget(item, 0) is not None
+        ]
+
+    def _object_name_for_item(self, item):
+        return item.data(0, Qt.ItemDataRole.UserRole)
 
     def on_object_selected(self):
-        selected_items = self._selected_top_level_items()
+        selected_items = self._selected_object_items()
         if not selected_items:
             # if nothing selected keep the previous selection.
             # Need to select a new object to change its properties
             return
 
         # For simplicity, just handle the first selected item
-        item = selected_items[0]
-        object_label = self._object_label_for_item(item)
+        object_name = self._object_name_for_item(selected_items[0])
+        if object_name and self.properties_widget:
+            self.properties_widget.setCurrentObject(object_name)
 
-        if object_label and hasattr(self, 'properties_widget') and self.properties_widget:
-
-            self.properties_widget.setCurrentObject(object_label)
-
-    def update_object_list(self, new_object):
-        """Rebuild the tree so top-level items are the entries in
-        `viewer.meshes`. Each mesh gets a visibility checkbox and child
-        items listing its point and cell data arrays.
+    def update_object_list(self, new_object=None):
+        """Build the tree again from the registry of the viewer: a group for
+        each source feature, with the objects of the feature. Each object has
+        a visibility check box, its name, its type and its isovalue.
         """
         if not self.viewer:
             return
-
-        # Clear and rebuild the tree to reflect current meshes
+        selected = {self._object_name_for_item(i) for i in self._selected_object_items()}
         self.treeWidget.clear()
-
-        meshes = getattr(self.viewer, 'meshes', {}) or {}
-        for mesh_name in sorted(meshes.keys()):
-            mesh = meshes[mesh_name]
-            self.add_mesh_item(mesh_name, mesh)
+        for group_name, objects in self.viewer.registry.grouped_by_feature():
+            group = QTreeWidgetItem(self.treeWidget)
+            group.setText(0, group_name)
+            font = group.font(0)
+            font.setBold(True)
+            group.setFont(0, font)
+            for obj in objects:
+                item = self.add_object_item(group, obj)
+                if obj.name in selected:
+                    item.setSelected(True)
+            group.setExpanded(group_name not in self._collapsed_groups)
 
     def _on_out_of_date_changed(self):
-        self.update_object_list(None)
+        self.update_object_list()
 
-    def add_mesh_item(self, mesh_name, mesh):
-        """Add a top-level tree item for a mesh and populate children for
-        point/cell data arrays.
-        """
-        top = QTreeWidgetItem(self.treeWidget)
-
-        # Determine initial visibility. Prefer viewer.actors entry if available.
-        initial_visibility = True
-        try:
-            if hasattr(self.viewer, 'actors') and mesh_name in getattr(self.viewer, 'actors', {}):
-                initial_visibility = bool(self.viewer.actors[mesh_name].visibility)
-            elif hasattr(mesh, 'visibility'):
-                initial_visibility = bool(mesh.visibility)
-        except Exception:
-            initial_visibility = True
+    def add_object_item(self, group, obj):
+        """Add a row for an object to a group row of the tree."""
+        item = QTreeWidgetItem(group)
+        item.setData(0, Qt.ItemDataRole.UserRole, obj.name)
 
         visibilityCheckbox = QCheckBox()
-        visibilityCheckbox.setChecked(initial_visibility)
-
-        # Connect checkbox: prefer viewer APIs, fallback to mesh attribute
-        def _on_vis(state, name=mesh_name, m=mesh):
-            checked = state == Qt.CheckState.Checked
-            if hasattr(self.viewer, 'actors') and name in getattr(self.viewer, 'actors', {}):
-                self.set_object_visibility(name, checked)
-                return
-            if hasattr(self.viewer, 'set_object_visibility'):
-                try:
-                    self.viewer.set_object_visibility(name, checked)
-                    return
-                except Exception:
-                    pass
-            # Fallback: set on mesh if possible
-            if hasattr(m, 'visibility'):
-                try:
-                    m.visibility = checked
-                except Exception:
-                    pass
-
-        visibilityCheckbox.stateChanged.connect(_on_vis)
-
-        # Compose widget (checkbox + label)
-        itemWidget = QWidget()
-        itemLayout = QHBoxLayout(itemWidget)
-        itemLayout.setContentsMargins(0, 0, 0, 0)
-        itemLayout.addWidget(visibilityCheckbox)
-        nameLabel = QLabel(mesh_name)
-        if isinstance(mesh, dict) and mesh.get('out_of_date'):
-            # the label text is the object name used elsewhere, so show the
-            # state with the style and tooltip only
-            nameLabel.setStyleSheet("color: gray; font-style: italic;")
-            nameLabel.setToolTip("Out of date: the model changed after this object was added")
-        itemLayout.addWidget(nameLabel)
-        itemWidget.setLayout(itemLayout)
-
-        self.treeWidget.setItemWidget(top, 0, itemWidget)
-        top.setExpanded(False)
-
-        # Add children: Point Data and Cell Data groups
-        try:
-            point_data = getattr(mesh, 'point_data', None)
-            cell_data = getattr(mesh, 'cell_data', None)
-
-            if point_data is not None and len(point_data.keys()) > 0:
-                pd_group = QTreeWidgetItem(top)
-                pd_group.setText(0, 'Point Data')
-                for array_name in sorted(point_data.keys()):
-                    arr_item = QTreeWidgetItem(pd_group)
-                    # show name and length/type if available
-                    try:
-                        vals = point_data[array_name]
-                        meta = f" ({len(vals)})" if hasattr(vals, '__len__') else ''
-                    except Exception:
-                        meta = ''
-                    arr_item.setText(0, f"{array_name}{meta}")
-
-            if cell_data is not None and len(cell_data.keys()) > 0:
-                cd_group = QTreeWidgetItem(top)
-                cd_group.setText(0, 'Cell Data')
-                for array_name in sorted(cell_data.keys()):
-                    arr_item = QTreeWidgetItem(cd_group)
-                    try:
-                        vals = cell_data[array_name]
-                        meta = f" ({len(vals)})" if hasattr(vals, '__len__') else ''
-                    except Exception:
-                        meta = ''
-                    arr_item.setText(0, f"{array_name}{meta}")
-        except Exception:
-            # If mesh lacks expected attributes, silently continue
-            pass
-
-    def add_object_item(self, object_name, instance=None):
-        """Add a generic object entry to the tree. This mirrors add_actor but works
-        for objects/meshes that are not present in viewer.actors."""
-        objectItem = QTreeWidgetItem(self.treeWidget)
-
-        # Determine initial visibility
-        visibility = False
-        if instance is not None and hasattr(instance, 'visibility'):
-            visibility = bool(instance.visibility)
-
-        visibilityCheckbox = QCheckBox()
-        visibilityCheckbox.setChecked(visibility)
-
-        # Connect checkbox to toggle visibility. Prefer using viewer APIs if available.
-        def _on_visibility_change(state, name=object_name, inst=instance):
-            checked = state == Qt.CheckState.Checked
-            # If there's an actor for this name, delegate to set_object_visibility
-            if hasattr(self.viewer, 'actors') and name in getattr(self.viewer, 'actors', {}):
-                self.set_object_visibility(name, checked)
-                return
-            # If viewer exposes a generic setter use it
-            if hasattr(self.viewer, 'set_object_visibility'):
-                try:
-                    self.viewer.set_object_visibility(name, checked)
-                    return
-                except Exception:
-                    pass
-            # Fallback: set attribute on the instance if possible
-            if inst is not None and hasattr(inst, 'visibility'):
-                try:
-                    inst.visibility = checked
-                except Exception:
-                    pass
-
-        visibilityCheckbox.stateChanged.connect(_on_visibility_change)
-
-        # Create a widget to hold the checkbox and name on a single line
-        itemWidget = QWidget()
-        itemLayout = QHBoxLayout(itemWidget)
-        itemLayout.setContentsMargins(0, 0, 0, 0)
-        itemLayout.addWidget(visibilityCheckbox)
-        itemLayout.addWidget(QLabel(object_name))
-        itemWidget.setLayout(itemLayout)
-
-        self.treeWidget.setItemWidget(objectItem, 0, itemWidget)
-        objectItem.setExpanded(False)  # Initially collapsed
-
-    def add_actor(self, actor_name):
-        # Create a tree item for the object
-        if not hasattr(self.viewer.actors[actor_name], 'visibility'):
-            return
-        objectItem = QTreeWidgetItem(self.treeWidget)
-
-        # Add a checkbox for visibility toggle in front of the name
-        visibilityCheckbox = QCheckBox()
-        visibilityCheckbox.setChecked(self.viewer.actors[actor_name].visibility)
-        visibilityCheckbox.stateChanged.connect(
-            lambda state, name=self.viewer.actors[actor_name].name: self.set_object_visibility(
-                name, state == Qt.CheckState.Checked
-            )
+        visibilityCheckbox.setChecked(bool(getattr(obj.actor, 'visibility', True)))
+        visibilityCheckbox.toggled.connect(
+            lambda checked, name=obj.name: self._set_visibility(name, checked)
         )
 
-        # Create a widget to hold the checkbox and name on a single line
         itemWidget = QWidget()
-        itemLayout = QHBoxLayout(itemWidget)  # Use horizontal layout for single line
+        itemLayout = QHBoxLayout(itemWidget)
         itemLayout.setContentsMargins(0, 0, 0, 0)
         itemLayout.addWidget(visibilityCheckbox)
-        itemLayout.addWidget(QLabel(self.viewer.actors[actor_name].name))
-        itemWidget.setLayout(itemLayout)
+        nameLabel = QLabel(obj.name)
+        itemLayout.addWidget(nameLabel)
+        description = describe_object(obj)
+        if description:
+            typeLabel = QLabel(f"({description})")
+            typeLabel.setStyleSheet("color: gray;")
+            itemLayout.addWidget(typeLabel)
+        itemLayout.addStretch(1)
+        if obj.out_of_date:
+            # show the state with the style and tooltip only
+            nameLabel.setStyleSheet("color: gray; font-style: italic;")
+            nameLabel.setToolTip("Out of date: the model changed after this object was added")
+        self.treeWidget.setItemWidget(item, 0, itemWidget)
+        return item
 
-        self.treeWidget.setItemWidget(objectItem, 0, itemWidget)
-        objectItem.setExpanded(False)  # Initially collapsed
-
-    def set_object_visibility(self, object_name, visibility):
-        self.viewer.actors[object_name].visibility = visibility
-
-        # self.object_manager.set_object_visibility(object_name, visibility)
-        # Logic to update visibility in the list widget
+    def _set_visibility(self, object_name, visible):
+        try:
+            self.viewer.set_object_visibility(object_name, visible)
+        except ValueError:
+            logger.info(f"Object '{object_name}' is not in the viewer")
 
     def contextMenuEvent(self, event):
-        selected_items = self._selected_top_level_items()
+        selected_items = self._selected_object_items()
         multiple = len(selected_items) > 1
 
         menu = QMenu(self)
@@ -304,45 +211,34 @@ class ObjectListWidget(QWidget):
         """Show or hide every currently-selected object by driving each
         item's visibility checkbox (so viewer state and checkbox state stay
         in sync)."""
-        for item in self._selected_top_level_items():
+        for item in self._selected_object_items():
             item_widget = self.treeWidget.itemWidget(item, 0)
             checkbox = item_widget.findChild(QCheckBox) if item_widget else None
             if checkbox is not None:
                 checkbox.setChecked(visible)
 
-    def zoom_to_selected_object(self):
-        selected_items = self._selected_top_level_items()
+    def _first_selected_object(self):
+        """The first selected object in the registry, or None."""
+        selected_items = self._selected_object_items()
         if not selected_items:
-            return
+            return None
+        return self.viewer.registry.get(self._object_name_for_item(selected_items[0]))
 
-        object_label = self._object_label_for_item(selected_items[0])
-        if object_label is None:
-            return
-        mesh_dict = self.viewer.meshes.get(object_label, None)
-        if mesh_dict is None:
-            return
-        mesh = mesh_dict.get('mesh', None)
-        if mesh is None or not hasattr(mesh, 'bounds'):
+    def zoom_to_selected_object(self):
+        obj = self._first_selected_object()
+        if obj is None or not hasattr(obj.mesh, 'bounds'):
             return
         try:
-            self.viewer.reset_camera(bounds=mesh.bounds)
+            self.viewer.reset_camera(bounds=obj.mesh.bounds)
         except Exception as e:
-            logger.error(f"Failed to zoom to object {object_label}: {e}")
+            logger.error(f"Failed to zoom to object {obj.name}: {e}")
 
     def export_selected_object(self):
-        selected_items = self._selected_top_level_items()
-        if not selected_items:
+        obj = self._first_selected_object()
+        if obj is None or obj.mesh is None:
             return
-
-        object_label = self._object_label_for_item(selected_items[0])
-        if object_label is None:
-            return
-        mesh_dict = self.viewer.meshes.get(object_label, None)
-        if mesh_dict is None:
-            return
-        mesh = mesh_dict.get('mesh', None)
-        if mesh is None:
-            return
+        object_label = obj.name
+        mesh = obj.mesh
         # Determine available formats based on object type and dependencies
         formats = []
         try:
@@ -468,40 +364,25 @@ class ObjectListWidget(QWidget):
                 f.write(f"{x:.6f} {y:.6f} {z:.6f} {value:.6f}\n")
 
     def remove_selected_object(self):
-        selected_items = self._selected_top_level_items()
-        if not selected_items:
-            return
-        for item in selected_items:
-            object_label = self._object_label_for_item(item)
-            if object_label is None:
-                continue
-            # Logic for removing the object
-            if self.viewer and hasattr(self.viewer, 'remove_object'):
-                self.viewer.remove_object(object_label)
-            else:
-                print("Error: Viewer is not initialized or does not support object removal.")
-            self.treeWidget.takeTopLevelItem(self.treeWidget.indexOfTopLevelItem(item))
+        names = [self._object_name_for_item(i) for i in self._selected_object_items()]
+        for name in names:
+            self.viewer.remove_object(name)
+        if names:
+            self.update_object_list()
 
     def show_add_object_menu(self):
         menu = QMenu(self)
 
-        addFeatureAction = menu.addAction("Surface from model")
         loadFeatureAction = menu.addAction("Load from file")
         addQgsLayerAction = menu.addAction("Add from QGIS layer")
 
         buttonPosition = self.sender().mapToGlobal(self.sender().rect().bottomLeft())
         action = menu.exec(buttonPosition)
 
-        if action == addFeatureAction:
-            self.add_feature_from_geological_model()
-        elif action == loadFeatureAction:
+        if action == loadFeatureAction:
             self.load_feature_from_file()
         elif action == addQgsLayerAction:
             self.add_object_from_qgis_layer()
-
-    def add_feature_from_geological_model(self):
-        # Logic to add a feature from the geological model
-        print("Adding feature from geological model")
 
     def add_object_from_qgis_layer(self):
         """Show a dialog to pick a QGIS point vector layer, convert it to a VTK/PyVista
@@ -619,13 +500,10 @@ class ObjectListWidget(QWidget):
                 continue
 
         # Add to viewer
-        if self.viewer and hasattr(self.viewer, 'add_mesh_object'):
-            try:
-                self.viewer.add_mesh_object(mesh, name=layer.name())
-            except Exception as e:
-                print("Failed to add mesh to viewer:", e)
-        else:
-            print("Error: Viewer is not initialized or does not support adding meshes.")
+        try:
+            self.viewer.add_mesh_object(mesh, name=layer.name())
+        except Exception as e:
+            logger.error(f"Failed to add mesh to viewer: {e}")
 
     def load_feature_from_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -638,17 +516,13 @@ class ObjectListWidget(QWidget):
         try:
             mesh = pv.read(file_path)
             # Add the mesh to the viewer
-            if self.viewer and hasattr(self.viewer, 'add_mesh'):
-                self.viewer.add_mesh_object(mesh, name=file_name)
-            else:
-                print("Error: Viewer is not initialized or does not support adding meshes.")
-
-            print(f"Loaded mesh from file: {file_path}")
+            self.viewer.add_mesh_object(mesh, name=file_name)
+            logger.info(f"Loaded mesh from file: {file_path}")
         except Exception as e:
-            print(f"Failed to load mesh: {e}")
+            logger.error(f"Failed to load mesh: {e}")
 
     def _toggle_selected_visibility(self):
-        for item in self._selected_top_level_items():
+        for item in self._selected_object_items():
             item_widget = self.treeWidget.itemWidget(item, 0)
             checkbox = item_widget.findChild(QCheckBox) if item_widget else None
             if checkbox is not None:

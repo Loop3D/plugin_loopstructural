@@ -20,6 +20,20 @@ The **Export** panel in step 5 is open when the model is solved. It has three ta
 
 The exports run in the background and show a message when they finish.
 
+### The 3D view
+The 3D view has three parts: the object list, the feature list with the action buttons, and the properties of the selected object.
+
+- **Object list**: the objects in the view are in groups, one group for each source feature. Each row has a check box (show or hide), the name of the object, its type and, for a surface from a scalar value, its value. Select an object to see its properties. The right-click menu can zoom to an object, export it, show or hide it, or remove it.
+- **Feature list**: right-click a feature to add its scalar field, its surfaces, its vector field or its data. The action buttons under the list add the model bounding box, the fault and stratigraphic surfaces, the topography, cross sections and a block model.
+- **Out-of-date objects**: when the model changes, the objects that come from the model show in grey italic. The **Update** button under the feature list builds them again from the current model, with the same settings.
+
+#### Isosurfaces
+Right-click a feature and choose **Add Isosurface...** to add the surface of the scalar field at values that you choose. Enter a list of values (for example `0.1, 0.5, 0.9`), or a start, an end and a count. The default values are inside the range of the scalar field. The plugin adds one object for each value. The name has the value, for example `Fault_1_iso_0.50`. These objects do not replace the surfaces that the model gives.
+
+If the scalar field has no surface at a value (for example, the value is outside the range of the field), a message shows the value and the other surfaces are still added.
+
+To change the value of an isosurface, select it in the object list, enter a new value in the **Isosurface** panel of the properties and choose **Apply**. Only this object is built again. The name of the object does not change. After the model changes, **Update** builds each isosurface again at its value.
+
 The header of the dock has **Save**, **Open**, **Reset** and **Settings**. They apply to all of the plugin.
 
 The toolbar has three actions: LoopStructural (the dock), 3D View and Help. The **Tools** submenu of the Plugins menu has the map2loop dialogs for advanced users.
