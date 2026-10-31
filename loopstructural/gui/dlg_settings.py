@@ -14,6 +14,7 @@ from qgis.gui import QgsOptionsPageWidget, QgsOptionsWidgetFactory
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QIcon
+from qgis.PyQt.QtWidgets import QComboBox, QLabel
 
 # project
 from loopstructural.__about__ import (
@@ -23,6 +24,7 @@ from loopstructural.__about__ import (
     __uri_tracker__,
     __version__,
 )
+from loopstructural.main import solver_choice
 from loopstructural.toolbelt import PlgLogger, PlgOptionsManager
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
@@ -84,6 +86,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.n_elements_auto_check_box.toggled.connect(
             lambda checked: self.n_elements_spin_box.setEnabled(not checked)
         )
+        self._add_solver_combo()
 
         # load previously saved settings
         self.load_settings()
@@ -100,6 +103,7 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         settings.interpolator_npw = self.npw_spin_box.value()
         settings.interpolator_cpw = self.cpw_spin_box.value()
         settings.interpolator_regularisation = self.regularisation_spin_box.value()
+        settings.interpolator_solver = self.solver_combo.currentData()
         settings.version = __version__
         debug_dir_text = (
             self.le_debug_directory.text() if hasattr(self, "le_debug_directory") else ""
@@ -131,8 +135,30 @@ class ConfigOptionsPage(FORM_CLASS, QgsOptionsPageWidget):
         self.regularisation_spin_box.setValue(settings.interpolator_regularisation)
         self.cpw_spin_box.setValue(settings.interpolator_cpw)
         self.npw_spin_box.setValue(settings.interpolator_npw)
+        index = self.solver_combo.findData(settings.interpolator_solver)
+        self.solver_combo.setCurrentIndex(max(index, 0))
         if hasattr(self, "le_debug_directory"):
             self.le_debug_directory.setText(settings.debug_directory or "")
+
+    def _add_solver_combo(self):
+        """Add the choice of the solver below the number of elements."""
+        self.solver_combo = QComboBox(self)
+        for choice in solver_choice.CHOICES:
+            self.solver_combo.addItem(solver_choice.LABELS[choice], choice)
+        if solver_choice.native_available():
+            tooltip = (
+                "The native solver is much faster. A feature that it cannot solve "
+                "(for example a fold) is solved with the default solver."
+            )
+        else:
+            tooltip = (
+                "The native solver is not installed, so the default solver is used. "
+                "Install it with: pip install loopstructural[native]"
+            )
+        self.solver_combo.setToolTip(tooltip)
+        row = self.gridLayout_solver.rowCount()
+        self.gridLayout_solver.addWidget(QLabel("Solver", self), row, 0)
+        self.gridLayout_solver.addWidget(self.solver_combo, row, 1)
 
     def reset_settings(self):
         """Reset settings in the UI and persisted settings to plugin defaults."""

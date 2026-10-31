@@ -29,7 +29,7 @@ from LoopStructural.utils.observer import Observable
 from LoopStructural import GeologicalModel
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
-from ..main import constraints, parametric_fault
+from ..main import constraints, parametric_fault, solver_choice
 from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
 from ..main.interpolation_size import DataSummary, suggest_nelements, summarise_data
@@ -248,6 +248,11 @@ class GeologicalModelManager(Observable):
         self.nelements_used: Dict[str, tuple] = {}
         # feature name -> DataSummary of the data of the last build
         self._data_summaries: Dict[str, DataSummary] = {}
+        # features that the native solver could not solve; they use the
+        # default solver (see `_solve_feature`)
+        self._native_failed: Set[str] = set()
+        # features with constraints that need an inequality solver
+        self._needs_inequalities: Set[str] = set()
 
     @property
     def uses_map_data(self) -> bool:
@@ -325,6 +330,8 @@ class GeologicalModelManager(Observable):
         self.nelements_overrides = {}
         self.nelements_used = {}
         self._data_summaries = {}
+        self._native_failed = set()
+        self._needs_inequalities = set()
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
@@ -1015,12 +1022,64 @@ class GeologicalModelManager(Observable):
         else:
             nelements, automatic = self.default_nelements(name)
         self.nelements_used[name] = (nelements, automatic)
-        return {
+        arguments = {
             'nelements': nelements,
             'npw': settings.interpolator_npw,
             'cpw': settings.interpolator_cpw,
             'regularisation': settings.interpolator_regularisation,
         }
+        if self._use_native(name):
+            arguments['solver'] = solver_choice.NATIVE
+        return arguments
+
+    def _use_native(self, name) -> bool:
+        """Return True if the feature `name` uses the native solver.
+
+        Not for a feature that the native solver could not solve before, see
+        `_solve_feature`.
+        """
+        if name in self._native_failed:
+            return False
+        settings = PlgOptionsManager.get_plg_settings()
+        return solver_choice.use_native(settings.interpolator_solver)
+
+    def _inequality_solver(self, name, solver):
+        """Return the solver to pass for a constraint type that needs `solver` (or None).
+
+        The native solver also solves the inequality constraints, so with it
+        `interpolator_arguments` gives the solver and this returns None.
+        """
+        if not solver:
+            return None
+        self._needs_inequalities.add(name)
+        return None if self._use_native(name) else solver
+
+    def _solve_feature(self, feature, rebuild=True):
+        """Build `feature`. If the native solver cannot solve it, build it with
+        the default solver, and use the default solver for it from now on.
+
+        `rebuild` builds the feature again; otherwise only if it is out of date.
+        """
+        try:
+            if rebuild:
+                feature.builder.update()
+            else:
+                feature.builder.up_to_date()
+        except solver_choice.NATIVE_ERRORS as error:
+            if not solver_choice.uses_native(feature):
+                raise
+            name = feature.name
+            self._native_failed.add(name)
+            fallback = solver_choice.fallback_solver(name in self._needs_inequalities)
+            if self._debug_manager is not None:
+                self._debug_manager.log(
+                    f"The native solver cannot solve '{name}' ({error}). "
+                    f"It is solved with '{fallback}'.",
+                    log_level=1,
+                )
+            for builder in solver_choice.builders(feature):
+                builder.update_build_arguments({'solver': fallback})
+            feature.builder.update()
 
     def default_nelements(self, name) -> tuple:
         """Return (number of elements, True if automatic) for the feature
@@ -1238,7 +1297,7 @@ class GeologicalModelManager(Observable):
             return {}
         kwargs = {}
         for layer_data in spec['data'].values():
-            solver = constraints.solver_for(layer_data.get('type'))
+            solver = self._inequality_solver(name, constraints.solver_for(layer_data.get('type')))
             if solver:
                 kwargs['solver'] = solver
         return kwargs
@@ -1941,7 +2000,7 @@ class GeologicalModelManager(Observable):
             raise ValueError(f"Feature '{feature_name}' not found in the model.")
         # Allow UI to react to a feature update
         self._emit('model_update_started')
-        feature.builder.update()
+        self._solve_feature(feature)
         # Notify observers and include feature name for interested listeners
         self._emit('feature_updated', feature_name)
         self._emit('model_update_finished')
@@ -2003,7 +2062,7 @@ class GeologicalModelManager(Observable):
                     feature = self.model.get_feature_by_name(feature_name)
                     if feature is not None:
                         self._report_progress(f"Solving '{feature_name}'")
-                        feature.builder.update()
+                        self._solve_feature(feature)
             finally:
                 self._progress_callback = None
         else:
@@ -2020,7 +2079,7 @@ class GeologicalModelManager(Observable):
                 for f in self.model.features:
                     if not f.name.startswith('__'):
                         self._report_progress(f"Solving '{f.name}'")
-                    f.builder.up_to_date()
+                    self._solve_feature(f, rebuild=False)
             finally:
                 self._progress_callback = None
         if dbg is not None:
@@ -2300,7 +2359,7 @@ class GeologicalModelManager(Observable):
                     dfs.append(constraints.add_weight(rows, df, layer_data))
                 else:
                     dfs.append(constraints.constraint_rows(df, layer_data, name))
-                solver = constraints.solver_for(layer_type)
+                solver = self._inequality_solver(name, constraints.solver_for(layer_type))
                 if solver:
                     kwargs['solver'] = solver
             except Exception as e:
