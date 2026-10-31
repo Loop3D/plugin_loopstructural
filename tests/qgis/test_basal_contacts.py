@@ -1,3 +1,4 @@
+import inspect
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -221,6 +222,20 @@ class TestBasalContactOverrides(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, 'bad geology'):
                 self._extract(['A', 'B', 'C'])
+
+    def test_the_list_of_ignored_units_does_not_change(self):
+        ignore_units = ['D']
+        for _ in range(2):
+            extract_basal_contacts(
+                geology=self._geology(),
+                stratigraphic_order=['A', 'B', 'C'],
+                ignore_units=ignore_units,
+                unit_name_field='unitname',
+            )
+        self.assertEqual(ignore_units, ['D'])
+        # the default is not a shared list that grows at each call
+        default = inspect.signature(extract_basal_contacts).parameters['ignore_units'].default
+        self.assertIsNone(default)
 
 
 if __name__ == '__main__':

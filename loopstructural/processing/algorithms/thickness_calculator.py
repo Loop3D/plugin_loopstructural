@@ -260,7 +260,7 @@ class ThicknessCalculatorAlgorithm(QgsProcessingAlgorithm):
         thickness_type = ['InterpolatedStructure', 'StructuralPoint'][thickness_type_index]
         dtm_data = self.parameterAsRasterLayer(parameters, self.INPUT_DTM, context)
         bounding_box_type = self.parameterAsEnum(parameters, self.INPUT_BOUNDING_BOX_TYPE, context)
-        max_line_length = self.parameterAsSource(parameters, self.INPUT_MAX_LINE_LENGTH, context)
+        max_line_length = self.parameterAsDouble(parameters, self.INPUT_MAX_LINE_LENGTH, context)
         basal_contacts = self.parameterAsSource(parameters, self.INPUT_BASAL_CONTACTS, context)
         geology_source = self.parameterAsSource(parameters, self.INPUT_GEOLOGY, context)
         if geology_source is None:

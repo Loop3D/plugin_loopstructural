@@ -249,7 +249,7 @@ def extract_basal_contacts(
     geology,
     stratigraphic_order,
     faults=None,
-    ignore_units=[],
+    ignore_units=None,
     unit_name_field=None,
     all_contacts=False,
     updater=None,
@@ -320,7 +320,8 @@ def extract_basal_contacts(
             geology = geology.drop(columns=['UNITNAME'])
         geology = geology.rename(columns={unit_name_field: 'UNITNAME'})
     # Log parameters via DebugManager if provided
-    ignore_units += [None]
+    # a new list: do not change the list of the caller
+    ignore_units = list(ignore_units or []) + [None]
 
     # Units in the geology layer that are not in the stratigraphic column are
     # kept in the geology (so they still bound the other units and appear in
