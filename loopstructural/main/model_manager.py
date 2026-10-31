@@ -1033,19 +1033,19 @@ class GeologicalModelManager(Observable):
         if not settings.interpolator_nelements_auto:
             return int(settings.interpolator_nelements), False
         summary = self._data_summaries.get(name, DataSummary())
-        return suggest_nelements(summary, self._model_volume()), True
+        return suggest_nelements(summary, self._model_area()), True
 
-    def _model_volume(self) -> float:
-        """Return the volume of the model box, or 0 if the box is not set."""
+    def _model_area(self) -> float:
+        """Return the map (XY) area of the model box, or 0 if the box is not set."""
         bounding_box = getattr(self.model, 'bounding_box', None)
         try:
-            lengths = np.asarray(bounding_box.maximum, dtype=float) - np.asarray(
+            lengths = np.asarray(bounding_box.maximum, dtype=float)[:2] - np.asarray(
                 bounding_box.origin, dtype=float
-            )
-        except (AttributeError, TypeError, ValueError):
+            )[:2]
+        except (AttributeError, TypeError, ValueError, IndexError):
             return 0.0
-        volume = float(np.prod(lengths))
-        return volume if np.isfinite(volume) and volume > 0 else 0.0
+        area = float(np.prod(lengths))
+        return area if np.isfinite(area) and area > 0 else 0.0
 
     def nelements_overrides_to_dict(self) -> dict:
         """Return `nelements_overrides` in a form that `json.dump` can write."""
