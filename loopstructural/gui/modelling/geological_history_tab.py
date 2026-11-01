@@ -4,6 +4,8 @@ from loopstructural.gui.modelling.stratigraphic_column.stratigraphic_column impo
 
 class GeologialHistoryTab(BaseTab):
     def __init__(self, parent=None, data_manager=None):
+        # The scroll area resizes the column to fill a tall dock, so the unit
+        # list grows, and it scrolls in a dock that is shorter than the column
         super().__init__(parent, data_manager, scrollable=True)
         # Load the UI file for Tab 1
         stratigraphic_column_widget = StratColumnWidget(self, data_manager=data_manager)

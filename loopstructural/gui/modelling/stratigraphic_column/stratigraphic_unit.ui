@@ -37,9 +37,9 @@
     </widget>
    </item>
    <item row="0" column="1">
-    <widget class="QPushButton" name="buttonColour">
+    <widget class="QgsColorButton" name="buttonColour">
      <property name="toolTip">
-      <string>Click to change color</string>
+      <string>Click to change colour</string>
      </property>
      <property name="text">
       <string/>
@@ -62,14 +62,10 @@
     <widget class="QLineEdit" name="lineEditName"/>
    </item>
    <item row="0" column="3">
-    <widget class="QLabel" name="labelThickness">
-     <property name="text">
-      <string>Thickness:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="4">
     <widget class="QDoubleSpinBox" name="spinBoxThickness">
+     <property name="toolTip">
+      <string>Thickness of the unit</string>
+     </property>
      <property name="suffix">
       <string> m</string>
      </property>
@@ -84,18 +80,25 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="5">
-    <widget class="QPushButton" name="buttonDelete">
+   <item row="0" column="4">
+    <widget class="QToolButton" name="buttonDelete">
      <property name="toolTip">
-      <string>Delete this unit</string>
+      <string>Remove this unit from the column</string>
      </property>
      <property name="text">
-      <string>🗑️</string>
+      <string/>
      </property>
     </widget>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsColorButton</class>
+   <extends>QToolButton</extends>
+   <header>qgscolorbutton.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

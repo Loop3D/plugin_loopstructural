@@ -41,8 +41,12 @@ The **Source** setting in the basal contacts group selects where the basal conta
 ## Stratigraphic Column
 The stratigraphic column defines the order of the contacts and any unconformable relationships between them. The column is defined by a list of units - these units are ordered from oldest at the bottom to youngest at the top. Unconformities can be inserted between units to define an unconformable relationship. The thicknesses define the true thickness of each unit and are used to parameterise the interpolation. The unit names should match the names of the contacts in the basal contacts layer. Units without basal contacts can be included in the stratigraphic column but will not be constrained by any data.
 
-The stratigraphic column can be initialised from the basal contacts layer by clicking the "Initialise from Layer" button. This will create a column with the contacts in the order they are found in the layer. The column can then be edited to add unconformities or change the order of the units. To change the order of units simply drag the units in the list. To add an unconformity, click the "Add Unconformity" button and drag the unconformity the location in the column.
+The tab has these parts, from top to bottom:
 
+- **Geology layer**: the layer and the unit name field. The plugin shares this layer with the map2loop tools. Under the pickers, a summary shows how many unit names have no match in the layer, and which names.
+- **Buttons**: **+ Unit** and **+ Unconformity** add a row at the top of the column. The **Build column** menu adds units from the map: from the basal contacts, or from a layer field. The **More actions** menu has Reverse and Clear. Clear asks for confirmation.
+- **The column**: the labels "Youngest" and "Oldest" show the direction. Each unit row has a colour button, a name, a thickness and a remove button. Unconformity rows have a different background. To change the order of units, drag the grip handle of a row. When the column is empty, the list shows how to start.
+- **Style map layer**: choose **Style by** unit colour, stratigraphic order or thickness. For the order and the thickness, choose a colour ramp. **Apply** styles the geology layer.
 
 ![Stratigraphic Column](../static/stratigraphic_column_04.png)
 
