@@ -37,6 +37,8 @@ class PlgSettingsStructure:
     interpolator_cpw: float = 1.0
     interpolator_npw: float = 1.0
     separate_dock_widgets: bool = False
+    # map units; see `fault_topology_calc.fault_pair_direction`
+    fault_end_tolerance: float = 10.0
 
 
 class PlgOptionsManager:
