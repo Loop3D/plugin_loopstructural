@@ -115,4 +115,3 @@ class FaultFeatureDetailsPanel(BaseFeatureDetailsPanel):
 
         self.layout.addWidget(orientation_group)
         self.layout.addWidget(ellipsoid_group)
-        self.setLayout(self.layout)
