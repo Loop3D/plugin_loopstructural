@@ -57,6 +57,10 @@ class VisualisationWidget(QWidget):
             data_manager=self.data_manager,
         )
         sidebarSplitter.addWidget(self.featureList)
+        # the properties panel asks to build an isosurface again at a new value
+        self.objectPropertiesWidget.isovalueChangeRequested.connect(
+            self.featureList.change_isovalue
+        )
         splitter.addWidget(sidebarSplitter)
         splitter.addWidget(self.plotter)
         # Add properties panel but start it collapsed (size 0)
