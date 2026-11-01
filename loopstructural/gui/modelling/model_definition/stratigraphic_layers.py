@@ -3,9 +3,10 @@ import os
 from qgis.core import QgsMapLayerProxyModel, QgsWkbTypes
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QWidget
+from qgis.PyQt.QtWidgets import QComboBox, QWidget
 
 from ...compatibility import configure_layer_combo
+from ....main import layer_roles
 from ....main.helpers import ColumnMatcher, get_layer_names
 
 
@@ -24,6 +25,7 @@ class StratigraphicLayersWidget(QWidget):
         )
         # Structural data can only be points
         configure_layer_combo(self.structuralDataLayer, QgsMapLayerProxyModel.Filter.PointLayer)
+        self._add_contacts_source_combo()
         self.basalContactsLayer.layerChanged.connect(self.onBasalContactsChanged)
         self.structuralDataLayer.layerChanged.connect(self.onStructuralDataLayerChanged)
         self.unitNameField.fieldChanged.connect(self.onUnitFieldChanged)
@@ -55,6 +57,39 @@ class StratigraphicLayersWidget(QWidget):
         )
         self._guess_layers_and_fields()
         self._restore_selection()
+
+    def _add_contacts_source_combo(self):
+        """Add the choice of where the basal contacts come from."""
+        self.contactsSourceComboBox = QComboBox(self)
+        self.contactsSourceComboBox.addItem(
+            "Calculate from geology polygons", layer_roles.CONTACTS_FROM_GEOLOGY
+        )
+        self.contactsSourceComboBox.addItem("Use a contacts layer", layer_roles.CONTACTS_FROM_LAYER)
+        self.contactsSourceComboBox.setToolTip(
+            "Calculate from geology polygons: the plugin extracts the basal contacts from "
+            "the geology layer and the stratigraphic column. The layer that it adds to the "
+            "project is for display.\n"
+            "Use a contacts layer: your own layer is an input. The plugin does not change it."
+        )
+        self.formLayout_basalContacts.insertRow(0, "Source", self.contactsSourceComboBox)
+        self._show_contacts_source(self.data_manager.layer_roles.contacts_source)
+        self.contactsSourceComboBox.currentIndexChanged.connect(self._on_contacts_source_selected)
+        self.data_manager.layer_roles.attach(self._on_layer_role_changed)
+
+    def _show_contacts_source(self, source):
+        index = self.contactsSourceComboBox.findData(source)
+        if index >= 0 and index != self.contactsSourceComboBox.currentIndex():
+            self.contactsSourceComboBox.blockSignals(True)
+            self.contactsSourceComboBox.setCurrentIndex(index)
+            self.contactsSourceComboBox.blockSignals(False)
+
+    def _on_contacts_source_selected(self, index):
+        self.data_manager.layer_roles.contacts_source = self.contactsSourceComboBox.itemData(index)
+
+    def _on_layer_role_changed(self, role, value):
+        """Show a contacts source that was set by a loaded state."""
+        if role == 'contacts_source':
+            self._show_contacts_source(value)
 
     def enableBasalContactsZCheckBox(self, enable):
         self.useBasalContactsZCoordinatesCheckBox.setEnabled(enable)

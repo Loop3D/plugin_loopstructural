@@ -6,8 +6,10 @@ from qgis.core import QgsMapLayerProxyModel
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
+from ...main import derived_data, layer_roles
 from ...main.m2l_api import paint_stratigraphic_order
 from ..compatibility import configure_layer_combo
+from .layer_defaults import adopt_geology_role, apply_layer_role_defaults
 
 
 class PaintStratigraphicOrderWidget(QWidget):
@@ -69,6 +71,12 @@ class PaintStratigraphicOrderWidget(QWidget):
 
         # Set up field combo boxes
         self._setup_field_combo_boxes()
+        # The geology layer of the shared role is the default of the tool
+        apply_layer_role_defaults(
+            self.data_manager,
+            {layer_roles.GEOLOGY: self.geologyLayerComboBox},
+            unit_field_combo=self.unitNameFieldComboBox,
+        )
 
     def set_debug_manager(self, debug_manager):
         """Attach a debug manager instance."""
@@ -159,6 +167,15 @@ class PaintStratigraphicOrderWidget(QWidget):
             paint_stratigraphic_order(
                 geology_layer, stratigraphic_order, unit_name_field, debug_manager=self._debug
             )
+            if self.data_manager:
+                adopt_geology_role(
+                    self.data_manager, geology=geology_layer, unit_field=unit_name_field
+                )
+                run_inputs = self.data_manager.styled_fields_inputs()
+            # The layer that has the field at the end: the geology layer, or
+            # its styled copy
+            styled_layer = geology_layer
+            ramp_name = None
 
             # If requested, duplicate layer and apply style using selected colour ramp
             try:
@@ -225,6 +242,7 @@ class PaintStratigraphicOrderWidget(QWidget):
                     mem_dp.addFeatures(new_feats)
                     mem_layer.updateExtents()
                     QgsProject.instance().addMapLayer(mem_layer)
+                    styled_layer = mem_layer
                 except Exception as e:
                     QMessageBox.warning(self, 'Duplicate Layer', f'Failed to create copy: {e}')
                     return False
@@ -328,6 +346,18 @@ class PaintStratigraphicOrderWidget(QWidget):
                     QMessageBox.warning(
                         self, 'Duplicate Layer', f'Failed to apply graduated styling: {e}'
                     )
+
+            if self.data_manager:
+                # Update writes the field again to the layer that is recorded
+                self.data_manager.derived.record(
+                    derived_data.STYLED_FIELDS,
+                    inputs=run_inputs,
+                    detail={
+                        'layer': styled_layer.name(),
+                        'field': unit_name_field,
+                        'ramp': ramp_name,
+                    },
+                )
 
         except Exception as e:
             QMessageBox.warning(self, 'Paint Stratigraphic Order', f'Operation failed: {e}')

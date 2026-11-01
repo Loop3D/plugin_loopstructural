@@ -82,6 +82,7 @@ class LoopstructuralPlugin:
         )
         self.model_manager = GeologicalModelManager(debug_manager=self.debug_manager)
         self.data_manager.set_model_manager(self.model_manager)
+        self.data_manager.set_debug_manager(self.debug_manager)
 
     def injectLogHandler(self):
         """Install LoopStructural logging handler that forwards logs to the plugin logger.

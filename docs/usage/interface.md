@@ -29,6 +29,15 @@ Two layers can be used to constrain the stratigraphy of the model:
 
 ![Stratigraphic Layer](../static/stratigraphic_layer.png)
 
+### Shared layers
+You select each layer one time. The plugin keeps the geology layer, the unit name field, the fault traces, the structure layer, the basal contacts and the DEM as shared layers. The map2loop tools (Basal Contacts, Thickness Calculator, Sorter, Sampler and Paint Stratigraphic Order) show these layers as their default values. You can select another layer in a tool for one run.
+
+The geology layer is the layer that you select in the Stratigraphic Column tab. If you select a layer in one of the tools and no geology layer is set, the plugin uses that layer for the other tools. The plugin saves the shared layers with the application state.
+
+The **Source** setting in the basal contacts group selects where the basal contacts come from:
+- **Calculate from geology polygons** (default). The Basal Contacts tool extracts the contacts from the geology layer and the stratigraphic column. When it finishes, the new layer becomes the basal contacts layer of the model.
+- **Use a contacts layer**. Your own layer is an input. The plugin does not change it, and the Thickness Calculator uses it.
+
 ## Stratigraphic Column
 The stratigraphic column defines the order of the contacts and any unconformable relationships between them. The column is defined by a list of units - these units are ordered from oldest at the bottom to youngest at the top. Unconformities can be inserted between units to define an unconformable relationship. The thicknesses define the true thickness of each unit and are used to parameterise the interpolation. The unit names should match the names of the contacts in the basal contacts layer. Units without basal contacts can be included in the stratigraphic column but will not be constrained by any data.
 
@@ -36,6 +45,11 @@ The stratigraphic column can be initialised from the basal contacts layer by cli
 
 
 ![Stratigraphic Column](../static/stratigraphic_column_04.png)
+
+### Out-of-date results
+The basal contacts, the calculated thicknesses and the `strat_order` field on a map layer depend on the stratigraphic column and on the layers and settings of the tools that made them. When one of these inputs changes, the Stratigraphic Column tab shows a message, for example "Basal contacts are out of date (the order of the units changed)", with an **Update** button. The button runs the tool again with the settings of the project. The plugin does not calculate again after each change, so you can move many units first. If you move a unit and then move it back, the results stay current.
+
+The plugin records if the thickness of a unit was typed or calculated. The Thickness Calculator does not replace a thickness that you typed. To use a calculated value, set the thickness of the unit to 0 first.
 
 
 ## Fault topology relationships

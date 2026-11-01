@@ -3,6 +3,8 @@ from qgis.core import QgsFeature, QgsField, QgsFields, QgsVectorLayer
 from qgis.testing import start_app
 
 from loopstructural.gui.compatibility import QVariantCompat
+from loopstructural.main.derived_data import DerivedData
+from loopstructural.main.layer_roles import LayerRoles
 
 
 # Monkeypatch uic.loadUi to avoid needing the .ui file and to provide minimal widgets
@@ -104,6 +106,16 @@ class DummyDataManager:
     def __init__(self, names):
         self._names = names
         self.stratigraphic_order = None
+        self.layer_roles = LayerRoles()
+        self.derived = DerivedData()
+
+    def adopt_layer_roles(self, **roles):
+        for role, value in roles.items():
+            if value is not None and self.layer_roles.get(role) is None:
+                self.layer_roles.set(role, value)
+
+    def styled_fields_inputs(self):
+        return {'unit_order': self._names}
 
     def get_stratigraphic_unit_names(self):
         return self._names
@@ -174,3 +186,28 @@ def test_widget_paint_stratigraphic_order(tmp_path):
     vals = [f['strat_order'] for f in layer.getFeatures()]
     # at least one value should be not None (matching provided order)
     assert any(v is not None for v in vals)
+
+
+def test_a_duplicated_layer_is_the_recorded_styled_layer():
+    start_app()
+    from qgis.core import QgsProject
+
+    from loopstructural.gui.map2loop_tools.paint_stratigraphic_order_widget import (
+        PaintStratigraphicOrderWidget,
+    )
+    from loopstructural.main.derived_data import STYLED_FIELDS
+
+    data_manager = DummyDataManager(['Unit_A', 'Unit_B', 'Unit_C'])
+    widget = PaintStratigraphicOrderWidget(
+        parent=None, data_manager=data_manager, debug_manager=DummyDebug()
+    )
+    layer = make_geology_layer()
+    widget.geologyLayerComboBox.setLayer(layer)
+    widget.unitNameFieldComboBox.setField('UNITNAME')
+    widget.duplicateLayerCheckBox.setChecked(True)
+
+    try:
+        assert widget._run_painter() is True
+        assert data_manager.derived.detail(STYLED_FIELDS)['layer'] == 'geology_strat'
+    finally:
+        QgsProject.instance().removeAllMapLayers()
