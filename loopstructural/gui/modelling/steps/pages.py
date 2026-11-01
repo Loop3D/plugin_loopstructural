@@ -32,7 +32,7 @@ from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MOD
 
 from . import checks
 from .export_panel import ExportPanel
-from .section_stack import SectionStack, page_scroll_area
+from .section_stack import SectionStack
 
 
 class StepPage(QWidget):
@@ -99,7 +99,7 @@ class DataStep(StepPage):
         mode_row.addWidget(self.mode_combo, 1)
         layout.addLayout(mode_row)
         self.tab = ModelDefinitionTab(self, data_manager=self.data_manager)
-        layout.addWidget(page_scroll_area(self.tab, self), 1)
+        layout.addWidget(self.tab, 1)
 
     def set_workflow_mode(self, mode):
         index = self.mode_combo.findData(mode)
@@ -138,7 +138,7 @@ class StratigraphyStep(StepPage):
         ).setToolTip("Show the order of the column on the geology polygons.")
 
         # The source layers are a section of the column stack, so the page has
-        # at most two open sections and one scroll area.
+        # at most two open sections. The dock puts each page in a scroll area.
         self.stratigraphy_layers = StratigraphicLayersWidget(self, self.data_manager)
         sections = self.tab.stratigraphic_column_widget.sections
         sections.add_section(
@@ -164,7 +164,7 @@ class StratigraphyStep(StepPage):
         row.addStretch(1)
         row.addWidget(derive)
         layout.addLayout(row)
-        layout.addWidget(page_scroll_area(self.tab, self), 1)
+        layout.addWidget(self.tab, 1)
 
         # With contacts from the geology polygons, the "Stratigraphic layers"
         # section has the geology picker, so do not show a second one
@@ -235,7 +235,7 @@ class FaultsStep(StepPage):
         layout.addLayout(row)
 
         self.adjacency = FaultAdjacencyTab(self, data_manager=self.data_manager)
-        layout.addWidget(page_scroll_area(self.adjacency, self), 1)
+        layout.addWidget(self.adjacency, 1)
 
     def _fault_layer_summary(self):
         if self.data_manager is None:
