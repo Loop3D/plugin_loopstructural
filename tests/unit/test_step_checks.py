@@ -110,7 +110,10 @@ class TestDataStep:
 class TestStratigraphyStep:
     @pytest.fixture(autouse=True)
     def map_layers(self, dm, request):
-        if request.node.name not in ('test_an_empty_column_is_not_started', 'test_missing_map_layers_are_a_todo'):
+        if request.node.name not in (
+            'test_an_empty_column_is_not_started',
+            'test_missing_map_layers_are_a_todo',
+        ):
             dm.layer_roles.values = {
                 layer_roles.GEOLOGY: object(),
                 layer_roles.STRUCTURE: object(),
@@ -241,12 +244,13 @@ class TestModelStep:
         assert checks.check_stratigraphy(dm).status == Status.PROBLEM
         assert checks.check_model(dm, FakeModelManager('solved')).status == Status.DONE
 
-    def test_changed_layers_are_a_problem(self, dm):
+    def test_changed_layers_are_a_todo(self, dm):
+        # "Update data and solve" fixes this with one click, so it is not a problem
         dm.bounding_box_set = True
         dm.changed_layers = ['geology']
         check = checks.check_model(dm, FakeModelManager('solved'))
-        assert check.status == Status.PROBLEM
-        assert 'geology' in check.problems[0]
+        assert not check.problems
+        assert 'geology' in check.todo[0]
 
 
 class TestViewStep:

@@ -129,8 +129,8 @@ def test_export_block_model_csv(tmp_path):
     )
     lines = path.read_text(encoding='utf-8').splitlines()
     assert lines[0] == 'x,y,z,stratigraphy_id,unit'
-    assert lines[1].endswith('0,"lower"')
-    assert lines[2].endswith('1,"upper"')
+    assert lines[1].endswith('0,lower')
+    assert lines[2].endswith('1,upper')
 
 
 def test_export_cross_section_plane_and_line(tmp_path):
@@ -153,3 +153,21 @@ def test_export_cross_section_needs_input(tmp_path):
         model_export.export_cross_section(
             manager, tmp_path / 'x.vtk', origin=(0, 0, 0), normal=(0, 0, 0), size=1
         )
+
+
+def test_csv_escapes_a_quote_in_a_unit_name(tmp_path):
+    import csv
+
+    path = tmp_path / 'quote.csv'
+    model_export._write_csv(path, [(0, 0, 0)], [3], ['Unit "A"'])
+    with open(path, newline='', encoding='utf-8') as handle:
+        rows = list(csv.reader(handle))
+    assert rows[1][3:] == ['3', 'Unit "A"']
+
+
+def test_nan_id_has_no_unit():
+    import numpy as np
+
+    manager = FakeManager(FakeModel())
+    names = model_export.unit_names_for_ids(manager, np.array([0.0, np.nan]))
+    assert names[1] == ''

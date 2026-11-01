@@ -146,3 +146,9 @@ class TestSaving:
         assert spec['major_axis'] == 1000.0
         assert spec['minor_axis'] == 500.0
         assert parametric_fault.problems({**spec, 'name': 'F'}) == []
+
+
+@pytest.mark.parametrize('saved', [None, {}, {'name': 'F'}, {'centre': [0, 0, 0]}])
+def test_spec_from_dict_rejects_a_damaged_spec(saved):
+    with pytest.raises(ValueError):
+        parametric_fault.spec_from_dict(saved)
