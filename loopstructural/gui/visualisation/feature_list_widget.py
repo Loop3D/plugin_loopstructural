@@ -4,14 +4,7 @@ from typing import Optional, Union
 import numpy as np
 import pyvista as pv
 from LoopStructural.datatypes import VectorPoints
-from qgis.core import (
-    QgsApplication,
-    QgsCoordinateTransform,
-    QgsGeometry,
-    QgsMapLayerProxyModel,
-    QgsProject,
-    QgsWkbTypes,
-)
+from qgis.core import QgsApplication, QgsMapLayerProxyModel
 from qgis.gui import QgsMapLayerComboBox
 from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtGui import QIcon
@@ -43,6 +36,7 @@ from .cross_section_utils import (
     build_line_extrusion_mesh,
     build_plane_mesh,
 )
+from .line_layer import line_xy_from_layer
 from .mesh_scalar_utils import stratigraphic_ids_to_rgb
 
 logger = logging.getLogger(__name__)
@@ -963,41 +957,13 @@ class FeatureListWidget(QWidget):
         selected feature (or first feature, if nothing is selected),
         reprojected into the model's CRS if one is available.
         """
-        features = (
-            list(layer.getSelectedFeatures())
-            if layer.selectedFeatureCount() > 0
-            else list(layer.getFeatures())
-        )
-        if not features:
-            return None
-        geom = features[0].geometry()
-        if geom is None or geom.isEmpty():
-            return None
-
         target_crs = None
         if self.data_manager is not None:
             try:
                 target_crs = self.data_manager.get_model_crs()
             except Exception:
                 target_crs = None
-        source_crs = layer.sourceCrs()
-        if (
-            target_crs is not None
-            and target_crs.isValid()
-            and source_crs.isValid()
-            and source_crs != target_crs
-        ):
-            geom = QgsGeometry(geom)
-            geom.transform(QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance()))
-
-        if QgsWkbTypes.isMultiType(geom.wkbType()):
-            parts = geom.asMultiPolyline()
-            polyline = parts[0] if parts else []
-        else:
-            polyline = geom.asPolyline()
-        if len(polyline) < 2:
-            return None
-        return np.array([[pt.x(), pt.y()] for pt in polyline])
+        return line_xy_from_layer(layer, target_crs)
 
     def add_line_cross_section(self):
         """Extrude the selected QGIS line layer vertically across the model's
