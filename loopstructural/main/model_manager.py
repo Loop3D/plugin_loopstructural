@@ -1164,9 +1164,10 @@ class GeologicalModelManager(Observable):
         """Return the map (XY) area of the model box, or 0 if the box is not set."""
         bounding_box = getattr(self.model, 'bounding_box', None)
         try:
-            lengths = np.asarray(bounding_box.maximum, dtype=float)[:2] - np.asarray(
-                bounding_box.origin, dtype=float
-            )[:2]
+            lengths = (
+                np.asarray(bounding_box.maximum, dtype=float)[:2]
+                - np.asarray(bounding_box.origin, dtype=float)[:2]
+            )
         except (AttributeError, TypeError, ValueError, IndexError):
             return 0.0
         area = float(np.prod(lengths))
@@ -1431,9 +1432,7 @@ class GeologicalModelManager(Observable):
     def detached_to_dict(self) -> dict:
         """Return `detached` in a form that `json.dump` can write."""
         return {
-            name: {
-                'columns': {str(c): [_json_value(v) for v in data[c]] for c in data.columns}
-            }
+            name: {'columns': {str(c): [_json_value(v) for v in data[c]] for c in data.columns}}
             for name, data in self.detached.items()
         }
 
@@ -1692,7 +1691,9 @@ class GeologicalModelManager(Observable):
 
     def parametric_faults_to_dict(self) -> dict:
         """Return `parametric_faults` in a form that `json.dump` can write."""
-        return {name: parametric_fault.clean_spec(spec) for name, spec in self.parametric_faults.items()}
+        return {
+            name: parametric_fault.clean_spec(spec) for name, spec in self.parametric_faults.items()
+        }
 
     def parametric_faults_from_dict(self, faults: dict):
         """Replace `parametric_faults` with the specs from `parametric_faults_to_dict`."""

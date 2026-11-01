@@ -110,7 +110,10 @@ class TestDataStep:
 class TestStratigraphyStep:
     @pytest.fixture(autouse=True)
     def map_layers(self, dm, request):
-        if request.node.name not in ('test_an_empty_column_is_not_started', 'test_missing_map_layers_are_a_todo'):
+        if request.node.name not in (
+            'test_an_empty_column_is_not_started',
+            'test_missing_map_layers_are_a_todo',
+        ):
             dm.layer_roles.values = {
                 layer_roles.GEOLOGY: object(),
                 layer_roles.STRUCTURE: object(),

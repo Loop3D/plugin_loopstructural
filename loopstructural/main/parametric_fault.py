@@ -174,8 +174,15 @@ def clean_spec(spec: dict) -> dict:
     """Return the spec as plain numbers and text, safe for JSON."""
     result = {key: spec[key] for key in FIELDS if key in spec}
     result['name'] = str(result['name']).strip()
-    for key in ('strike', 'dip', 'pitch', 'displacement', 'major_axis', 'intermediate_axis',
-                'minor_axis'):
+    for key in (
+        'strike',
+        'dip',
+        'pitch',
+        'displacement',
+        'major_axis',
+        'intermediate_axis',
+        'minor_axis',
+    ):
         if key in result:
             result[key] = float(result[key])
     result['centre'] = [float(v) for v in result['centre']]
