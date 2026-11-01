@@ -55,6 +55,34 @@ class TestPrimaryAction:
         assert action.tooltip == "Set the bounding box."
 
 
+class TestPrimaryActionWorkflow:
+    def test_constraints_name_the_workflow(self):
+        action = build_plan.choose_primary_action(
+            'empty', workflow_mode=WORKFLOW_MODE_CONSTRAINTS
+        )
+        assert action.text == "Build model from constraints"
+        assert 'constraints' in action.tooltip
+
+    def test_map_keeps_the_default_text(self):
+        action = build_plan.choose_primary_action('empty', workflow_mode=WORKFLOW_MODE_MAP)
+        assert action.text == "Build model"
+
+    def test_constraints_ignore_out_of_date_derived_data(self):
+        action = build_plan.choose_primary_action(
+            'solved',
+            derived_out_of_date=[derived_data.BASAL_CONTACTS],
+            workflow_mode=WORKFLOW_MODE_CONSTRAINTS,
+        )
+        assert action.action == build_plan.ACTION_SOLVE
+
+    def test_constraints_name_the_workflow_when_blocked(self):
+        action = build_plan.choose_primary_action(
+            'empty', blocked_reason="Set the bounding box.", workflow_mode=WORKFLOW_MODE_CONSTRAINTS
+        )
+        assert not action.enabled
+        assert action.text == "Build model from constraints"
+
+
 class TestProblems:
     def test_problems_of_all_steps_in_the_order_of_the_steps(self):
         problems = build_plan.collect_problems(
