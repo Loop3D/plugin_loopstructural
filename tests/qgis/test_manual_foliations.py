@@ -13,6 +13,7 @@ from LoopStructural.datatypes import BoundingBox
 from shapely.geometry import Point
 
 from loopstructural.main.model_manager import GeologicalModelManager
+from loopstructural.main import solver_choice
 from loopstructural.toolbelt.preferences import PlgSettingsStructure
 
 
@@ -169,12 +170,23 @@ class TestConstraintTypes:
         data, _ = self._rows(manager, layer)
         assert (data['Z'] == 12.5).all()
 
-    def test_a_pairwise_inequality_needs_the_admm_solver(self, manager):
+    def test_a_pairwise_inequality_needs_the_admm_solver(self, manager, monkeypatch):
+        # the default solver; the native solver also solves inequalities
+        monkeypatch.setattr(solver_choice, 'native_available', lambda: False)
         df = _points(order=lambda p: 1 if p.x < 50 else 2)
         layer = {'type': 'Pairwise Inequality', 'pair_field': 'order', 'df': df}
         data, kwargs = self._rows(manager, layer)
         assert kwargs == {'solver': 'admm'}
         assert 'pair_id' in data
+
+    def test_with_the_native_solver_a_pairwise_inequality_needs_no_admm(
+        self, manager, monkeypatch
+    ):
+        monkeypatch.setattr(solver_choice, 'use_native', lambda setting: True)
+        df = _points(order=lambda p: 1 if p.x < 50 else 2)
+        layer = {'type': 'Pairwise Inequality', 'pair_field': 'order', 'df': df}
+        _data, kwargs = self._rows(manager, layer)
+        assert 'solver' not in kwargs
 
     def test_a_feature_from_value_and_normal_layers_solves_without_a_column(self, manager):
         values = _value_layer()

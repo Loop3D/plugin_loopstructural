@@ -29,7 +29,7 @@ from LoopStructural.utils.observer import Observable
 from LoopStructural import GeologicalModel
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
-from ..main import constraints, parametric_fault
+from ..main import constraints, parametric_fault, solver_choice
 from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
 from ..main.interpolation_size import DataSummary, suggest_nelements, summarise_data
@@ -248,6 +248,14 @@ class GeologicalModelManager(Observable):
         self.nelements_used: Dict[str, tuple] = {}
         # feature name -> DataSummary of the data of the last build
         self._data_summaries: Dict[str, DataSummary] = {}
+        # features that the native solver could not solve; they use the
+        # default solver (see `_solve_feature`)
+        self._native_failed: Set[str] = set()
+        # feature name -> indexes of the builders (coordinates) that use the
+        # default solver because the native solver could not solve them
+        self._native_fallbacks: Dict[str, Set[int]] = {}
+        # features with constraints that need an inequality solver
+        self._needs_inequalities: Set[str] = set()
 
     @property
     def uses_map_data(self) -> bool:
@@ -325,6 +333,9 @@ class GeologicalModelManager(Observable):
         self.nelements_overrides = {}
         self.nelements_used = {}
         self._data_summaries = {}
+        self._native_failed = set()
+        self._native_fallbacks = {}
+        self._needs_inequalities = set()
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
@@ -1015,12 +1026,117 @@ class GeologicalModelManager(Observable):
         else:
             nelements, automatic = self.default_nelements(name)
         self.nelements_used[name] = (nelements, automatic)
-        return {
+        arguments = {
             'nelements': nelements,
             'npw': settings.interpolator_npw,
             'cpw': settings.interpolator_cpw,
             'regularisation': settings.interpolator_regularisation,
         }
+        if self._use_native(name):
+            arguments['solver'] = solver_choice.NATIVE
+        return arguments
+
+    def _use_native(self, name) -> bool:
+        """Return True if the feature `name` uses the native solver.
+
+        Not for a feature that the native solver could not solve before, see
+        `_solve_feature`.
+        """
+        if name in self._native_failed:
+            return False
+        settings = PlgOptionsManager.get_plg_settings()
+        return solver_choice.use_native(settings.interpolator_solver)
+
+    def _inequality_solver(self, name, solver):
+        """Return the solver to pass for a constraint type that needs `solver` (or None).
+
+        The native solver also solves the inequality constraints, so with it
+        `interpolator_arguments` gives the solver and this returns None.
+        """
+        if not solver:
+            return None
+        self._needs_inequalities.add(name)
+        return None if self._use_native(name) else solver
+
+    def _solve_feature(self, feature, rebuild=True):
+        """Build `feature`. A coordinate that the native solver cannot solve is
+        built with the default solver, and uses it from now on.
+
+        Each coordinate of a structural frame has its own builder. For a fault,
+        the coordinates 1 and 2 have orthogonal rows that the native core cannot
+        read, but the coordinate 0 can use it. If the check of loop-interpolation
+        finds no coordinate, the full feature uses the default solver.
+
+        A native solve that does not converge is also solved again with the
+        default solver: loop-interpolation then keeps the old field, which can
+        have the size of an old grid.
+
+        `rebuild` builds the feature again; otherwise only if it is out of date.
+        """
+        name = feature.name
+        builders = solver_choice.builders(feature)
+        fallback = solver_choice.fallback_solver(name in self._needs_inequalities)
+        # the coordinates that failed in an earlier build
+        for index in self._native_fallbacks.get(name, ()):
+            if index < len(builders):
+                self._set_fallback(builders[index], fallback)
+        self._set_native_limits(builders)
+        build = feature.builder.update if rebuild else feature.builder.up_to_date
+        # one coordinate (or more) changes to the fallback at each attempt
+        for _attempt in range(len(builders) + 1):
+            try:
+                build()
+                break
+            except solver_choice.NATIVE_ERRORS as error:
+                if not solver_choice.uses_native(feature):
+                    raise
+                failed = solver_choice.unsupported_builders(builders)
+                if not failed:
+                    self._native_failed.add(name)
+                    failed = list(range(len(builders)))
+                self._use_fallback(name, builders, failed, fallback, f"not supported ({error})")
+                # the coordinates that are built already stay as they are
+                build = feature.builder.up_to_date
+        else:
+            build()
+        unconverged = solver_choice.unconverged_builders(builders)
+        if unconverged:
+            self._use_fallback(name, builders, unconverged, fallback, "did not converge")
+            feature.builder.up_to_date()
+
+    @staticmethod
+    def _set_fallback(builder, fallback):
+        # the native iteration limit is not for the other solvers
+        builder.update_build_arguments({'solver': fallback, 'solver_kwargs': {}})
+
+    @staticmethod
+    def _set_native_limits(builders):
+        """Give each native builder the iteration limit of its grid.
+
+        Only a change of the limit marks the builder out of date.
+        """
+        for builder in builders:
+            if (builder.build_arguments or {}).get('solver') != solver_choice.NATIVE:
+                continue
+            limits = solver_choice.native_solver_kwargs(builder)
+            if limits and builder.build_arguments.get('solver_kwargs') != limits:
+                builder.update_build_arguments({'solver_kwargs': limits})
+
+    def _use_fallback(self, name, builders, indexes, fallback, reason):
+        """Solve the builders `indexes` of the feature `name` with `fallback` from now on."""
+        self._native_fallbacks.setdefault(name, set()).update(indexes)
+        if self._debug_manager is not None:
+            which = (
+                f"the coordinates {sorted(indexes)} of '{name}'"
+                if len(builders) > 1
+                else f"'{name}'"
+            )
+            self._debug_manager.log(
+                f"Native solver, {which}: {reason}. Solved with '{fallback}'.",
+                log_level=1,
+            )
+        for index in indexes:
+            self._set_fallback(builders[index], fallback)
 
     def default_nelements(self, name) -> tuple:
         """Return (number of elements, True if automatic) for the feature
@@ -1238,7 +1354,7 @@ class GeologicalModelManager(Observable):
             return {}
         kwargs = {}
         for layer_data in spec['data'].values():
-            solver = constraints.solver_for(layer_data.get('type'))
+            solver = self._inequality_solver(name, constraints.solver_for(layer_data.get('type')))
             if solver:
                 kwargs['solver'] = solver
         return kwargs
@@ -1941,7 +2057,7 @@ class GeologicalModelManager(Observable):
             raise ValueError(f"Feature '{feature_name}' not found in the model.")
         # Allow UI to react to a feature update
         self._emit('model_update_started')
-        feature.builder.update()
+        self._solve_feature(feature)
         # Notify observers and include feature name for interested listeners
         self._emit('feature_updated', feature_name)
         self._emit('model_update_finished')
@@ -2003,7 +2119,7 @@ class GeologicalModelManager(Observable):
                     feature = self.model.get_feature_by_name(feature_name)
                     if feature is not None:
                         self._report_progress(f"Solving '{feature_name}'")
-                        feature.builder.update()
+                        self._solve_feature(feature)
             finally:
                 self._progress_callback = None
         else:
@@ -2020,7 +2136,7 @@ class GeologicalModelManager(Observable):
                 for f in self.model.features:
                     if not f.name.startswith('__'):
                         self._report_progress(f"Solving '{f.name}'")
-                    f.builder.up_to_date()
+                    self._solve_feature(f, rebuild=False)
             finally:
                 self._progress_callback = None
         if dbg is not None:
@@ -2300,7 +2416,7 @@ class GeologicalModelManager(Observable):
                     dfs.append(constraints.add_weight(rows, df, layer_data))
                 else:
                     dfs.append(constraints.constraint_rows(df, layer_data, name))
-                solver = constraints.solver_for(layer_type)
+                solver = self._inequality_solver(name, constraints.solver_for(layer_type))
                 if solver:
                     kwargs['solver'] = solver
             except Exception as e:
