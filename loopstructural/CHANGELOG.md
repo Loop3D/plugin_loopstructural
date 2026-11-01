@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.7.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.1...v0.7.0) (2026-11-01)
+
+
+### Features
+
+* build a model with only faults (6.5) ([#143](https://github.com/Loop3D/plugin_loopstructural/issues/143)) ([3c482aa](https://github.com/Loop3D/plugin_loopstructural/commit/3c482aa798b2071b0ec92973cc47f2aef2839e85))
+* choose the number of elements from the data (phase 6.4) ([#141](https://github.com/Loop3D/plugin_loopstructural/issues/141)) ([1d602dd](https://github.com/Loop3D/plugin_loopstructural/commit/1d602dd7b103106e506e70373edb131fb6cebb05))
+* export from the view step (usability plan, phase 5) ([#136](https://github.com/Loop3D/plugin_loopstructural/issues/136)) ([3cfc592](https://github.com/Loop3D/plugin_loopstructural/commit/3cfc592054aef24596e7380c21f22b92762d1ac9))
+* fault topology as a button, with the pair direction from geometry ([#144](https://github.com/Loop3D/plugin_loopstructural/issues/144)) ([036ce18](https://github.com/Loop3D/plugin_loopstructural/commit/036ce180ae73414df187f1c7a963108621396cf8))
+* limit the vertical stack of widgets (phase 6.3) ([#140](https://github.com/Loop3D/plugin_loopstructural/issues/140)) ([44aaab3](https://github.com/Loop3D/plugin_loopstructural/commit/44aaab3f758fa99d8182158735e49b47e2f045b9))
+* model step and direct interpolation (usability plan, phase 4) ([#135](https://github.com/Loop3D/plugin_loopstructural/issues/135)) ([997f022](https://github.com/Loop3D/plugin_loopstructural/commit/997f022b73f256f1699ab0b4fa46e9740729ca2b))
+* move the stratigraphic layers to step 2 (6.2) ([#138](https://github.com/Loop3D/plugin_loopstructural/issues/138)) ([16328cf](https://github.com/Loop3D/plugin_loopstructural/commit/16328cf5f4bf51a194ab271b30ea611362648aa8))
+* object registry and isosurfaces in the 3D view (6.8) ([#145](https://github.com/Loop3D/plugin_loopstructural/issues/145)) ([eb2e059](https://github.com/Loop3D/plugin_loopstructural/commit/eb2e059285b56a1a8af36607e735fc08435ae0c2))
+* phase 1 shared layer roles and derived-data records ([#132](https://github.com/Loop3D/plugin_loopstructural/issues/132)) ([d65c479](https://github.com/Loop3D/plugin_loopstructural/commit/d65c4797d9d25b2d76401455db999e64813d59ed))
+* phase 2 stratigraphic column changes ([#133](https://github.com/Loop3D/plugin_loopstructural/issues/133)) ([bc6c320](https://github.com/Loop3D/plugin_loopstructural/commit/bc6c320233983d1d51d56eea2455e95ac13def01))
+* separate the map and constraints workflows (phase 6.1) ([#137](https://github.com/Loop3D/plugin_loopstructural/issues/137)) ([81a8dbb](https://github.com/Loop3D/plugin_loopstructural/commit/81a8dbbabefb268c7f91d5f36c988204335ffa04))
+* step-based dock (usability plan, phase 3) ([#134](https://github.com/Loop3D/plugin_loopstructural/issues/134)) ([4308354](https://github.com/Loop3D/plugin_loopstructural/commit/43083549f562a47a1c9293ce6fd5969193342117))
+* **ui:** highlight the stratigraphic unit on map when clicked in column ([#129](https://github.com/Loop3D/plugin_loopstructural/issues/129)) ([00d8ec4](https://github.com/Loop3D/plugin_loopstructural/commit/00d8ec4ad21046c910bb351501a80da40558f700))
+* use the native solver of LoopStructural when it is installed ([#148](https://github.com/Loop3D/plugin_loopstructural/issues/148)) ([a74e867](https://github.com/Loop3D/plugin_loopstructural/commit/a74e867deb7be396f89b6d546f4a249fa295ee4d))
+
+
+### Bug Fixes
+
+* address review findings on the derived refresh, native solver and export ([#153](https://github.com/Loop3D/plugin_loopstructural/issues/153)) ([6d88cd8](https://github.com/Loop3D/plugin_loopstructural/commit/6d88cd8efa6ce73ffef6c2e9d0f5a594e261a076))
+* keep the dock short with a scroll area for each step ([#142](https://github.com/Loop3D/plugin_loopstructural/issues/142)) ([6cbcbb4](https://github.com/Loop3D/plugin_loopstructural/commit/6cbcbb442892f34df7ad5e96931f1475b36e20b8))
+* phase 0 quick fixes for the usability plan ([#131](https://github.com/Loop3D/plugin_loopstructural/issues/131)) ([d3718e2](https://github.com/Loop3D/plugin_loopstructural/commit/d3718e2d6946b4aba0de5e2d50e401893413d051))
+
 ## [0.6.1](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.0...v0.6.1) (2026-10-04)
 
 
