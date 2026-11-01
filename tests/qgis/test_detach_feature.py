@@ -15,6 +15,7 @@ from LoopStructural import StratigraphicColumn
 
 from loopstructural.main.data_manager import ModellingDataManager
 from loopstructural.main.model_manager import GeologicalModelManager
+from loopstructural.main import solver_choice
 
 
 def _contact(x):
@@ -138,7 +139,9 @@ class TestAddedRows:
         assert sorted(manager.detached[name]['X']) == [1.0, 2.0]
         assert _built_x(manager) == [1.0, 2.0, 7.0]
 
-    def test_an_inequality_row_gives_the_solver(self, manager):
+    def test_an_inequality_row_gives_the_solver(self, manager, monkeypatch):
+        # the default solver; with the native solver, see the next test
+        monkeypatch.setattr(solver_choice, 'native_available', lambda: False)
         name = _group_name(manager)
         spec = self._extra(7.0)
         spec['data']['values'].update(
@@ -147,6 +150,18 @@ class TestAddedRows:
         manager.extra_constraints[name] = spec
         manager.update_foliation_features()
         assert manager._captured[-1][2]['solver'] == 'admm'
+
+    def test_the_native_solver_also_solves_an_inequality_row(self, manager, monkeypatch):
+        monkeypatch.setattr(solver_choice, 'native_available', lambda: True)
+        monkeypatch.setattr(solver_choice, 'use_native', lambda setting: True)
+        name = _group_name(manager)
+        spec = self._extra(7.0)
+        spec['data']['values'].update(
+            {'type': 'Inequality', 'lower_field': 'v', 'upper_field': 'v'}
+        )
+        manager.extra_constraints[name] = spec
+        manager.update_foliation_features()
+        assert manager._captured[-1][2]['solver'] == 'native'
 
     def test_a_bad_row_is_skipped_and_the_other_rows_are_used(self, manager):
         name = _group_name(manager)

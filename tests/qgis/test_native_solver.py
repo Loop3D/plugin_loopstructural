@@ -106,3 +106,72 @@ def test_an_error_without_native_is_raised(manager, monkeypatch):
     feature.builder = _Failing('cg')
     with pytest.raises(NotImplementedError):
         manager._solve_feature(feature)
+
+
+class _FrameBuilder:
+    """Three coordinates. A coordinate that the native core cannot solve raises."""
+
+    def __init__(self, refused):
+        self.builders = [_Builder(solver_choice.NATIVE) for _ in range(3)]
+        self.refused = set(refused)
+        self.built = set()
+
+    def _build(self, everything):
+        for index, builder in enumerate(self.builders):
+            if index in self.built and not everything:
+                continue
+            solver = builder.build_arguments.get('solver')
+            builder.solvers.append(solver)
+            if solver == solver_choice.NATIVE and index in self.refused:
+                raise NotImplementedError(
+                    "solver='native' does not support the setting "
+                    "'add_constraints_to_least_squares'"
+                )
+            self.built.add(index)
+
+    def update(self):
+        self.built = set()
+        self._build(everything=True)
+
+    def up_to_date(self):
+        self._build(everything=False)
+
+
+class _Fault:
+    def __init__(self, name, refused=(1, 2)):
+        self.name = name
+        self.builder = _FrameBuilder(refused)
+
+
+def test_only_the_coordinates_that_native_cannot_solve_use_the_default(manager, monkeypatch):
+    _use(monkeypatch, solver_choice.NATIVE)
+    fault = _Fault('f1')
+    monkeypatch.setattr(solver_choice, 'unsupported_builders', lambda builders: [1, 2])
+    manager._solve_feature(fault)
+    solvers = [b.build_arguments['solver'] for b in fault.builder.builders]
+    assert solvers == ['native', 'cg', 'cg']
+    # the coordinate 0 is built one time, with native
+    assert fault.builder.builders[0].solvers == ['native']
+    assert manager._native_fallbacks['f1'] == {1, 2}
+    # the feature still gets native, so the coordinate 0 uses it next time
+    assert manager.interpolator_arguments('f1', None)['solver'] == 'native'
+
+
+def test_the_next_build_uses_the_recorded_coordinates(manager, monkeypatch):
+    _use(monkeypatch, solver_choice.NATIVE)
+    manager._native_fallbacks['f1'] = {1, 2}
+    fault = _Fault('f1')
+    manager._solve_feature(fault)
+    # no native attempt for the coordinates 1 and 2
+    assert [b.solvers for b in fault.builder.builders] == [['native'], ['cg'], ['cg']]
+
+
+def test_without_a_coordinate_from_the_check_the_full_feature_uses_the_default(
+    manager, monkeypatch
+):
+    _use(monkeypatch, solver_choice.NATIVE)
+    fault = _Fault('f1')
+    monkeypatch.setattr(solver_choice, 'unsupported_builders', lambda builders: [])
+    manager._solve_feature(fault)
+    assert [b.build_arguments['solver'] for b in fault.builder.builders] == ['cg'] * 3
+    assert 'f1' in manager._native_failed

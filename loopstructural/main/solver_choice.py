@@ -55,6 +55,35 @@ def builders(feature):
     return list(getattr(builder, 'builders', None) or [builder])
 
 
+def unsupported_builders(builders):
+    """Return the indexes of the builders that use the native solver but that
+    its core cannot solve, for example the coordinates 1 and 2 of a fault
+    frame, which have orthogonal rows that the core cannot read.
+
+    It uses the support check of loop-interpolation. Returns an empty list if
+    the check is not available or finds no problem.
+    """
+    try:
+        from loop_interpolation._native import check_supported
+    except ImportError:
+        return []
+    failed = []
+    for index, builder in enumerate(builders):
+        if (getattr(builder, 'build_arguments', None) or {}).get('solver') != NATIVE:
+            continue
+        interpolator = getattr(builder, 'interpolator', None)
+        if interpolator is None:
+            continue
+        try:
+            check_supported(interpolator, getattr(interpolator, '_setup_kwargs', {}), {})
+        except NotImplementedError:
+            failed.append(index)
+        except Exception:
+            # the check is for one solve; any other problem is not a reason to change
+            continue
+    return failed
+
+
 def uses_native(feature) -> bool:
     """Return True if a builder of the feature uses the native solver."""
     return any(

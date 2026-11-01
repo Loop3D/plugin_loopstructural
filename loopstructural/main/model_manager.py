@@ -251,6 +251,9 @@ class GeologicalModelManager(Observable):
         # features that the native solver could not solve; they use the
         # default solver (see `_solve_feature`)
         self._native_failed: Set[str] = set()
+        # feature name -> indexes of the builders (coordinates) that use the
+        # default solver because the native solver could not solve them
+        self._native_fallbacks: Dict[str, Set[int]] = {}
         # features with constraints that need an inequality solver
         self._needs_inequalities: Set[str] = set()
 
@@ -331,6 +334,7 @@ class GeologicalModelManager(Observable):
         self.nelements_used = {}
         self._data_summaries = {}
         self._native_failed = set()
+        self._native_fallbacks = {}
         self._needs_inequalities = set()
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
@@ -1055,31 +1059,53 @@ class GeologicalModelManager(Observable):
         return None if self._use_native(name) else solver
 
     def _solve_feature(self, feature, rebuild=True):
-        """Build `feature`. If the native solver cannot solve it, build it with
-        the default solver, and use the default solver for it from now on.
+        """Build `feature`. A coordinate that the native solver cannot solve is
+        built with the default solver, and uses it from now on.
+
+        Each coordinate of a structural frame has its own builder. For a fault,
+        the coordinates 1 and 2 have orthogonal rows that the native core cannot
+        read, but the coordinate 0 can use it. If the check of loop-interpolation
+        finds no coordinate, the full feature uses the default solver.
 
         `rebuild` builds the feature again; otherwise only if it is out of date.
         """
-        try:
-            if rebuild:
-                feature.builder.update()
-            else:
-                feature.builder.up_to_date()
-        except solver_choice.NATIVE_ERRORS as error:
-            if not solver_choice.uses_native(feature):
-                raise
-            name = feature.name
-            self._native_failed.add(name)
-            fallback = solver_choice.fallback_solver(name in self._needs_inequalities)
-            if self._debug_manager is not None:
-                self._debug_manager.log(
-                    f"The native solver cannot solve '{name}' ({error}). "
-                    f"It is solved with '{fallback}'.",
-                    log_level=1,
-                )
-            for builder in solver_choice.builders(feature):
-                builder.update_build_arguments({'solver': fallback})
-            feature.builder.update()
+        name = feature.name
+        builders = solver_choice.builders(feature)
+        fallback = solver_choice.fallback_solver(name in self._needs_inequalities)
+        # the coordinates that failed in an earlier build
+        for index in self._native_fallbacks.get(name, ()):
+            if index < len(builders):
+                builders[index].update_build_arguments({'solver': fallback})
+        build = feature.builder.update if rebuild else feature.builder.up_to_date
+        # one coordinate (or more) changes to the fallback at each attempt
+        for _attempt in range(len(builders) + 1):
+            try:
+                build()
+                return
+            except solver_choice.NATIVE_ERRORS as error:
+                if not solver_choice.uses_native(feature):
+                    raise
+                failed = solver_choice.unsupported_builders(builders)
+                if not failed:
+                    self._native_failed.add(name)
+                    failed = list(range(len(builders)))
+                self._native_fallbacks.setdefault(name, set()).update(failed)
+                if self._debug_manager is not None:
+                    which = (
+                        f"the coordinates {sorted(failed)} of '{name}'"
+                        if len(builders) > 1
+                        else f"'{name}'"
+                    )
+                    self._debug_manager.log(
+                        f"The native solver cannot solve {which} ({error}). "
+                        f"They are solved with '{fallback}'.",
+                        log_level=1,
+                    )
+                for index in failed:
+                    builders[index].update_build_arguments({'solver': fallback})
+                # the coordinates that are built already stay as they are
+                build = feature.builder.up_to_date
+        build()
 
     def default_nelements(self, name) -> tuple:
         """Return (number of elements, True if automatic) for the feature
