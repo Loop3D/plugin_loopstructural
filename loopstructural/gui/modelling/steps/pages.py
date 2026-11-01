@@ -12,7 +12,10 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QFrame,
     QPushButton,
+    QScrollArea,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -24,7 +27,11 @@ from loopstructural.gui.modelling.geological_history_tab import GeologialHistory
 from loopstructural.gui.modelling.geological_model_tab import GeologicalModelTab
 from loopstructural.gui.modelling.model_definition import ModelDefinitionTab
 from loopstructural.gui.modelling.model_definition.fault_layers import FaultLayersWidget
+from loopstructural.gui.modelling.model_definition.stratigraphic_layers import (
+    StratigraphicLayersWidget,
+)
 
+from loopstructural.main import layer_roles
 from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
 
 from . import checks
@@ -64,7 +71,7 @@ class StepPage(QWidget):
 
 
 class DataStep(StepPage):
-    """Step 1: the bounding box, the CRS, the DEM and the source layers."""
+    """Step 1: the bounding box, the CRS and the DEM."""
 
     key = checks.STEP_DATA
 
@@ -77,7 +84,7 @@ class DataStep(StepPage):
         convert.setToolTip("Convert the columns of your map data to the names that the tools use.")
         convert.clicked.connect(lambda _checked=False: self._show_tool(launchers.DATA_CONVERSION))
         row = QHBoxLayout()
-        row.addWidget(QLabel("Select the area and the source layers.", self), 1)
+        row.addWidget(QLabel("Select the area and the elevation.", self), 1)
         row.addWidget(convert)
         layout.addLayout(row)
 
@@ -111,7 +118,7 @@ class DataStep(StepPage):
 
 
 class StratigraphyStep(StepPage):
-    """Step 2: the stratigraphic column, and the results that come from the map."""
+    """Step 2: the source layers, the stratigraphic column and the results from the map."""
 
     key = checks.STEP_STRATIGRAPHY
 
@@ -134,6 +141,12 @@ class StratigraphyStep(StepPage):
             "Paint the order on the map...", lambda: self._show_tool(launchers.PAINT_STRAT_ORDER)
         ).setToolTip("Show the order of the column on the geology polygons.")
 
+        self.stratigraphy_layers = StratigraphicLayersWidget(self, self.data_manager)
+        layers_scroll = QScrollArea(self)
+        layers_scroll.setWidgetResizable(True)
+        layers_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        layers_scroll.setWidget(self.stratigraphy_layers)
+
         derive = self._tool_button(
             "Derive from map",
             QgsApplication.getThemeIcon('mActionSharingExport.svg'),
@@ -148,7 +161,32 @@ class StratigraphyStep(StepPage):
         row.addStretch(1)
         row.addWidget(derive)
         layout.addLayout(row)
-        layout.addWidget(self.tab, 1)
+
+        # Two tabs, so the page is not tall: the source layers and the column
+        self.tabs = QTabWidget(self)
+        self.tabs.addTab(layers_scroll, "Source layers")
+        self.tabs.addTab(self.tab, "Column")
+        self.tabs.setCurrentWidget(self.tab)
+        layout.addWidget(self.tabs, 1)
+
+        # With contacts from the geology polygons, the "Source layers" tab has
+        # the geology picker, so do not show a second one on the column tab
+        roles = self.data_manager.layer_roles
+        roles.attach(self._on_layer_role_changed)
+        self._show_column_geology_picker(roles.contacts_source)
+
+    def _show_column_geology_picker(self, source):
+        self.tab.stratigraphic_column_widget.geologyGroup.setVisible(
+            source != layer_roles.CONTACTS_FROM_GEOLOGY
+        )
+
+    def _on_layer_role_changed(self, role, value):
+        if role == 'contacts_source':
+            try:
+                self._show_column_geology_picker(value)
+            except RuntimeError:
+                # the page was deleted
+                pass
 
 
 class FaultsStep(StepPage):

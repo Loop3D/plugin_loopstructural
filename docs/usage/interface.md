@@ -47,7 +47,7 @@ The faults trace layer is usually a line layer that contains the trace of the fa
 
 ![Fault Layer](../static/fault_layers.png)
 ### Stratigraphy
-Two layers can be used to constrain the stratigraphy of the model:
+The **Source layers** group is at the top of step 2. Two layers can be used to constrain the stratigraphy of the model:
 1. Basal contacts - this layer defines the basal contacts of the stratigraphy. The layer should contain a line layer with the contact traces. The attributes can be used to define the name of the contact.
 2. Structural data - this layer defines the structural data that is used to constrain the model. The layer should contain a point layer with the structural data. The attributes can be used to define the orientation of the data, such as dip and dip direction.
 
@@ -58,9 +58,9 @@ You select each layer one time. The plugin keeps the geology layer, the unit nam
 
 The geology layer is the layer that you select in the Stratigraphic Column tab. If you select a layer in one of the tools and no geology layer is set, the plugin uses that layer for the other tools. The plugin saves the shared layers with the application state.
 
-The **Source** setting in the basal contacts group selects where the basal contacts come from:
-- **Calculate from geology polygons** (default). The Basal Contacts tool extracts the contacts from the geology layer and the stratigraphic column. When it finishes, the new layer becomes the basal contacts layer of the model.
-- **Use a contacts layer**. Your own layer is an input. The plugin does not change it, and the Thickness Calculator uses it.
+The **Source** setting in the **Source layers** group of step 2 selects where the basal contacts come from. The first layer picker follows the setting. Each source keeps its own selection:
+- **Calculate from geology polygons** (default). The picker shows polygon layers. It sets the geology layer and the unit name field. The Basal Contacts tool extracts the contacts from the geology layer and the stratigraphic column. When it finishes, the new layer becomes the basal contacts layer of the model.
+- **Use a contacts layer**. The picker shows line and point layers. Your own layer is an input. The plugin does not change it, and the Thickness Calculator uses it.
 
 ## Stratigraphic Column
 The stratigraphic column defines the order of the contacts and any unconformable relationships between them. The column is defined by a list of units - these units are ordered from oldest at the bottom to youngest at the top. Unconformities can be inserted between units to define an unconformable relationship. The thicknesses define the true thickness of each unit and are used to parameterise the interpolation. The unit names should match the names of the contacts in the basal contacts layer. Units without basal contacts can be included in the stratigraphic column but will not be constrained by any data.
