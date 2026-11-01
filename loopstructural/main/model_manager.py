@@ -27,11 +27,12 @@ from LoopStructural.modelling.features.fold import FoldFrame
 from LoopStructural.utils.observer import Observable
 
 from LoopStructural import GeologicalModel
-from loopstructural.toolbelt.preferences import PlgSettingsStructure
+from loopstructural.toolbelt.preferences import PlgOptionsManager
 
 from ..main import constraints, parametric_fault
 from ..main.data_types import FaultEntry, StratigraphyEntry
 from ..main.helpers import qgisAttributeIsNone
+from ..main.interpolation_size import DataSummary, suggest_nelements, summarise_data
 from ..main.workflow_mode import WORKFLOW_MODE_CONSTRAINTS, WORKFLOW_MODE_MAP, WORKFLOW_MODES
 
 
@@ -238,6 +239,15 @@ class GeologicalModelManager(Observable):
         self._cancel_requested = False
         # How the user builds the model; see `set_workflow_mode`.
         self.workflow_mode = WORKFLOW_MODE_MAP
+        # feature name -> number of elements that the user set for the
+        # feature. A feature that is not here uses the automatic number or the
+        # fixed number of the settings; see `interpolator_arguments`.
+        self.nelements_overrides: Dict[str, int] = {}
+        # feature name -> (number of elements, True if automatic) of the last
+        # build, for the feature panel.
+        self.nelements_used: Dict[str, tuple] = {}
+        # feature name -> DataSummary of the data of the last build
+        self._data_summaries: Dict[str, DataSummary] = {}
 
     @property
     def uses_map_data(self) -> bool:
@@ -312,6 +322,9 @@ class GeologicalModelManager(Observable):
         self.extra_constraints = {}
         self.skipped_constraints = {}
         self.parametric_faults = {}
+        self.nelements_overrides = {}
+        self.nelements_used = {}
+        self._data_summaries = {}
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
@@ -980,13 +993,75 @@ class GeologicalModelManager(Observable):
             self.model.data = data_for_fault
         self.model.create_and_add_domain_fault(
             fault_name,
-            nelements=PlgSettingsStructure.interpolator_nelements,
-            npw=PlgSettingsStructure.interpolator_npw,
-            cpw=PlgSettingsStructure.interpolator_cpw,
-            regularisation=PlgSettingsStructure.interpolator_regularisation,
+            **self.interpolator_arguments(fault_name, data_for_fault),
         )
         self._strip_domain_fault_region_from_boundary_above(fault_name)
         return True
+
+    def interpolator_arguments(self, name, data) -> dict:
+        """Return `nelements`, `npw`, `cpw` and `regularisation` for the
+        feature `name` that is built from the data frame `data`.
+
+        The number of elements is, in this order: the number that the user set
+        for the feature, the number from the data (if the saved setting
+        "automatic" is on), or the saved fixed number. All values come from the
+        saved settings, not from the class defaults.
+        """
+        settings = PlgOptionsManager.get_plg_settings()
+        self._data_summaries[name] = summarise_data(data)
+        if self.nelements_overrides.get(name):
+            nelements = int(self.nelements_overrides[name])
+            automatic = False
+        else:
+            nelements, automatic = self.default_nelements(name)
+        self.nelements_used[name] = (nelements, automatic)
+        return {
+            'nelements': nelements,
+            'npw': settings.interpolator_npw,
+            'cpw': settings.interpolator_cpw,
+            'regularisation': settings.interpolator_regularisation,
+        }
+
+    def default_nelements(self, name) -> tuple:
+        """Return (number of elements, True if automatic) for the feature
+        `name` without the number that the user set for it.
+
+        With the saved setting "automatic", the number comes from the data of
+        the last build of the feature. Otherwise it is the saved fixed number.
+        """
+        settings = PlgOptionsManager.get_plg_settings()
+        if not settings.interpolator_nelements_auto:
+            return int(settings.interpolator_nelements), False
+        summary = self._data_summaries.get(name, DataSummary())
+        return suggest_nelements(summary, self._model_area()), True
+
+    def _model_area(self) -> float:
+        """Return the map (XY) area of the model box, or 0 if the box is not set."""
+        bounding_box = getattr(self.model, 'bounding_box', None)
+        try:
+            lengths = np.asarray(bounding_box.maximum, dtype=float)[:2] - np.asarray(
+                bounding_box.origin, dtype=float
+            )[:2]
+        except (AttributeError, TypeError, ValueError, IndexError):
+            return 0.0
+        area = float(np.prod(lengths))
+        return area if np.isfinite(area) and area > 0 else 0.0
+
+    def nelements_overrides_to_dict(self) -> dict:
+        """Return `nelements_overrides` in a form that `json.dump` can write."""
+        return {name: int(n) for name, n in self.nelements_overrides.items()}
+
+    def nelements_overrides_from_dict(self, overrides: dict):
+        """Replace `nelements_overrides` with the numbers from `nelements_overrides_to_dict`."""
+        self.nelements_overrides = {name: int(n) for name, n in (overrides or {}).items()}
+
+    def set_nelements_override(self, name: str, nelements: Optional[int]):
+        """Keep `nelements` for the feature `name` in the next builds, or use
+        the automatic (or fixed) number again if `nelements` is None."""
+        if nelements is None:
+            self.nelements_overrides.pop(name, None)
+        else:
+            self.nelements_overrides[name] = int(nelements)
 
     def _strip_domain_fault_region_from_boundary_above(self, fault_name):
         """Work around a LoopStructural core bug that crops the boundary
@@ -1067,10 +1142,7 @@ class GeologicalModelManager(Observable):
                 data=data,
                 force_constrained=True,
                 **self._extra_kwargs(groupname),
-                nelements=PlgSettingsStructure.interpolator_nelements,
-                npw=PlgSettingsStructure.interpolator_npw,
-                cpw=PlgSettingsStructure.interpolator_cpw,
-                regularisation=PlgSettingsStructure.interpolator_regularisation,
+                **self.interpolator_arguments(groupname, data),
             )
             fault_name, flipped = self._base_fault_boundary(group)
             if fault_name is None or not self._build_domain_fault_boundary(
@@ -1422,10 +1494,7 @@ class GeologicalModelManager(Observable):
                     fault_pitch=pitch,
                     data=data,
                     faults=self._cutting_faults_for(fault_name),
-                    nelements=PlgSettingsStructure.interpolator_nelements,
-                    npw=PlgSettingsStructure.interpolator_npw,
-                    cpw=PlgSettingsStructure.interpolator_cpw,
-                    regularisation=PlgSettingsStructure.interpolator_regularisation,
+                    **self.interpolator_arguments(fault_name, data),
                 )
         self._build_parametric_faults()
         self.apply_fault_abutting_relationships()
@@ -1472,13 +1541,11 @@ class GeologicalModelManager(Observable):
         for name, spec in self.parametric_faults.items():
             self._report_progress(f"Building fault '{name}'")
             try:
+                fault_data = parametric_fault.frame_data(spec)
                 self.model.create_and_add_fault(
                     name,
-                    data=parametric_fault.frame_data(spec),
-                    nelements=PlgSettingsStructure.interpolator_nelements,
-                    npw=PlgSettingsStructure.interpolator_npw,
-                    cpw=PlgSettingsStructure.interpolator_cpw,
-                    regularisation=PlgSettingsStructure.interpolator_regularisation,
+                    data=fault_data,
+                    **self.interpolator_arguments(name, fault_data),
                     **parametric_fault.fault_arguments(spec),
                 )
             except Exception as e:
@@ -2125,7 +2192,9 @@ class GeologicalModelManager(Observable):
     ):
         """Create the foliation feature in the model; see `add_foliation`."""
         data, kwargs = self._foliation_data(name, data, sampler, use_z_coordinate)
-        foliation = self.model.create_and_add_foliation(name, data=data, **kwargs)
+        foliation = self.model.create_and_add_foliation(
+            name, data=data, **kwargs, **self.interpolator_arguments(name, data)
+        )
         if not restrict_to_stratigraphic_domain:
             foliation.regions = [
                 r for r in foliation.regions if not isinstance(r, UnconformityFeature)

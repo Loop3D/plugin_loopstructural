@@ -1848,6 +1848,7 @@ class ModellingDataManager:
             state['manual_foliations'] = self._model_manager.manual_foliations_to_dict()
             state['detached_features'] = self._model_manager.detached_to_dict()
             state['parametric_faults'] = self._model_manager.parametric_faults_to_dict()
+            state['nelements_overrides'] = self._model_manager.nelements_overrides_to_dict()
 
         with open(path, 'w') as f:
             json.dump(state, f, indent=2)
@@ -1882,6 +1883,7 @@ class ModellingDataManager:
             self._model_manager.manual_foliations_from_dict(state.get('manual_foliations', {}))
             self._model_manager.detached_from_dict(state.get('detached_features', {}))
             self._model_manager.parametric_faults_from_dict(state.get('parametric_faults', {}))
+            self._model_manager.nelements_overrides_from_dict(state.get('nelements_overrides', {}))
         # the data was just read from the layers
         self._changed_layer_ids.clear()
         self.refresh_layer_watchers()
