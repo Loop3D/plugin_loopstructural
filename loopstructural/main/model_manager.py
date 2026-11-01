@@ -1106,6 +1106,14 @@ class GeologicalModelManager(Observable):
         and the basal contacts and structural orientations data.
         This method will automatically add unconformities based on the stratigraphic column.
         """
+        if self.stratigraphic_column is not None:
+            # also for an empty column, so the model does not keep the units
+            # of the last build
+            self.model.stratigraphic_column = self.stratigraphic_column
+        # A model with faults only has no column, or a column with no units
+        if self.stratigraphic_column is None or not self.stratigraphic_column.get_groups():
+            self._emit('foliation_features_updated')
+            return
         stratigraphic_column = {}
         # Take each unit's training value straight from `get_isovalues()`
         # (LoopStructural core), which is what labels the extracted
@@ -1719,18 +1727,19 @@ class GeologicalModelManager(Observable):
 
     @property
     def valid(self):
-        valid = True
-        if len(self.groups) == 0:
-            valid = False
-        if len(self.stratigraphy) == 0:
-            valid = False
-        if len(self.faults) > 0:
-            for _fault_name, fault_data in self.faults.items():
-                if 'data' in fault_data and not fault_data['data'].empty:
-                    valid = True
-                else:
-                    valid = False
-        return valid
+        """True if the model has stratigraphy or faults, and each fault trace has data.
+
+        A model with faults only (traces or parametric faults) has no groups
+        and no stratigraphy.
+        """
+        if any(
+            'data' not in fault_data or fault_data['data'].empty
+            for fault_data in self.faults.values()
+        ):
+            return False
+        has_stratigraphy = len(self.groups) > 0 and len(self.stratigraphy) > 0
+        has_faults = len(self.faults) > 0 or len(self.parametric_faults) > 0
+        return has_stratigraphy or has_faults
 
     def update_model(
         self,
