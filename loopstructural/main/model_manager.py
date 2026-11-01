@@ -1104,6 +1104,15 @@ class GeologicalModelManager(Observable):
             self._use_fallback(name, builders, unconverged, fallback, "did not converge")
             feature.builder.up_to_date()
 
+    def _forget_native_state(self, name=None):
+        """Let the feature `name` (or every feature) try the native solver again."""
+        if name is None:
+            self._native_failed.clear()
+            self._native_fallbacks.clear()
+            return
+        self._native_failed.discard(name)
+        self._native_fallbacks.pop(name, None)
+
     @staticmethod
     def _set_fallback(builder, fallback):
         # the native iteration limit is not for the other solvers
@@ -1659,7 +1668,13 @@ class GeologicalModelManager(Observable):
     def remove_parametric_fault(self, name: str):
         """Stop building the parametric fault `name`. The model is stale until the next build."""
         if self.parametric_faults.pop(name, None) is not None:
+            self.nelements_overrides.pop(name, None)
+            self.nelements_used.pop(name, None)
+            self._data_summaries.pop(name, None)
+            self._needs_inequalities.discard(name)
+            self._forget_native_state(name)
             self._data_dirty = True
+            self._emit('model_updated')
 
     def _build_parametric_faults(self):
         for name, spec in self.parametric_faults.items():
@@ -1681,9 +1696,16 @@ class GeologicalModelManager(Observable):
 
     def parametric_faults_from_dict(self, faults: dict):
         """Replace `parametric_faults` with the specs from `parametric_faults_to_dict`."""
-        self.parametric_faults = {
-            name: parametric_fault.spec_from_dict(spec) for name, spec in (faults or {}).items()
-        }
+        self.parametric_faults = {}
+        for name, spec in (faults or {}).items():
+            # one damaged fault must not stop the restore of the project
+            try:
+                self.parametric_faults[name] = parametric_fault.spec_from_dict(spec)
+            except ValueError as error:
+                if self._debug_manager is not None:
+                    self._debug_manager.log(
+                        f"Skipped the saved parametric fault '{name}': {error}", log_level=2
+                    )
 
     def _get_feature_by_name_or_none(self, name):
         """Non-raising counterpart to `GeologicalModel.get_feature_by_name`.
@@ -1883,6 +1905,8 @@ class GeologicalModelManager(Observable):
         self.model.features = []
         self.model.feature_name_index = {}
         self.skipped_constraints = {}
+        # The data is read again, so a feature can use the native solver again
+        self._forget_native_state()
 
         # Notify start (if requested) so UI can react
         if notify_observers:
@@ -1980,6 +2004,8 @@ class GeologicalModelManager(Observable):
         """
         updated = []
         needs_initialize = []
+        # The data paths below add the features that need inequalities again
+        self._needs_inequalities.clear()
 
         def refresh(name, data):
             feature = self._get_feature_by_name_or_none(name)
@@ -2000,6 +2026,8 @@ class GeologicalModelManager(Observable):
             if isinstance(current, pd.DataFrame) and current.equals(data):
                 return
             target.add_data_from_data_frame(data)
+            # new data can be solved by the native solver
+            self._forget_native_state(name)
             # add_data_from_data_frame does not reset this flag, and while
             # it is set the builder keeps the constraints of the old data
             target.data_added = False

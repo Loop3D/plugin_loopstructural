@@ -1404,7 +1404,15 @@ class ModellingDataManager:
                 if entry.get('processed') or entry.get('layer') is None:
                     continue
                 row = dict(entry)
-                row['df'] = qgsLayerToGeoDataFrame(entry['layer'], target_crs=model_crs)
+                try:
+                    row['df'] = qgsLayerToGeoDataFrame(entry['layer'], target_crs=model_crs)
+                except RuntimeError as error:
+                    # The layer was removed from the project: skip this row only
+                    self.logger(
+                        message=f"Could not read the added constraint '{key}' of '{name}': {error}",
+                        log_level=2,
+                    )
+                    continue
                 rows[key] = row
             if rows:
                 extras[name] = {'data': rows, 'use_z_coordinate': True}

@@ -116,12 +116,13 @@ def check_model(data_manager, model_manager=None) -> StepCheck:
         problems.append("The model CRS must be a projected CRS (in metres).")
     changed = data_manager.get_changed_layers()
     if changed:
-        problems.append("Input layers changed after the model was built: " + ", ".join(changed))
+        # "Update data and solve" puts the new data into the features
+        todo.append("Input layers changed after the model was built: " + ", ".join(changed))
     state = model_manager.model_state if model_manager is not None else 'empty'
     if state == 'empty':
-        todo.append("Initialise the model.")
+        todo.append("Build the model.")
     elif state == 'stale':
-        problems.append("Inputs changed after the model was built. Initialise the model again.")
+        problems.append("Inputs changed after the model was built. Rebuild the model.")
     elif state == 'initialized':
         todo.append("Solve the model.")
     return StepCheck(tuple(problems), tuple(todo))

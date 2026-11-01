@@ -241,12 +241,13 @@ class TestModelStep:
         assert checks.check_stratigraphy(dm).status == Status.PROBLEM
         assert checks.check_model(dm, FakeModelManager('solved')).status == Status.DONE
 
-    def test_changed_layers_are_a_problem(self, dm):
+    def test_changed_layers_are_a_todo(self, dm):
+        # "Update data and solve" fixes this with one click, so it is not a problem
         dm.bounding_box_set = True
         dm.changed_layers = ['geology']
         check = checks.check_model(dm, FakeModelManager('solved'))
-        assert check.status == Status.PROBLEM
-        assert 'geology' in check.problems[0]
+        assert not check.problems
+        assert 'geology' in check.todo[0]
 
 
 class TestViewStep:

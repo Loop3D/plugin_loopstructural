@@ -5,6 +5,7 @@ the model through the model manager (`model`, `evaluate_stratigraphy_on_points`
 and `get_stratigraphic_unit_names`) and write files with pyvista.
 """
 
+import csv
 import re
 from pathlib import Path
 
@@ -73,7 +74,8 @@ def _check_extension(extension, formats):
 def unit_names_for_ids(model_manager, ids) -> np.ndarray:
     """Return the unit name for each stratigraphic id. An id of -1 has no unit."""
     names = list(model_manager.get_stratigraphic_unit_names())
-    ids = np.asarray(ids, dtype=int)
+    # NaN (a point with no unit) has the id -1
+    ids = np.nan_to_num(np.asarray(ids, dtype=float), nan=-1).astype(int)
     return np.array([names[i] if 0 <= i < len(names) else '' for i in ids], dtype=object)
 
 
@@ -84,6 +86,9 @@ def add_stratigraphy(model_manager, mesh, *, cells=False):
     """
     points = mesh.cell_centers().points if cells else mesh.points
     ids = np.asarray(model_manager.evaluate_stratigraphy_on_points(points))
+    if ids.dtype.kind == 'f':
+        # a point with no unit has the id -1
+        ids = np.nan_to_num(ids, nan=-1).astype(int)
     data = mesh.cell_data if cells else mesh.point_data
     data[STRATIGRAPHY_ID_FIELD] = ids
     # a VTK string array: '' where there is no unit
@@ -108,9 +113,11 @@ def existing_surface_files(folder, extension):
 def _write_csv(path, points, ids, names):
     points = np.asarray(points)
     with open(path, 'w', encoding='utf-8', newline='') as handle:
-        handle.write(f"x,y,z,{STRATIGRAPHY_ID_FIELD},{UNIT_FIELD}\n")
+        writer = csv.writer(handle, lineterminator='\n')
+        writer.writerow(['x', 'y', 'z', STRATIGRAPHY_ID_FIELD, UNIT_FIELD])
         for (x, y, z), unit_id, name in zip(points, ids, names):
-            handle.write(f"{x:.6f},{y:.6f},{z:.6f},{int(unit_id)},\"{name}\"\n")
+            unit_id = -1 if np.isnan(unit_id) else int(unit_id)
+            writer.writerow([f"{x:.6f}", f"{y:.6f}", f"{z:.6f}", unit_id, name])
 
 
 def export_surfaces(

@@ -89,11 +89,9 @@ class DerivedRefresh:
         dm = self.data_manager
         settings = dm.get_widget_settings('basal_contacts_widget', {}) or {}
         geology = dm.get_layer_role(layer_roles.GEOLOGY)
-        faults = (
-            dm.find_layer_by_name(settings['faults_layer'])
-            if settings.get('faults_layer')
-            else dm.get_layer_role(layer_roles.FAULT_TRACES)
-        )
+        faults = dm.get_layer_role(layer_roles.FAULT_TRACES)
+        if faults is None and settings.get('faults_layer'):
+            faults = dm.find_layer_by_name(settings['faults_layer'])
         unit_field = dm.get_layer_role(layer_roles.GEOLOGY_UNIT_FIELD)
         inputs = dm.basal_contacts_inputs()
         _check_contacts_inputs(inputs)
@@ -126,10 +124,12 @@ class DerivedRefresh:
             )
 
         def layer(key, role=None):
-            name = settings.get(key)
-            if name:
-                return dm.find_layer_by_name(name)
-            return dm.get_layer_role(role) if role else None
+            # The role first, as in `thickness_inputs`, so that the layer of a
+            # run is the layer that its inputs record.
+            found = dm.get_layer_role(role) if role else None
+            if found is None and settings.get(key):
+                found = dm.find_layer_by_name(settings[key])
+            return found
 
         geology = layer('geology_layer', layer_roles.GEOLOGY)
         structure = layer('structure_layer', layer_roles.STRUCTURE)

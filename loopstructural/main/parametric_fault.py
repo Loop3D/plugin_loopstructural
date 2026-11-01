@@ -183,7 +183,18 @@ def clean_spec(spec: dict) -> dict:
 
 
 def spec_from_dict(data: Optional[dict]) -> dict:
-    """Read a spec that was saved. The centre is a tuple again."""
-    spec = clean_spec(data)
+    """Read a spec that was saved. The centre is a tuple again.
+
+    Raises
+    ------
+    ValueError
+        If the saved spec is empty or has no name or centre.
+    """
+    if not isinstance(data, dict) or 'name' not in data or 'centre' not in data:
+        raise ValueError("The saved parametric fault has no name or centre.")
+    try:
+        spec = clean_spec(data)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"The saved parametric fault is not valid: {error}") from error
     spec['centre'] = tuple(spec['centre'])
     return spec
