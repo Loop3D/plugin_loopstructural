@@ -136,3 +136,60 @@ class TestManualFoliationsSerialisation:
         manager.update_model(notify_observers=False)
 
         assert 's1' in _names(manager)
+
+
+def _points(**fields):
+    points = [Point(x, y, 0.0) for x in (20.0, 50.0, 80.0) for y in (20.0, 50.0, 80.0)]
+    columns = {name: [fn(p) for p in points] for name, fn in fields.items()}
+    return gpd.GeoDataFrame(columns, geometry=points)
+
+
+class TestConstraintTypes:
+    """A feature built from constraint layers only, with no stratigraphic column data."""
+
+    def _rows(self, manager, layer):
+        data, kwargs = manager._foliation_data('f', {'layer': layer}, use_z_coordinate=True)
+        return data, kwargs
+
+    def test_interface_rows_use_the_group_field(self, manager):
+        df = _points(group=lambda p: 'a' if p.x < 50 else 'b')
+        layer = {'type': 'Interface', 'group_field': 'group', 'df': df}
+        data, _ = self._rows(manager, layer)
+        assert sorted(data['interface'].unique()) == [0.0, 1.0]
+
+    def test_weight_goes_to_the_rows(self, manager):
+        layer = _value_layer()
+        layer['weight'] = 0.25
+        data, _ = self._rows(manager, layer)
+        assert (data['w'] == 0.25).all()
+
+    def test_a_constant_z_source_gives_one_z(self, manager):
+        layer = _value_layer()
+        layer.update({'z_source': 'constant', 'z_value': 12.5})
+        data, _ = self._rows(manager, layer)
+        assert (data['Z'] == 12.5).all()
+
+    def test_a_pairwise_inequality_needs_the_admm_solver(self, manager):
+        df = _points(order=lambda p: 1 if p.x < 50 else 2)
+        layer = {'type': 'Pairwise Inequality', 'pair_field': 'order', 'df': df}
+        data, kwargs = self._rows(manager, layer)
+        assert kwargs == {'solver': 'admm'}
+        assert 'pair_id' in data
+
+    def test_a_feature_from_value_and_normal_layers_solves_without_a_column(self, manager):
+        values = _value_layer()
+        normals = {
+            'layer_name': 'normals',
+            'type': 'Gradient/Normal',
+            'vector_kind': 'normal',
+            'vector_x_field': 'nx',
+            'vector_y_field': 'ny',
+            'vector_z_field': 'nz',
+            'df': _points(nx=lambda p: 1.0, ny=lambda p: 0.0, nz=lambda p: 0.0),
+        }
+        manager.add_foliation(
+            's1', {'values': values, 'normals': normals}, use_z_coordinate=True
+        )
+        manager.update_all_features(notify_observers=False)
+        result = manager.model['s1'].evaluate_value(np.array([[50.0, 50.0, 0.0]]))
+        assert not np.any(np.isnan(result))

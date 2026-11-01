@@ -8,6 +8,7 @@ from qgis.core import QgsApplication
 from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -23,6 +24,8 @@ from loopstructural.gui.modelling.geological_history_tab import GeologialHistory
 from loopstructural.gui.modelling.geological_model_tab import GeologicalModelTab
 from loopstructural.gui.modelling.model_definition import ModelDefinitionTab
 from loopstructural.gui.modelling.model_definition.fault_layers import FaultLayersWidget
+
+from loopstructural.main.workflow_mode import WORKFLOW_MODE_LABELS, WORKFLOW_MODES
 
 from . import checks
 
@@ -76,8 +79,34 @@ class DataStep(StepPage):
         row.addWidget(QLabel("Select the area and the source layers.", self), 1)
         row.addWidget(convert)
         layout.addLayout(row)
+
+        # The start choice. The "constraints" choice hides steps 2 and 3.
+        self.mode_combo = QComboBox(self)
+        for mode in WORKFLOW_MODES:
+            self.mode_combo.addItem(WORKFLOW_MODE_LABELS[mode], mode)
+        self.mode_combo.setToolTip(
+            "Steps 2 and 3 make features and constraints from a geological map. "
+            "Interpolate from constraints hides them. Change the choice to show them again."
+        )
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Method:", self))
+        mode_row.addWidget(self.mode_combo, 1)
+        layout.addLayout(mode_row)
         self.tab = ModelDefinitionTab(self, data_manager=self.data_manager)
         layout.addWidget(self.tab, 1)
+
+
+    def set_workflow_mode(self, mode):
+        index = self.mode_combo.findData(mode)
+        if index >= 0 and index != self.mode_combo.currentIndex():
+            self.mode_combo.blockSignals(True)
+            self.mode_combo.setCurrentIndex(index)
+            self.mode_combo.blockSignals(False)
+
+    def _on_mode_changed(self, _index):
+        if self.data_manager is not None:
+            self.data_manager.set_workflow_mode(self.mode_combo.currentData())
 
 
 class StratigraphyStep(StepPage):

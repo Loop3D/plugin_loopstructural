@@ -45,8 +45,8 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> Optional[gpd.GeoDataFrame]
 
     Parameters
     ----------
-    layer : QgsVectorLayer
-        The vector layer to convert
+    layer : QgsVectorLayer or gpd.GeoDataFrame
+        The vector layer to convert. A GeoDataFrame is returned as a copy.
     target_crs : QgsCoordinateReferenceSystem, optional
         If provided, all geometries will be transformed to this CRS.
         If None, the layer's source CRS is used.
@@ -58,6 +58,11 @@ def qgsLayerToGeoDataFrame(layer, target_crs=None) -> Optional[gpd.GeoDataFrame]
     """
     if layer is None:
         return None
+    if isinstance(layer, gpd.GeoDataFrame):
+        gdf = layer.copy()
+        if target_crs is not None and target_crs.isValid() and gdf.crs is not None:
+            gdf = gdf.to_crs(target_crs.authid())
+        return gdf
 
     features = layer.getFeatures()
     fields = layer.fields()

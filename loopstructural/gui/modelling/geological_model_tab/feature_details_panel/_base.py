@@ -1,3 +1,4 @@
+import numpy as np
 from LoopStructural.modelling.features import StructuralFrame
 from LoopStructural.utils import normal_vector_to_strike_and_dip
 from qgis.gui import QgsCollapsibleGroupBox, QgsMapLayerComboBox
@@ -6,17 +7,22 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 from qgis.utils import plugins
 
 from LoopStructural import getLogger
+from loopstructural.main import preview
 
+from ....background_task import finish_background_task, start_background_task
+from ....messages import push_info, push_warning
 from ..bounding_box_widget import BoundingBoxWidget
 from ..layer_selection_table import LayerSelectionTable
 
@@ -149,6 +155,7 @@ class BaseFeatureDetailsPanel(QWidget):
             name_validator=lambda: (True, ''),  # Always valid in this context
         )
         table_layout = QVBoxLayout()
+        table_layout.addWidget(self._build_detach_widget())
         table_layout.addWidget(self.layer_table)
         self.view_constraint_data_button = QPushButton("View Data Used by Interpolator")
         self.view_constraint_data_button.setToolTip(
@@ -170,10 +177,217 @@ class BaseFeatureDetailsPanel(QWidget):
         group_box = QgsCollapsibleGroupBox('Interpolator Settings')
         group_box.setLayout(form_layout)
         self.layout.addWidget(group_box)
+        self.layout.addWidget(self._build_preview_widget())
         self.layout.addWidget(table_group_box)
         # this will call the addMidBlock and addExportBlock methods
         self.addMidBlock()
         self.addExportBlock()
+
+    def _build_preview_widget(self):
+        """Return the group with the button that shows the isolines of this feature on the map."""
+        group = QgsCollapsibleGroupBox('Preview')
+        row = QHBoxLayout(group)
+        self.preview_levels_spin = QSpinBox()
+        self.preview_levels_spin.setRange(1, 100)
+        self.preview_levels_spin.setValue(preview.DEFAULT_LEVEL_COUNT)
+        self.preview_levels_spin.setPrefix("Lines: ")
+        self.preview_levels_spin.setToolTip("The number of isolines.")
+        self.preview_button = QPushButton("Preview on map")
+        self.preview_button.setToolTip(
+            "Solve this feature only, and add its isolines on the ground (the DEM) to the "
+            "project as a temporary layer. The other features are not solved."
+        )
+        self.preview_button.clicked.connect(self.preview_on_map)
+        row.addWidget(self.preview_levels_spin)
+        row.addWidget(self.preview_button, 1)
+        self._preview_layer_id = None
+        return group
+
+    def preview_on_map(self):
+        """Solve this feature and show its isolines on the map canvas.
+
+        The grid is read on the GUI thread (the DEM can be a raster layer). The
+        solve and the lines are made on a background thread.
+        """
+        manager = self.model_manager
+        name = self.feature.name
+        model = getattr(manager, 'model', None)
+        if model is None or model.bounding_box is None:
+            QMessageBox.warning(self, "Preview", "Build the model first.")
+            return
+        bounding_box = model.bounding_box
+        x, y, points = preview.grid_points(
+            bounding_box.origin,
+            bounding_box.maximum,
+            preview.DEFAULT_RESOLUTION,
+            getattr(manager, 'dem_function', None),
+        )
+        count = self.preview_levels_spin.value()
+
+        def target(progress_callback):
+            progress_callback("Solving the feature...")
+            values = np.asarray(manager.evaluate_feature_on_points(name, points), dtype=float)
+            if values.ndim != 1:
+                raise ValueError("The feature has no scalar field to draw.")
+            values = values.reshape(len(y), len(x))
+            progress_callback("Making the lines...")
+            levels = preview.default_levels(values, count)
+            return preview.isolines(x, y, values, levels), levels
+
+        self.preview_button.setEnabled(False)
+        self._preview_task = start_background_task(
+            self,
+            target,
+            title="Preview",
+            initial_label="Solving the feature...",
+            on_progress=self._on_preview_progress,
+            on_finished=self._on_preview_finished,
+            on_error=self._on_preview_error,
+        )
+
+    def _on_preview_progress(self, message):
+        try:
+            self._preview_task[2].setLabelText(message)
+        except Exception:
+            pass
+
+    def _end_preview_task(self):
+        finish_background_task(*self._preview_task)
+        self.preview_button.setEnabled(True)
+
+    def _on_preview_error(self, traceback_text):
+        self._end_preview_task()
+        lines = traceback_text.strip().splitlines()
+        QMessageBox.critical(
+            self, "Preview failed", lines[-1] if lines else "The preview stopped with an error."
+        )
+
+    def _on_preview_finished(self, result):
+        self._end_preview_task()
+        lines, levels = result
+        if not lines:
+            push_warning(
+                "Preview",
+                f"'{self.feature.name}' has no isolines on the map. The field has no range "
+                "or no values in the model area.",
+            )
+            return
+        self._show_preview_lines(lines)
+        # the feature is solved now, so the ticks of the feature list change
+        self.model_manager.notify('model_updated')
+        push_info(
+            "Preview",
+            f"{len(lines)} lines for '{self.feature.name}', from {levels.min():g} to {levels.max():g}.",
+        )
+
+    def _show_preview_lines(self, lines):
+        """Add the isolines as a temporary layer. An earlier preview of this feature is replaced."""
+        from qgis.core import (
+            QgsFeature,
+            QgsField,
+            QgsGeometry,
+            QgsPointXY,
+            QgsProject,
+            QgsVectorLayer,
+        )
+
+        from loopstructural.gui.compatibility import QVariantCompat
+
+        project = QgsProject.instance()
+        previous = getattr(self, '_preview_layer_id', None)
+        if previous and project.mapLayer(previous) is not None:
+            project.removeMapLayer(previous)
+        crs = self.data_manager.get_model_crs() if self.data_manager is not None else None
+        crs_text = crs.authid() if crs is not None and crs.isValid() else project.crs().authid()
+        layer = QgsVectorLayer(
+            f"LineString?crs={crs_text}", f"Preview: {self.feature.name}", "memory"
+        )
+        provider = layer.dataProvider()
+        provider.addAttributes([QgsField("value", QVariantCompat.Double)])
+        layer.updateFields()
+        features = []
+        for level, coordinates in lines:
+            feature = QgsFeature(layer.fields())
+            feature.setGeometry(
+                QgsGeometry.fromPolylineXY([QgsPointXY(px, py) for px, py in coordinates])
+            )
+            feature.setAttribute("value", level)
+            features.append(feature)
+        provider.addFeatures(features)
+        layer.updateExtents()
+        project.addMapLayer(layer)
+        self._preview_layer_id = layer.id()
+
+    def _build_detach_widget(self):
+        """Return the row that tells where the data of a generated feature comes from.
+
+        A generated feature is one that the stratigraphic column makes. Its
+        contact and orientation rows are read-only. The user can add rows to
+        them, or detach the feature to keep a fixed copy of the data.
+        """
+        self.detach_widget = QWidget()
+        row = QHBoxLayout(self.detach_widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.detach_label = QLabel()
+        self.detach_label.setWordWrap(True)
+        self.detach_button = QPushButton()
+        self.detach_button.clicked.connect(self._toggle_detached)
+        row.addWidget(self.detach_label, 1)
+        row.addWidget(self.detach_button)
+        self._refresh_detach_widget()
+        return self.detach_widget
+
+    def _refresh_detach_widget(self):
+        manager = self.model_manager
+        name = self.feature.name
+        if manager is None or not manager.is_generated(name):
+            self.detach_widget.hide()
+            return
+        self.detach_widget.show()
+        if manager.is_detached(name):
+            self.detach_label.setText(
+                "Detached. The rows from the column are a fixed copy. They do not change "
+                "when the column or the contacts change."
+            )
+            self.detach_button.setText("Follow the column again")
+            self.detach_button.setToolTip(
+                "Use the data of the stratigraphic column again. The model needs a rebuild."
+            )
+        else:
+            self.detach_label.setText(
+                "The read-only rows come from the stratigraphic column. Rows that you "
+                "add are used together with them."
+            )
+            self.detach_button.setText("Detach")
+            self.detach_button.setToolTip(
+                "Keep a fixed copy of the data of this feature, so that it does not "
+                "follow the column."
+            )
+
+    def _toggle_detached(self):
+        manager = self.model_manager
+        name = self.feature.name
+        if manager.is_detached(name):
+            reply = QMessageBox.question(
+                self,
+                "Follow the column again",
+                f"'{name}' will use the data of the stratigraphic column again. "
+                "The fixed copy is removed. Continue?",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            manager.attach_feature(name)
+            push_info("Feature", f"'{name}' follows the stratigraphic column again. Rebuild the model.")
+        elif manager.detach_feature(name):
+            push_info("Feature", f"'{name}' is detached. Its data is a fixed copy.")
+        else:
+            QMessageBox.warning(
+                self, "Cannot detach", f"'{name}' has no data from the column to keep."
+            )
+            return
+        self.data_manager._sync_processed_feature_data()
+        self.layer_table.restore_table_state()
+        self._refresh_detach_widget()
 
     def addMidBlock(self):
         """Base mid block is intentionally empty now — bounding-box controls
