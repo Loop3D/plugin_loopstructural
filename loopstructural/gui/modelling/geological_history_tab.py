@@ -8,6 +8,6 @@ class GeologialHistoryTab(BaseTab):
         # list grows, and it scrolls in a dock that is shorter than the column
         super().__init__(parent, data_manager, scrollable=True)
         # Load the UI file for Tab 1
-        stratigraphic_column_widget = StratColumnWidget(self, data_manager=data_manager)
+        self.stratigraphic_column_widget = StratColumnWidget(self, data_manager=data_manager)
         # Add the loaded UI widget to the container layout
-        self.add_widget(stratigraphic_column_widget, group_box=False)
+        self.add_widget(self.stratigraphic_column_widget, group_box=False)

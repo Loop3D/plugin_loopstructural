@@ -722,6 +722,10 @@ class ModellingDataManager:
             self.basal_contacts_callback(**self._basal_contacts)
         self.refresh_layer_watchers()
 
+    def get_unique_basal_units(self):
+        """Return the unit names that the basal contacts layer has."""
+        return list(self._unique_basal_units)
+
     def calculate_unique_basal_units(self):
         if (
             self._basal_contacts is not None
@@ -1295,6 +1299,14 @@ class ModellingDataManager:
 
     def _on_layer_data_changed(self, layer_id):
         self._changed_layer_ids.add(layer_id)
+        # step 2 of the dock compares the column with the units of the contacts layer
+        contacts_layer = self._basal_contacts.get('layer') if self._basal_contacts else None
+        try:
+            if contacts_layer is not None and contacts_layer.id() == layer_id:
+                self.calculate_unique_basal_units()
+        except RuntimeError:
+            # the layer was deleted
+            pass
         self._notify_layer_data_changed()
 
     def _notify_layer_data_changed(self):
