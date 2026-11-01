@@ -22,8 +22,9 @@ jobs:
           # plus loop_common/loop_interpolation sub-packages), so `releases/latest`
           # can return whichever component's release was published last, not
           # necessarily the LoopStructural package. Read the manifest instead —
-          # it maps package name to version unambiguously.
-          latest=$(curl -fsS https://raw.githubusercontent.com/Loop3D/LoopStructural/master/.release-please-manifest.json | jq -r '.["LoopStructural"] // empty')
+          # it maps package path to version unambiguously. LoopStructural is the
+          # root package, so its key is ".".
+          latest=$(curl -fsS https://raw.githubusercontent.com/Loop3D/LoopStructural/master/.release-please-manifest.json | jq -r '.["."] // empty')
           if ! [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Could not read a valid LoopStructural version from the release manifest (got '${latest}')."
             exit 1
@@ -36,11 +37,13 @@ jobs:
           latest="${{ steps.latest.outputs.version }}"
           latest_minor="${latest%.*}"
           changed=0
-          for f in requirements/embedded.txt requirements/testing.txt; do
-            current=$(grep -oP 'LoopStructural~=\K[0-9]+\.[0-9]+\.[0-9]+' "$f")
+          # loopstructural/requirements.txt is the file that QGIS (qpip) reads.
+          # The pin can have an extra, for example LoopStructural[native]~=1.11.0.
+          for f in loopstructural/requirements.txt requirements/embedded.txt requirements/testing.txt; do
+            current=$(grep -oP 'LoopStructural(\[[^]]*\])?~=\K[0-9]+\.[0-9]+\.[0-9]+' "$f")
             current_minor="${current%.*}"
             if [ "$latest_minor" != "$current_minor" ]; then
-              sed -i "s/LoopStructural~=[0-9.]\+/LoopStructural~=${latest}/" "$f"
+              sed -i -E "s/(LoopStructural(\[[^]]*\])?)~=[0-9.]+/\1~=${latest}/" "$f"
               changed=1
             fi
           done
@@ -54,8 +57,8 @@ jobs:
           title: "Bump LoopStructural pin to ${{ steps.latest.outputs.version }}"
           body: |
             LoopStructural released a new minor version (${{ steps.latest.outputs.version }}).
-            This bumps the `~=` pin in `requirements/embedded.txt` and
-            `requirements/testing.txt` accordingly.
+            This bumps the `~=` pin in `loopstructural/requirements.txt`,
+            `requirements/embedded.txt` and `requirements/testing.txt` accordingly.
 
             Verify the `qgis-compat` CI job passes before merging.
           branch: bump-loopstructural-pin
