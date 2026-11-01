@@ -4,6 +4,8 @@ The features are small stand-ins: the tests check the choice of the solver and
 the fallback, not LoopStructural.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from loopstructural.main import model_manager as model_manager_module
@@ -175,3 +177,43 @@ def test_without_a_coordinate_from_the_check_the_full_feature_uses_the_default(
     manager._solve_feature(fault)
     assert [b.build_arguments['solver'] for b in fault.builder.builders] == ['cg'] * 3
     assert 'f1' in manager._native_failed
+
+
+class _GridBuilder(_Builder):
+    """A builder with an interpolator. The native solve converges if `converges`."""
+
+    def __init__(self, converges=True, n_nodes=1000):
+        super().__init__(solver_choice.NATIVE)
+        self.converges = converges
+        self.interpolator = SimpleNamespace(
+            support=SimpleNamespace(n_nodes=n_nodes), up_to_date=False
+        )
+        self.kwargs_at_solve = []
+
+    def update(self):
+        solver = self.build_arguments.get('solver')
+        self.solvers.append(solver)
+        self.kwargs_at_solve.append(dict(self.build_arguments.get('solver_kwargs') or {}))
+        self.interpolator.up_to_date = solver != solver_choice.NATIVE or self.converges
+
+    up_to_date = update
+
+
+def test_the_native_solve_gets_the_iteration_limit_of_its_grid(manager, monkeypatch):
+    _use(monkeypatch, solver_choice.NATIVE)
+    feature = _Feature('s1')
+    feature.builder = _GridBuilder(n_nodes=87232)
+    manager._solve_feature(feature)
+    assert feature.builder.kwargs_at_solve == [{'maxiter': 872320}]
+
+
+def test_a_native_solve_that_does_not_converge_is_solved_with_the_default(manager, monkeypatch):
+    _use(monkeypatch, solver_choice.NATIVE)
+    feature = _Feature('Group_0')
+    feature.builder = _GridBuilder(converges=False)
+    manager._solve_feature(feature)
+    assert feature.builder.solvers == ['native', 'cg']
+    # the native limit is not given to cg
+    assert feature.builder.kwargs_at_solve[-1] == {}
+    assert manager._native_fallbacks['Group_0'] == {0}
+    assert any('did not converge' in m for m in manager._debug_manager.messages)

@@ -1067,6 +1067,10 @@ class GeologicalModelManager(Observable):
         read, but the coordinate 0 can use it. If the check of loop-interpolation
         finds no coordinate, the full feature uses the default solver.
 
+        A native solve that does not converge is also solved again with the
+        default solver: loop-interpolation then keeps the old field, which can
+        have the size of an old grid.
+
         `rebuild` builds the feature again; otherwise only if it is out of date.
         """
         name = feature.name
@@ -1075,13 +1079,14 @@ class GeologicalModelManager(Observable):
         # the coordinates that failed in an earlier build
         for index in self._native_fallbacks.get(name, ()):
             if index < len(builders):
-                builders[index].update_build_arguments({'solver': fallback})
+                self._set_fallback(builders[index], fallback)
+        self._set_native_limits(builders)
         build = feature.builder.update if rebuild else feature.builder.up_to_date
         # one coordinate (or more) changes to the fallback at each attempt
         for _attempt in range(len(builders) + 1):
             try:
                 build()
-                return
+                break
             except solver_choice.NATIVE_ERRORS as error:
                 if not solver_choice.uses_native(feature):
                     raise
@@ -1089,23 +1094,49 @@ class GeologicalModelManager(Observable):
                 if not failed:
                     self._native_failed.add(name)
                     failed = list(range(len(builders)))
-                self._native_fallbacks.setdefault(name, set()).update(failed)
-                if self._debug_manager is not None:
-                    which = (
-                        f"the coordinates {sorted(failed)} of '{name}'"
-                        if len(builders) > 1
-                        else f"'{name}'"
-                    )
-                    self._debug_manager.log(
-                        f"The native solver cannot solve {which} ({error}). "
-                        f"They are solved with '{fallback}'.",
-                        log_level=1,
-                    )
-                for index in failed:
-                    builders[index].update_build_arguments({'solver': fallback})
+                self._use_fallback(name, builders, failed, fallback, f"not supported ({error})")
                 # the coordinates that are built already stay as they are
                 build = feature.builder.up_to_date
-        build()
+        else:
+            build()
+        unconverged = solver_choice.unconverged_builders(builders)
+        if unconverged:
+            self._use_fallback(name, builders, unconverged, fallback, "did not converge")
+            feature.builder.up_to_date()
+
+    @staticmethod
+    def _set_fallback(builder, fallback):
+        # the native iteration limit is not for the other solvers
+        builder.update_build_arguments({'solver': fallback, 'solver_kwargs': {}})
+
+    @staticmethod
+    def _set_native_limits(builders):
+        """Give each native builder the iteration limit of its grid.
+
+        Only a change of the limit marks the builder out of date.
+        """
+        for builder in builders:
+            if (builder.build_arguments or {}).get('solver') != solver_choice.NATIVE:
+                continue
+            limits = solver_choice.native_solver_kwargs(builder)
+            if limits and builder.build_arguments.get('solver_kwargs') != limits:
+                builder.update_build_arguments({'solver_kwargs': limits})
+
+    def _use_fallback(self, name, builders, indexes, fallback, reason):
+        """Solve the builders `indexes` of the feature `name` with `fallback` from now on."""
+        self._native_fallbacks.setdefault(name, set()).update(indexes)
+        if self._debug_manager is not None:
+            which = (
+                f"the coordinates {sorted(indexes)} of '{name}'"
+                if len(builders) > 1
+                else f"'{name}'"
+            )
+            self._debug_manager.log(
+                f"Native solver, {which}: {reason}. Solved with '{fallback}'.",
+                log_level=1,
+            )
+        for index in indexes:
+            self._set_fallback(builders[index], fallback)
 
     def default_nelements(self, name) -> tuple:
         """Return (number of elements, True if automatic) for the feature

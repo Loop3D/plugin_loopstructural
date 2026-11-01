@@ -21,6 +21,8 @@ LABELS = {
 
 # The errors that tell that the native solver cannot solve a feature
 NATIVE_ERRORS = (NotImplementedError, ImportError)
+# The iteration limit of a native solve, for each node of the grid (as cg)
+NATIVE_ITERATIONS_PER_NODE = 10
 
 
 def native_available() -> bool:
@@ -82,6 +84,35 @@ def unsupported_builders(builders):
             # the check is for one solve; any other problem is not a reason to change
             continue
     return failed
+
+
+def native_solver_kwargs(builder):
+    """Return the solver_kwargs for a native solve of `builder`, or None.
+
+    The core stops after 5 000 iterations by default. The cg solver of scipy
+    allows 10 x the number of nodes. With the default, a large grid can stop
+    before it converges, so give the native solver the same limit as cg.
+    """
+    support = getattr(getattr(builder, 'interpolator', None), 'support', None)
+    n_nodes = getattr(support, 'n_nodes', None)
+    if not n_nodes:
+        return None
+    return {'maxiter': int(NATIVE_ITERATIONS_PER_NODE * n_nodes)}
+
+
+def unconverged_builders(builders):
+    """Return the indexes of the builders whose native solve did not converge.
+
+    Then loop-interpolation keeps the old field of the interpolator, which can
+    have the size of an old grid.
+    """
+    return [
+        index
+        for index, builder in enumerate(builders)
+        if (getattr(builder, 'build_arguments', None) or {}).get('solver') == NATIVE
+        and getattr(builder, 'interpolator', None) is not None
+        and not getattr(builder.interpolator, 'up_to_date', True)
+    ]
 
 
 def uses_native(feature) -> bool:
