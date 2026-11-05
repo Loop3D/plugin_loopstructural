@@ -1,6 +1,6 @@
 [general]
 name=LoopStructural
-about=Implict 3D geological modelling in QGIS
+about=Implicit 3D geological modelling in QGIS
 category=Vector
 hasProcessingProvider=False
 description=This plugin provides an interface to LoopStructural a 3D geological modelling library.
