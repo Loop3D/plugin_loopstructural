@@ -5,6 +5,7 @@ on:
 env:
     PACKAGE_NAME: plugin_loopstructural
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -23,20 +24,13 @@ jobs:
       tag_name: ${{ steps.release.outputs.loopstructural--tag_name }}
   package:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.tag_name != '' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Extract tag name
-        id: tag
-        run: |
-          full_tag="${{ needs.release-please.outputs.tag_name }}"
-          tag="${full_tag#*--}"  # removes everything before the --
-          echo "tag=$tag" >> $GITHUB_OUTPUT
-
-      - name: Trigger release.yml
-        run: |
-          curl --fail-with-body -X POST \
-            -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/Loop3d/${{ env.PACKAGE_NAME }}/actions/workflows/releaser.yml/dispatches \
-            -d "{\"ref\":\"${{ steps.tag.outputs.tag }}\"}"
+      # Tags and releases made with GITHUB_TOKEN do not start other workflows,
+      # but workflow_dispatch made with GITHUB_TOKEN does.
+      - name: Trigger releaser.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh workflow run releaser.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
