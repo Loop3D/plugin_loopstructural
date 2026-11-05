@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Loop3D/plugin_loopstructural/compare/v0.7.0...v0.7.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* correct the spelling of implicit in the plugin description ([8b2d5d8](https://github.com/Loop3D/plugin_loopstructural/commit/8b2d5d8cee41417cf8525c300c06eb23b1c995a1))
+
 ## [0.7.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.6.1...v0.7.0) (2026-11-01)
 
 
