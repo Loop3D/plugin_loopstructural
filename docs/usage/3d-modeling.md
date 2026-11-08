@@ -28,16 +28,34 @@ Faults are modelled in LoopStructural by building three implicit functions defin
 
 ## Push the model to GeoViewer
 
-GeoViewer is the advanced 3D viewer of Loop. It is a separate program. The plugin can send the
-surfaces of the solved model to it. This is optional: the 3D view of the plugin does not change.
+GeoViewer is the advanced 3D viewer of Loop. It is a separate program. The plugin sends the
+solved model to it with the `loop-link` package. This is optional: the 3D view of the plugin does
+not change.
 
-1. Start GeoViewer. Open its link popup (in the status bar) and note the port and the token.
+Install the package in the Python of QGIS: `pip install loop-link`.
+
+1. Start GeoViewer and turn its link on.
 2. In the plugin, build the model (step 4). Open **Export** in step 5 and select the
    **GeoViewer** tab.
-3. Type the port and the token, choose the surfaces to send, and select
-   **Push model to GeoViewer**.
+3. Select the kinds of object to send, and select **Push model to GeoViewer**.
 
-The plugin saves the port and the token for the next push. The surfaces go into the group
-`LoopStructural model` of the GeoViewer scene. A new push replaces the surfaces of the last push.
-Other objects of the scene stay. The coordinates are in the CRS of the model, and the scene of
-GeoViewer keeps its own origin.
+These kinds of object can be sent. Each kind goes into its own group in the group
+`LoopStructural model` of the GeoViewer scene.
+
+| Kind | GeoViewer object |
+| --- | --- |
+| Stratigraphic surfaces, fault surfaces | Surface, with the colour of the unit or fault |
+| Stratigraphy volume | Block model with the categories of the units |
+| Scalar fields | Block model with the value of each feature on the nodes |
+| DEM | Surface with an `elevation` property |
+| Data points | Points with the value of the data |
+| Orientation data | Vectors with dip direction and dip |
+| Vector fields | Vectors of the gradient of each feature |
+| Lines | Bounding box of the model, fault traces and basal contacts |
+
+The **Cells** values set the size of the grid of the stratigraphy volume and of the scalar
+fields. **Port** is **Automatic** by default: loop_link finds the running viewer and reads the
+token that GeoViewer saved. Type a port or a token only if you need to override them.
+
+A new push replaces the objects of the last push. Other objects of the scene stay. The
+coordinates are in the CRS of the model, and the scene of GeoViewer keeps its own origin.

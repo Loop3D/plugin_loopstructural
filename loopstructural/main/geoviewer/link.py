@@ -1,45 +1,41 @@
-"""The connection of the plugin to a running GeoViewer.
+"""The connection of the plugin to a running GeoViewer, with the ``loop_link`` package.
 
-``GeoViewerLink.push`` makes the connection, says ``hello``, sends the objects
-of the model and closes the connection. Nothing keeps the link open, so the
-plugin has no state to repair when the viewer stops. The viewer keeps the scene.
+``push_model`` connects, sends the objects of the model, applies the plain
+colours, removes the old objects of the last push, and closes the connection.
+Nothing keeps the link open, so the plugin has no state to repair when the
+viewer stops. The viewer keeps the scene.
+
+``loop_link`` is an optional package. The import is inside the functions, so the
+plugin starts without it and the push says what to install.
 """
 
-from typing import Callable, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+import threading
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
-from . import protocol
-from .websocket_client import WebSocketClient, WebSocketClosed, WebSocketError
+from .scene import Group, Item, Skipped
 
-DEFAULT_PORT = 47615
-HOST = '127.0.0.1'
-
-# Time to wait for the answer to the hello message
-_HELLO_TIMEOUT = 5.0
-# Time to wait for the errors of the viewer after the last message
-_SETTLE_TIMEOUT = 0.5
+INSTALL_HINT = (
+    "The loop_link package is not installed. Install it in the Python of QGIS "
+    "with: pip install loop-link"
+)
 
 
 class LinkError(Exception):
     """The push failed. The text tells the user why."""
 
 
-class SkippedObject(NamedTuple):
-    """Put in place of a frame when an object cannot be made. The push continues."""
-
-    reason: str
-
-
-class PushResult:
+@dataclass
+class PushSummary:
     """What happened in one push."""
 
-    def __init__(self):
-        self.sent = 0
-        self.removed = 0
-        # (object id, text) of each error that the viewer sent about an object
-        self.refused: List[Tuple[str, str]] = []
-        self.other_errors: List[str] = []
-        # (object id, text) of each object that the plugin could not make
-        self.skipped: List[Tuple[str, str]] = []
+    sent: int = 0
+    removed: int = 0
+    cancelled: bool = False
+    # (object id, text) of each object that the plugin or loop_link did not send
+    skipped: List[Tuple[str, str]] = field(default_factory=list)
+    # texts of the messages that the viewer refused, and of the colours that it refused
+    refused: List[str] = field(default_factory=list)
 
     def summary(self) -> str:
         text = f"{self.sent} objects sent to GeoViewer"
@@ -47,128 +43,125 @@ class PushResult:
             text += f", {self.removed} old objects removed"
         if self.skipped:
             text += f", {len(self.skipped)} objects skipped"
-        if self.refused or self.other_errors:
-            text += f". The viewer refused {len(self.refused) + len(self.other_errors)} messages"
-        return text + "."
+        if self.cancelled:
+            text += ", stopped by the user"
+        text += "."
+        if self.refused:
+            text += f" The viewer refused {len(self.refused)} messages."
+        return text
+
+    def details(self) -> List[str]:
+        return [f"{object_id}: {text}" for object_id, text in self.skipped] + list(self.refused)
 
 
-class GeoViewerLink:
-    """A short session with the viewer.
+def import_loop_link():
+    """Return the ``loop_link`` module, or raise a ``LinkError`` with the install hint."""
+    try:
+        import loop_link
+    except ImportError as error:
+        raise LinkError(INSTALL_HINT) from error
+    return loop_link
+
+
+def loop_link_available() -> bool:
+    try:
+        import_loop_link()
+    except LinkError:
+        return False
+    return True
+
+
+def push_model(
+    items: Iterable[Any],
+    *,
+    crs: str = '',
+    origin: Sequence[float] = (0.0, 0.0, 0.0),
+    port: Optional[int] = None,
+    token: Optional[str] = None,
+    replace_prefix: Optional[str] = None,
+    progress: Optional[Callable[[str], None]] = None,
+    cancel: Optional[threading.Event] = None,
+    viewer=None,
+) -> PushSummary:
+    """Send the values of ``scene.model_items`` to the viewer.
 
     Parameters
     ----------
-    port, token : the port and the token of the link of the viewer. The viewer
-        shows both in its link popup.
+    items : iterable
+        ``Group``, ``Item`` and ``Skipped`` values. The iterable is read while the
+        objects are sent, so a slow object is built just before it is sent.
+    crs, origin : the CRS and the origin that the plugin proposes for the scene.
+        If the scene of the viewer has an origin already, the viewer keeps it.
+    port, token : the port and the token of the viewer. ``None`` means that
+        loop_link finds the viewer and reads the token (the ``GEOVIEWER_TOKEN``
+        variable, or the token that the viewer saved).
+    replace_prefix : after the push, remove the objects of the viewer whose id
+        starts with this text and that were not sent again.
+    progress : called with a text before each step.
+    cancel : an event that stops the push before the next object.
+    viewer : a ``loop_link.Viewer`` to use, for the tests. The function closes it.
+
+    Raises
+    ------
+    LinkError
+        The viewer cannot be reached, it refused the link, or nothing was sent.
     """
+    loop_link = import_loop_link()
+    if viewer is None:
+        viewer = loop_link.Viewer(
+            port=port or None, token=token or None, crs=crs or '', origin=origin
+        )
+    summary = PushSummary()
+    colours: List[Tuple[str, Tuple[int, int, int]]] = []
 
-    def __init__(self, port: int = DEFAULT_PORT, token: str = '', host: str = HOST):
-        self.port = int(port)
-        self.token = token or ''
-        self.host = host
+    def objects():
+        for value in items:
+            if isinstance(value, Group):
+                viewer.send_group(value.id, value.name, value.parent)
+            elif isinstance(value, Skipped):
+                summary.skipped.append((value.id, value.reason))
+            elif isinstance(value, Item):
+                if value.colour is not None:
+                    colours.append((value.id, value.colour))
+                yield (value.id, value.obj, {'name': value.name, 'parent': value.parent})
 
-    def push(
-        self,
-        crs: str,
-        origin: Sequence[float],
-        build_messages: Callable[[Sequence[float]], Iterable[Tuple[str, bytes]]],
-        *,
-        replace_prefix: Optional[str] = None,
-        progress: Optional[Callable[[str], None]] = None,
-    ) -> PushResult:
-        """Send objects to the viewer.
+    try:
+        viewer.connect()
+        result = loop_link.push_objects(
+            viewer,
+            objects(),
+            replace_prefix=replace_prefix,
+            progress=progress,
+            cancel=cancel,
+        )
+        summary.sent = result.sent
+        summary.removed = result.removed
+        summary.cancelled = result.cancelled
+        summary.skipped += list(result.skipped)
+        summary.refused += [f"{r.object_id}: {r.message}" for r in result.refused]
+        _apply_colours(viewer, colours, {r.object_id for r in result.refused}, summary)
+    except loop_link.LoopLinkError as error:
+        raise LinkError(str(error)) from error
+    finally:
+        viewer.close()
+    if summary.sent == 0 and not summary.cancelled:
+        reasons = '; '.join(summary.details())
+        raise LinkError("No object was sent to GeoViewer." + (f" {reasons}" if reasons else ""))
+    return summary
 
-        Parameters
-        ----------
-        crs, origin : the CRS and the origin that the plugin proposes for the
-            scene. If the scene of the viewer has an origin already, the viewer
-            keeps it and says so in its ``hello`` answer.
-        build_messages : called with the origin that the viewer uses. It yields
-            ``(object id, frame)`` pairs. The coordinates must be relative to
-            this origin. A ``SkippedObject`` in place of a frame is recorded in
-            ``PushResult.skipped``.
-        replace_prefix : after the push, remove the objects of the viewer whose
-            id starts with this text and that were not sent again.
-        progress : called with a text before each step.
-        """
-        say = progress or (lambda _text: None)
-        say(f"Connecting to GeoViewer on port {self.port}...")
+
+def _apply_colours(viewer, colours, refused_ids, summary: PushSummary) -> None:
+    """Give a plain colour to the objects that the viewer accepted.
+
+    A viewer that is too old for the colour commands refuses the first one. The
+    objects keep the colours of the viewer, and the summary says so once.
+    """
+    for object_id, colour in colours:
+        if object_id in refused_ids:
+            continue
         try:
-            client = WebSocketClient.connect(self.host, self.port, token=self.token)
-        except WebSocketError as error:
-            raise LinkError(
-                f"{error} Start GeoViewer, and check the port and the token in its link popup."
-            ) from error
-        try:
-            return self._session(client, crs, origin, build_messages, replace_prefix, say)
-        except WebSocketError as error:
-            raise LinkError(str(error)) from error
-        finally:
-            client.close()
-
-    def _session(self, client, crs, origin, build_messages, replace_prefix, say) -> PushResult:
-        result = PushResult()
-        client.send_binary(protocol.hello_message(crs, origin))
-        scene_origin, existing = self._read_hello_answer(client, origin)
-        sent_ids = set()
-        for object_id, frame in build_messages(scene_origin):
-            if isinstance(frame, SkippedObject):
-                result.skipped.append((object_id, frame.reason))
-                continue
-            say(f"Sending {object_id}...")
-            client.send_binary(frame)
-            sent_ids.add(object_id)
-            result.sent += 1
-            self._collect_errors(client, result, wait=0.0)
-        if replace_prefix:
-            for object_id in existing:
-                if object_id.startswith(replace_prefix) and object_id not in sent_ids:
-                    client.send_binary(protocol.remove_message(object_id))
-                    result.removed += 1
-        self._collect_errors(client, result, wait=_SETTLE_TIMEOUT)
-        return result
-
-    @staticmethod
-    def _read_hello_answer(client, origin):
-        """Return the origin of the scene and the ids that are in the scene.
-
-        The viewer answers ``hello`` with its own ``hello`` and then with one
-        ``scene.inventory``.
-        """
-        scene_origin = [float(v) for v in origin]
-        ids: List[str] = []
-        got_hello = got_inventory = False
-        while not (got_hello and got_inventory):
-            data = client.receive(_HELLO_TIMEOUT)
-            if data is None:
-                raise LinkError("GeoViewer did not answer the hello message.")
-            header = protocol.decode_header(data)
-            kind = header.get('type')
-            if kind == 'hello':
-                # an empty scene can answer "origin": null
-                scene_origin = [float(v) for v in header.get('origin') or scene_origin]
-                got_hello = True
-            elif kind == 'scene.inventory':
-                ids = protocol.inventory_ids(header)
-                got_inventory = True
-            elif kind == 'error':
-                raise LinkError(f"GeoViewer refused the link: {header.get('message', '')}")
-        return scene_origin, ids
-
-    @staticmethod
-    def _collect_errors(client, result: PushResult, *, wait: float):
-        """Read the messages that wait in the socket and keep the errors."""
-        while True:
-            try:
-                data = client.receive(wait if wait > 0 else 0.001)
-            except WebSocketClosed:
+            viewer.set_object_colour(object_id, colour)
+        except Exception as error:
+            summary.refused.append(f"{object_id}: colour not set ({error})")
+            if type(error).__name__ == 'MissingFeatureError':
                 return
-            if data is None:
-                return
-            header = protocol.decode_header(data)
-            if header.get('type') != 'error':
-                continue
-            text = header.get('message', header.get('code', 'error'))
-            if header.get('object'):
-                result.refused.append((header['object'], text))
-            else:
-                result.other_errors.append(text)

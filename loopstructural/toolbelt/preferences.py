@@ -42,7 +42,8 @@ class PlgSettingsStructure:
     # map units; see `fault_topology_calc.fault_pair_direction`
     fault_end_tolerance: float = 10.0
     # the link to the GeoViewer application (see `main.geoviewer`)
-    geoviewer_port: int = 47615
+    # 0 means that loop_link looks for the running viewer
+    geoviewer_port: int = 0
     # an old version kept the token here in plain text; see `toolbelt.auth_store`
     geoviewer_token: str = ""
     # the id of the QGIS authentication configuration that has the token

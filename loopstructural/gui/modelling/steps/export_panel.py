@@ -21,8 +21,9 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from loopstructural.main import model_export
+from loopstructural.main.geoviewer import layer_lines
 from loopstructural.main.geoviewer import scene as geoviewer_scene
-from loopstructural.main.geoviewer.link import DEFAULT_PORT, GeoViewerLink, LinkError
+from loopstructural.main.geoviewer.link import LinkError, loop_link_available, push_model
 from loopstructural.toolbelt import auth_store
 from loopstructural.toolbelt.preferences import PlgOptionsManager
 
@@ -158,34 +159,41 @@ class ExportPanel(QgsCollapsibleGroupBox):
     def _geoviewer_tab(self):
         tab = QWidget(self)
         form = QFormLayout(tab)
-        note = QLabel(
-            "Send the surfaces of the model to GeoViewer, the advanced 3D viewer. "
-            "Start GeoViewer first, and copy the port and the token from its link popup. "
-            "A new push replaces the surfaces of the last push.",
-            tab,
+        text = (
+            "Send the model to GeoViewer, the advanced 3D viewer, with the loop_link package. "
+            "Start GeoViewer and turn its link on. A new push replaces the objects of the last push."
         )
+        if not loop_link_available():
+            text += " The loop_link package is not installed: run 'pip install loop-link' in QGIS."
+        note = QLabel(text, tab)
         note.setWordWrap(True)
-        self.geoviewer_port = _spin(tab, DEFAULT_PORT, minimum=1, maximum=65535)
+        self.geoviewer_port = _spin(tab, 0, minimum=0, maximum=65535)
+        self.geoviewer_port.setSpecialValueText("Automatic")
         self.geoviewer_token = QLineEdit(tab)
         self.geoviewer_token.setEchoMode(QLineEdit.EchoMode.Password)
-        self.geoviewer_stratigraphy = QCheckBox("Stratigraphic surfaces", tab)
-        self.geoviewer_stratigraphy.setChecked(True)
-        self.geoviewer_faults = QCheckBox("Fault surfaces", tab)
-        self.geoviewer_faults.setChecked(True)
+        self.geoviewer_token.setPlaceholderText("Empty: use the token that GeoViewer saved")
+        self.geoviewer_cells = [_spin(tab, n) for n in geoviewer_scene.DEFAULT_CELLS]
+        self.geoviewer_kinds = {}
+        for key, (label, _group) in geoviewer_scene.KINDS.items():
+            box = QCheckBox(label, tab)
+            box.setChecked(True)
+            self.geoviewer_kinds[key] = box
         self.geoviewer_button = QPushButton("Push model to GeoViewer", tab)
         self.geoviewer_button.clicked.connect(self.push_to_geoviewer)
         self._load_geoviewer_settings()
         form.addRow(note)
         form.addRow("Port", self.geoviewer_port)
         form.addRow("Token", self.geoviewer_token)
-        form.addRow(self.geoviewer_stratigraphy)
-        form.addRow(self.geoviewer_faults)
+        for box in self.geoviewer_kinds.values():
+            form.addRow(box)
+        for label, widget in zip(("Cells in X", "Cells in Y", "Cells in Z"), self.geoviewer_cells):
+            form.addRow(f"{label} (volume and fields)", widget)
         form.addRow(self.geoviewer_button)
         return tab
 
     def _load_geoviewer_settings(self):
-        port = PlgOptionsManager.get_value_from_key('geoviewer_port', DEFAULT_PORT, int)
-        self.geoviewer_port.setValue(int(port or DEFAULT_PORT))
+        port = PlgOptionsManager.get_value_from_key('geoviewer_port', 0, int)
+        self.geoviewer_port.setValue(int(port or 0))
         # The token is read from the QGIS authentication database at the push,
         # so QGIS does not ask for its master password when the dock opens
         if self._has_saved_geoviewer_token():
@@ -241,6 +249,13 @@ class ExportPanel(QgsCollapsibleGroupBox):
         if not has_units:
             self.surface_strat.setChecked(False)
         self.tabs.setTabEnabled(1, has_units)
+        for key in ('stratigraphy_surfaces', 'stratigraphy_volume'):
+            box = self.geoviewer_kinds[key]
+            if has_units and not box.isEnabled():
+                box.setChecked(True)
+            box.setEnabled(has_units)
+            if not has_units:
+                box.setChecked(False)
         if not has_units:
             self.hint.setText("The model has faults only, so the block model is not offered.")
         if self._model_solved:
@@ -318,39 +333,53 @@ class ExportPanel(QgsCollapsibleGroupBox):
         QMessageBox.warning(self, "Export", text)
 
     def push_to_geoviewer(self):
-        """Send the surfaces of the model to a running GeoViewer. The model does not change."""
-        strat = self.geoviewer_stratigraphy.isChecked()
-        faults = self.geoviewer_faults.isChecked()
-        if not (strat or faults):
-            return self._warn("Select the stratigraphic surfaces, the fault surfaces, or both.")
+        """Send the model to a running GeoViewer. The model does not change."""
+        kinds = [key for key, box in self.geoviewer_kinds.items() if box.isChecked()]
+        if not kinds:
+            return self._warn("Select at least one kind of object to push.")
         port = self.geoviewer_port.value()
         PlgOptionsManager.set_value_from_key('geoviewer_port', port)
         token = self._geoviewer_token()
         manager = self.model_manager
+        ncells = [spin.value() for spin in self.geoviewer_cells]
         crs = self.data_manager.get_model_crs() if self.data_manager else None
         crs_text = crs.authid() if crs is not None and crs.isValid() else ''
+        # QGIS layers are read on this thread: the background task must not touch them
+        try:
+            line_sets = (
+                layer_lines.collect_line_sets(self.data_manager, manager)
+                if 'lines' in kinds
+                else []
+            )
+        except Exception as error:
+            return self._warn(f"The lines of the layers cannot be read: {error}")
 
         def target(progress):
             model = getattr(manager, 'model', None)
             if model is None:
-                raise geoviewer_scene.PushError("Build the model in step 4 first.")
+                raise RuntimeError("Build the model in step 4 first.")
             try:
-                result = GeoViewerLink(port, token).push(
-                    crs_text,
-                    geoviewer_scene.proposed_origin(model),
-                    lambda origin: geoviewer_scene.model_messages(
-                        manager, origin, stratigraphic=strat, faults=faults, progress=progress
+                summary = push_model(
+                    geoviewer_scene.model_items(
+                        manager,
+                        kinds,
+                        ncells=ncells,
+                        line_sets=line_sets,
+                        progress=progress,
                     ),
+                    crs=crs_text,
+                    origin=geoviewer_scene.proposed_origin(model),
+                    port=port or None,
+                    token=token or None,
                     replace_prefix=geoviewer_scene.ID_PREFIX,
                     progress=progress,
                 )
             except (LinkError, geoviewer_scene.PushError) as error:
                 raise RuntimeError(str(error)) from error
-            details = [f"{object_id}: {text}" for object_id, text in result.skipped]
-            details += [text for _id, text in result.refused] + list(result.other_errors)
+            details = summary.details()
             if details:
-                return f"{result.summary()} {'; '.join(details)}"
-            return result.summary()
+                return f"{summary.summary()} {'; '.join(details)}"
+            return summary.summary()
 
         self._run(target, "Push model to GeoViewer")
 
