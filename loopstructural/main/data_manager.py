@@ -23,6 +23,7 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
+from qgis.PyQt import sip
 from qgis.PyQt.QtGui import QColor
 
 from LoopStructural import FaultTopology, StratigraphicColumn
@@ -122,6 +123,11 @@ class ModellingDataManager:
         self._bounding_box_set = False
 
         self._basal_contacts: Optional[BasalContactsConfig] = None
+        # The contacts that the build calculated from the geology polygons, or that were read
+        # once from the contacts layer. The model reads these, not the layer: with "Calculate
+        # from geology polygons" the layer is a memory layer that exists for display only, and
+        # it is empty or gone after the project is opened again.
+        self._calculated_contacts: Optional[dict] = None
         self._fault_traces: Optional[FaultTracesConfig] = None
         self._structural_orientations: Optional[StructuralOrientationsConfig] = None
         self._unique_basal_units = []
@@ -758,6 +764,7 @@ class ModellingDataManager:
             'use_z_coordinate': use_z_coordinate,
         }
         self.layer_roles.set(layer_roles.BASAL_CONTACTS, basal_contacts)
+        self._remember_contacts_from_layer(basal_contacts, unitname_field, use_z_coordinate)
         # self._unitname_field = unitname_field
         self.calculate_unique_basal_units()
         # if stratigraphic column is not empty, update contacts
@@ -767,11 +774,77 @@ class ModellingDataManager:
             self.basal_contacts_callback(**self._basal_contacts)
         self.refresh_layer_watchers()
 
+    def _contacts_come_from_geology(self) -> bool:
+        return self.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_GEOLOGY
+
+    def _crs_text(self) -> str:
+        crs = self.get_model_crs()
+        return crs.authid() if crs is not None and crs.isValid() else ''
+
+    def _remember_contacts(self, frame, unit_field, use_z=False):
+        """Keep the contacts that the model uses with "Calculate from geology polygons"."""
+        self._calculated_contacts = {
+            'frame': frame,
+            'unit_field': unit_field,
+            'use_z': bool(use_z),
+            'crs': self._crs_text(),
+        }
+
+    def _remember_contacts_from_layer(self, layer, unit_field, use_z):
+        """Read the contacts layer once, so that the model does not read it again.
+
+        An empty layer keeps the contacts that were remembered: a memory layer of a
+        project that was opened again has no features.
+        """
+        if layer is None:
+            self._calculated_contacts = None
+            return
+        if not self._contacts_come_from_geology():
+            return
+        try:
+            frame = qgsLayerToGeoDataFrame(layer, target_crs=self.get_model_crs())
+        except Exception as error:
+            self.logger(message=f"The contacts layer cannot be read: {error}", log_level=2)
+            return
+        if frame is None or len(frame) == 0:
+            return
+        self._remember_contacts(frame, unit_field, use_z)
+
+    def has_contact_data(self) -> bool:
+        """Return True if the model manager holds contact points for at least one unit."""
+        manager = self._model_manager
+        if manager is None:
+            return False
+        return any(len(unit.get('contact', ())) for unit in manager.stratigraphy.values())
+
     def get_unique_basal_units(self):
         """Return the unit names that the basal contacts layer has."""
         return list(self._unique_basal_units)
 
+    @staticmethod
+    def _layer_is_deleted(layer) -> bool:
+        """Return True if the layer object is a Python name for a layer that QGIS deleted.
+
+        This happens when the project removes a layer that a setting still points to, for
+        example the scratch layer of the basal contacts after the project is opened again.
+        """
+        return layer is not None and sip.isdeleted(layer)
+
+    def _prune_deleted_layer(self, attribute: str):
+        """Forget the layer setting ``attribute`` if its layer is deleted, and return the setting."""
+        config = getattr(self, attribute)
+        if config is not None and self._layer_is_deleted(config.get('layer')):
+            self.logger(
+                message="A layer of the model settings was removed from the project. "
+                "The setting is cleared.",
+                log_level=2,
+            )
+            setattr(self, attribute, None)
+            return None
+        return config
+
     def calculate_unique_basal_units(self):
+        self._prune_deleted_layer('_basal_contacts')
         if (
             self._basal_contacts is not None
             and self._basal_contacts['unitname_field'] is not None
@@ -1521,7 +1594,7 @@ class ModellingDataManager:
 
     def get_basal_contacts(self) -> Optional[BasalContactsConfig]:
         """Get the basal contacts."""
-        return self._basal_contacts
+        return self._prune_deleted_layer('_basal_contacts')
 
     def get_unique_faults(self):
         """Get the unique faults from the fault traces."""
@@ -1562,7 +1635,7 @@ class ModellingDataManager:
 
     def get_fault_traces(self) -> Optional[FaultTracesConfig]:
         """Get the fault traces."""
-        return self._fault_traces
+        return self._prune_deleted_layer('_fault_traces')
 
     def set_structural_orientations(
         self,
@@ -1589,7 +1662,7 @@ class ModellingDataManager:
 
     def get_structural_orientations(self) -> Optional[StructuralOrientationsConfig]:
         """Get the structural orientations."""
-        return self._structural_orientations
+        return self._prune_deleted_layer('_structural_orientations')
 
     def get_stratigraphic_column(self):
         """Get the stratigraphic column."""
@@ -1611,14 +1684,27 @@ class ModellingDataManager:
             The unit name field of ``basal_contacts``.
         """
         self.logger(message="Updating stratigraphy...", log_level=4)
+        self._prune_deleted_layer('_basal_contacts')
+        self._prune_deleted_layer('_structural_orientations')
         if self._model_manager is not None:
             model_crs = self.get_model_crs()
             if basal_contacts is not None:
+                if self._contacts_come_from_geology():
+                    self._remember_contacts(basal_contacts, unit_name_field)
                 self._model_manager.update_contact_traces(
                     basal_contacts,
                     unit_name_field=unit_name_field,
                     use_z_coordinate=False,
                 )
+            elif self._contacts_come_from_geology():
+                # not the layer: it is for display, and it can be empty
+                remembered = self._calculated_contacts
+                if remembered is not None and remembered['crs'] == self._crs_text():
+                    self._model_manager.update_contact_traces(
+                        remembered['frame'],
+                        unit_name_field=remembered['unit_field'],
+                        use_z_coordinate=remembered['use_z'],
+                    )
             elif self._basal_contacts is not None:
                 self._model_manager.update_contact_traces(
                     qgsLayerToGeoDataFrame(self._basal_contacts['layer'], target_crs=model_crs),
@@ -1771,6 +1857,7 @@ class ModellingDataManager:
         """Clear all data in the manager."""
         self._bounding_box = BoundingBox()
         self._basal_contacts = None
+        self._calculated_contacts = None
         self._fault_traces = None
         self._structural_orientations = None
 

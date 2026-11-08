@@ -27,7 +27,7 @@ def names_to_refresh(data_manager) -> List[str]:
     """Return the derived results that a build calculates, in the order of calculation.
 
     - Basal contacts: with "Calculate from geology polygons", when they are
-      out of date, or never calculated. With "Use a contacts layer", never,
+      out of date, never calculated, or missing from the model data. With "Use a contacts layer", never,
       because the layer is an input of the user.
     - Thickness: only when it is out of date. A thickness that was never
       calculated can be typed, so the build does not calculate it.
@@ -43,7 +43,12 @@ def names_to_refresh(data_manager) -> List[str]:
         data_manager.layer_roles.contacts_source == layer_roles.CONTACTS_FROM_GEOLOGY
         and data_manager.get_layer_role(layer_roles.GEOLOGY) is not None
         and data_manager.get_layer_role(layer_roles.GEOLOGY_UNIT_FIELD)
-        and derived.status(derived_data.BASAL_CONTACTS) != derived_data.CURRENT
+        and (
+            derived.status(derived_data.BASAL_CONTACTS) != derived_data.CURRENT
+            # The record of the inputs is saved with the project, but the contacts are not:
+            # after the project is opened again the record says "current" and there is no data.
+            or not data_manager.has_contact_data()
+        )
     ):
         names.append(derived_data.BASAL_CONTACTS)
     if derived.is_out_of_date(derived_data.THICKNESS):
@@ -254,10 +259,12 @@ class DerivedRefresh:
         skipped = []
         if self._contacts_result is not None:
             # The model reads the contacts directly. The project layer is only for display.
+            # The layer first: the data manager reads it once, and then the result of the
+            # calculation, which has all of its columns, replaces that data.
+            self._update_contacts_layer(self._contacts_result)
             dm.update_stratigraphy(
                 basal_contacts=self._contacts_result, unit_name_field=BASAL_CONTACT_UNIT_FIELD
             )
-            self._update_contacts_layer(self._contacts_result)
             dm.derived.record(derived_data.BASAL_CONTACTS, inputs=self._contacts['inputs'])
         if self._thickness_result is not None:
             values = thickness_values(self._thickness_result['thicknesses'])

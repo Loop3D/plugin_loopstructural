@@ -225,6 +225,11 @@ class GeologicalModelManager(Observable):
         # put into the current features (a fault trace changed, or a group
         # got or lost all of its data). Only Initialize Model applies that.
         self._data_dirty = False
+        # True once the contacts or the orientations of the units changed after
+        # the features were built. The features keep the data that they were
+        # built with, so Solve Model alone would use the old data. Initialize
+        # Model, or `refresh_feature_data`, puts the new data in.
+        self._inputs_changed = False
         # True once the structure of the stratigraphic column (its
         # unconformities, the order of its elements, or the fault links of
         # its boundaries) has changed since the last Initialize Model. The
@@ -339,6 +344,7 @@ class GeologicalModelManager(Observable):
         self.dem_function = lambda x, y: 0
         self._topology_dirty = False
         self._data_dirty = False
+        self._inputs_changed = False
         self._column_dirty = False
         self._built_fault_data = {}
         self._emit('model_updated')
@@ -373,6 +379,7 @@ class GeologicalModelManager(Observable):
             # from whatever model was previously loaded.
             self._topology_dirty = False
             self._data_dirty = False
+            self._inputs_changed = False
             self._column_dirty = False
             # the data manager restores the fault data from the same state
             # before it loads the model, so take that as the built data
@@ -668,6 +675,41 @@ class GeologicalModelManager(Observable):
         # signal that fault point input changed
         self._emit('data_changed', 'fault_points')
 
+    # -- changes of the contacts and the orientations ---------------------
+
+    _INPUT_COLUMNS = ('X', 'Y', 'Z', 'dip', 'strike')
+
+    def _input_snapshot(self) -> dict:
+        """Return the contact and orientation rows of each unit, by (unit, kind).
+
+        Only the coordinates and the angles are kept: the build adds columns
+        (the value and the feature name) to the frames that it reads.
+        """
+        snapshot = {}
+        for unit_name, unit_data in self.stratigraphy.items():
+            for kind in ('contact', 'orientations'):
+                frame = unit_data.get(kind) if hasattr(unit_data, 'get') else None
+                if frame is None or len(frame) == 0:
+                    continue
+                columns = [c for c in self._INPUT_COLUMNS if c in frame.columns]
+                snapshot[(unit_name, kind)] = frame[columns].copy()
+        return snapshot
+
+    def _note_input_change(self, previous: dict) -> None:
+        """Mark the model stale if its features were built with other contacts or orientations.
+
+        A model with no features has nothing that is out of date.
+        """
+        model = getattr(self, 'model', None)
+        features = getattr(model, 'features', None) or []
+        if not any(not str(f.name).startswith('__') for f in features):
+            return
+        current = self._input_snapshot()
+        if previous.keys() != current.keys() or any(
+            not previous[key].equals(current[key]) for key in current
+        ):
+            self._inputs_changed = True
+
     def update_contact_traces(
         self,
         basal_contacts: gpd.GeoDataFrame,
@@ -697,22 +739,28 @@ class GeologicalModelManager(Observable):
         keyed by unit name. It does not notify observers; callers should call
         `update_model` or trigger observers as required.
         """
-        self.stratigraphy.clear()  # Clear existing stratigraphy
-        unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
-        if len(unit_points) == 0 or unit_points.empty:
-            self._debug_manager.log("No basal contacts found or empty GeoDataFrame.", log_level=2)
-            return
-        if unit_name_field is not None:
-            unit_points['unit_name'] = unit_points[unit_name_field].astype(str)
-        else:
-            return
-        for unit_name in unit_points['unit_name'].unique():
-            self.stratigraphy[unit_name]['contact'] = unit_points.loc[
-                unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
-            ]
+        previous = self._input_snapshot()
+        try:
+            self.stratigraphy.clear()  # Clear existing stratigraphy
+            unit_points = sampler(basal_contacts, self.dem_function, use_z_coordinate)
+            if len(unit_points) == 0 or unit_points.empty:
+                self._debug_manager.log(
+                    "No basal contacts found or empty GeoDataFrame.", log_level=2
+                )
+                return
+            if unit_name_field is not None:
+                unit_points['unit_name'] = unit_points[unit_name_field].astype(str)
+            else:
+                return
+            for unit_name in unit_points['unit_name'].unique():
+                self.stratigraphy[unit_name]['contact'] = unit_points.loc[
+                    unit_points['unit_name'] == unit_name, ['X', 'Y', 'Z']
+                ]
 
-        # signal that input data changed — consumers may choose to rebuild the model
-        self._emit('data_changed', 'contact_traces')
+            # signal that input data changed — consumers may choose to rebuild the model
+            self._emit('data_changed', 'contact_traces')
+        finally:
+            self._note_input_change(previous)
 
     def update_structural_data(
         self,
@@ -726,38 +774,45 @@ class GeologicalModelManager(Observable):
         use_z_coordinate=False,
     ):
         """Add structural orientation data to the geological model."""
-        if structural_orientations is None or structural_orientations.empty:
-            return
-        if (
-            strike_field is None
-            or strike_field not in structural_orientations.columns
-            or dip_field is None
-            or dip_field not in structural_orientations.columns
-        ):
-            return
-        if unit_name_field is None or unit_name_field not in structural_orientations.columns:
-            return
-        structural_orientations = sampler(
-            structural_orientations, self.dem_function, use_z_coordinate
-        )
+        previous = self._input_snapshot()
+        try:
+            if structural_orientations is None or structural_orientations.empty:
+                return
+            if (
+                strike_field is None
+                or strike_field not in structural_orientations.columns
+                or dip_field is None
+                or dip_field not in structural_orientations.columns
+            ):
+                return
+            if unit_name_field is None or unit_name_field not in structural_orientations.columns:
+                return
+            structural_orientations = sampler(
+                structural_orientations, self.dem_function, use_z_coordinate
+            )
 
-        structural_orientations['unit_name'] = structural_orientations[unit_name_field].astype(str)
+            structural_orientations['unit_name'] = structural_orientations[unit_name_field].astype(
+                str
+            )
 
-        structural_orientations['dip'] = structural_orientations[dip_field]
-        structural_orientations['strike'] = structural_orientations[strike_field]
-        structural_orientations = structural_orientations[
-            ['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']
-        ]
-        if dip_direction:
-            structural_orientations['strike'] = structural_orientations['strike'] - 90
-        for unit_name in structural_orientations['unit_name'].unique():
-            orientations = structural_orientations.loc[
-                structural_orientations['unit_name'] == unit_name, ['X', 'Y', 'Z', 'dip', 'strike']
+            structural_orientations['dip'] = structural_orientations[dip_field]
+            structural_orientations['strike'] = structural_orientations[strike_field]
+            structural_orientations = structural_orientations[
+                ['X', 'Y', 'Z', 'dip', 'strike', 'unit_name']
             ]
-            self.stratigraphy[unit_name]['orientations'] = orientations
+            if dip_direction:
+                structural_orientations['strike'] = structural_orientations['strike'] - 90
+            for unit_name in structural_orientations['unit_name'].unique():
+                orientations = structural_orientations.loc[
+                    structural_orientations['unit_name'] == unit_name,
+                    ['X', 'Y', 'Z', 'dip', 'strike'],
+                ]
+                self.stratigraphy[unit_name]['orientations'] = orientations
 
-        # signal structural orientation data changed
-        self._emit('data_changed', 'structural_orientations')
+            # signal structural orientation data changed
+            self._emit('data_changed', 'structural_orientations')
+        finally:
+            self._note_input_change(previous)
 
     def update_stratigraphic_column(self, stratigraphic_column: StratigraphicColumn):
         """Update the stratigraphic column with a new stratigraphic column"""
@@ -1857,6 +1912,7 @@ class GeologicalModelManager(Observable):
         if (
             getattr(self, '_topology_dirty', False)
             or getattr(self, '_data_dirty', False)
+            or getattr(self, '_inputs_changed', False)
             or getattr(self, '_column_dirty', False)
         ):
             return 'stale'
@@ -1959,6 +2015,7 @@ class GeologicalModelManager(Observable):
             # just re-applied above, so any pending topology edit is now current
             self._topology_dirty = False
             self._data_dirty = False
+            self._inputs_changed = False
             self._column_dirty = False
         finally:
             self._progress_callback = None
@@ -2070,6 +2127,9 @@ class GeologicalModelManager(Observable):
 
         if needs_initialize:
             self._data_dirty = True
+        else:
+            # the features have the current contacts and orientations now
+            self._inputs_changed = False
         self._emit('model_updated')
         return {'updated': updated, 'needs_initialize': needs_initialize}
 

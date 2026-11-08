@@ -126,6 +126,7 @@ class FakeDataManager:
 
     def __init__(self):
         self.units = ['a', 'b']
+        self.contact_data = True
         self.layer_roles = FakeRoles()
         self.inputs = {'unit_order': ['a', 'b']}
         self.derived = DerivedData()
@@ -137,6 +138,9 @@ class FakeDataManager:
 
     def get_layer_role(self, role):
         return self.layer_roles.values.get(role)
+
+    def has_contact_data(self):
+        return self.contact_data
 
 
 @pytest.fixture
@@ -150,6 +154,18 @@ class TestNamesToRefresh:
 
     def test_current_contacts_are_not_calculated_again(self, dm):
         dm.derived.record(derived_data.BASAL_CONTACTS)
+        assert names_to_refresh(dm) == []
+
+    def test_current_contacts_with_no_data_are_calculated_again(self, dm):
+        # the record is saved with the project, the contacts are not
+        dm.derived.record(derived_data.BASAL_CONTACTS)
+        dm.contact_data = False
+        assert names_to_refresh(dm) == [derived_data.BASAL_CONTACTS]
+
+    def test_a_contacts_layer_of_the_user_needs_no_calculation_without_data(self, dm):
+        dm.derived.record(derived_data.BASAL_CONTACTS)
+        dm.contact_data = False
+        dm.layer_roles.contacts_source = layer_roles.CONTACTS_FROM_LAYER
         assert names_to_refresh(dm) == []
 
     def test_a_reorder_makes_contacts_and_thickness_out_of_date_in_order(self, dm):
