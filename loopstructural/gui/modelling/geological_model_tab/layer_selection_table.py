@@ -535,9 +535,7 @@ class LayerSelectionDialog(QDialog):
             self.weight_spin.setDecimals(3)
             self.weight_spin.setRange(0.001, 1000.0)
             self.weight_spin.setSingleStep(0.1)
-            self.weight_spin.setValue(
-                self.existing_data.get('weight', constraints.DEFAULT_WEIGHT)
-            )
+            self.weight_spin.setValue(self.existing_data.get('weight', constraints.DEFAULT_WEIGHT))
             self.weight_spin.setToolTip("How much the constraint counts in the interpolation.")
             form.addRow("Weight:", self.weight_spin)
 
@@ -545,7 +543,12 @@ class LayerSelectionDialog(QDialog):
         for source in constraints.Z_SOURCES:
             self.z_source_combo.addItem(constraints.Z_LABELS[source], source)
         self.z_source_combo.setCurrentIndex(
-            max(self.z_source_combo.findData(self.existing_data.get('z_source', constraints.Z_LAYER)), 0)
+            max(
+                self.z_source_combo.findData(
+                    self.existing_data.get('z_source', constraints.Z_LAYER)
+                ),
+                0,
+            )
         )
         self.z_source_combo.setToolTip(
             "Where the Z of the points comes from: the geometry of the layer, the DEM "
@@ -561,7 +564,9 @@ class LayerSelectionDialog(QDialog):
         layout.addLayout(form)
 
         def update_z_value_state():
-            self.z_value_spin.setEnabled(self.z_source_combo.currentData() == constraints.Z_CONSTANT)
+            self.z_value_spin.setEnabled(
+                self.z_source_combo.currentData() == constraints.Z_CONSTANT
+            )
 
         self.z_source_combo.currentIndexChanged.connect(update_z_value_state)
         update_z_value_state()

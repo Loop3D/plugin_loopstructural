@@ -394,7 +394,9 @@ class BaseFeatureDetailsPanel(QWidget):
             if reply != QMessageBox.StandardButton.Yes:
                 return
             manager.attach_feature(name)
-            push_info("Feature", f"'{name}' follows the stratigraphic column again. Rebuild the model.")
+            push_info(
+                "Feature", f"'{name}' follows the stratigraphic column again. Rebuild the model."
+            )
         elif manager.detach_feature(name):
             push_info("Feature", f"'{name}' is detached. Its data is a fixed copy.")
         else:

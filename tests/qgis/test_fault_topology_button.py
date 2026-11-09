@@ -14,9 +14,7 @@ from loopstructural.main.model_manager import GeologicalModelManager
 def page():
     project = QgsProject.instance()
     model_manager = GeologicalModelManager()
-    data_manager = ModellingDataManager(
-        project=project, mapCanvas=Mock(), logger=Mock()
-    )
+    data_manager = ModellingDataManager(project=project, mapCanvas=Mock(), logger=Mock())
     data_manager.set_model_manager(model_manager)
     return FaultsStep(None, data_manager=data_manager, model_manager=model_manager)
 

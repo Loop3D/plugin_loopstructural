@@ -74,8 +74,7 @@ _MODEL_STATE_LABELS = {
     'initialized': "Model status: initialized (not solved)",
     'solved': "Model status: solved",
     'stale': (
-        "Model status: faults, stratigraphic column or input data changed — "
-        "rebuild the model"
+        "Model status: faults, stratigraphic column or input data changed — " "rebuild the model"
     ),
 }
 
@@ -524,9 +523,7 @@ class GeologicalModelTab(QWidget):
         )
         return reply == QMessageBox.StandardButton.Yes
 
-    def _run_model_task(
-        self, target, *, title, initial_label, cancellable=True, on_success=None
-    ):
+    def _run_model_task(self, target, *, title, initial_label, cancellable=True, on_success=None):
         """Run `target(progress_callback)` on a background QThread with a
         non-modal progress dialog, so the rest of QGIS stays usable. Both
         Initialize Model and Solve Model share this: they disable each other

@@ -261,7 +261,9 @@ class FaultsStep(StepPage):
         self.fault_layers.faultTraceLayer.layerChanged.connect(self.update_topology_button)
         self.fault_layers.faultNameField.fieldChanged.connect(self.update_topology_button)
         if self.data_manager is not None:
-            self.data_manager.layer_roles.attach(lambda _role, _value: self.update_topology_button())
+            self.data_manager.layer_roles.attach(
+                lambda _role, _value: self.update_topology_button()
+            )
         self.update_topology_button()
 
         self.adjacency = FaultAdjacencyTab(self, data_manager=self.data_manager)
@@ -274,7 +276,11 @@ class FaultsStep(StepPage):
     def update_topology_button(self, *_args):
         """Enable the button when the fault layer and the name field are set."""
         traces = self._fault_traces()
-        layer = self.data_manager.get_layer_role(layer_roles.FAULT_TRACES) if self.data_manager else None
+        layer = (
+            self.data_manager.get_layer_role(layer_roles.FAULT_TRACES)
+            if self.data_manager
+            else None
+        )
         if layer is None or not traces.get('fault_name_field'):
             self.topology_button.setEnabled(False)
             self.topology_button.setToolTip(
@@ -289,11 +295,11 @@ class FaultsStep(StepPage):
     def _calculate_topology(self):
         self.message_bar.clearWidgets()
         try:
-            result = calculate_from_data_manager(
-                self.data_manager, self.tolerance_spin_box.value()
-            )
+            result = calculate_from_data_manager(self.data_manager, self.tolerance_spin_box.value())
         except FaultTopologyError as error:
-            self.message_bar.pushMessage("Fault topology", str(error), level=Qgis.MessageLevel.Critical)
+            self.message_bar.pushMessage(
+                "Fault topology", str(error), level=Qgis.MessageLevel.Critical
+            )
             return
         text, warn = result_message(result)
         self.message_bar.pushMessage(

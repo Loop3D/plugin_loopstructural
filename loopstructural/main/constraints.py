@@ -69,6 +69,7 @@ def has_weight(layer_type):
     """Return True if a row of the type `layer_type` has a weight."""
     return layer_type not in UNWEIGHTED_TYPES
 
+
 # The keys of a row that name a field of the layer, for each type. A row
 # without these keys is not complete.
 REQUIRED_FIELDS = {
@@ -85,7 +86,9 @@ REQUIRED_FIELDS = {
 
 def missing_fields(layer_data):
     """Return the keys that a row needs and does not have."""
-    return [key for key in REQUIRED_FIELDS.get(layer_data.get('type'), ()) if not layer_data.get(key)]
+    return [
+        key for key in REQUIRED_FIELDS.get(layer_data.get('type'), ()) if not layer_data.get(key)
+    ]
 
 
 def solver_for(layer_type):

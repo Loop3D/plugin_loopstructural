@@ -32,7 +32,6 @@ from loopstructural.gui.modelling.steps.section_stack import SectionStack
 from .init_from_field_dialog import InitFromLayerFieldDialog
 from .stratigraphic_unit import StratigraphicUnitWidget
 
-
 # The values of the "Style by" combo
 STYLE_COLOUR = 'colour'
 STYLE_ORDER = 'order'
