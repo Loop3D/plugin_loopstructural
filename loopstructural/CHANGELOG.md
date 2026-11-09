@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/Loop3D/plugin_loopstructural/compare/v0.7.1...v0.8.0) (2026-11-09)
+
+
+### Features
+
+* push the model to GeoViewer from the export panel ([a40c050](https://github.com/Loop3D/plugin_loopstructural/commit/a40c050ba5923d0b15b4e6ba4e5dedb0ef2b09e3))
+* push the whole model to GeoViewer with loop_link ([4fce97c](https://github.com/Loop3D/plugin_loopstructural/commit/4fce97c6433c0bd22255d3cc7273b868021da2db))
+
+
+### Bug Fixes
+
+* mark the model stale when the contacts or the orientations change after a build ([6f9e1a1](https://github.com/Loop3D/plugin_loopstructural/commit/6f9e1a178a655b67b1e020fc8f8400cffbed1887))
+* review fixes for the push to GeoViewer ([25acc52](https://github.com/Loop3D/plugin_loopstructural/commit/25acc52d3587053c79319773e606f64609d4e27b))
+
 ## [0.7.1](https://github.com/Loop3D/plugin_loopstructural/compare/v0.7.0...v0.7.1) (2026-11-05)
 
 
