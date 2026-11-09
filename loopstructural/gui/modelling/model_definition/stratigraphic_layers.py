@@ -89,7 +89,8 @@ class StratigraphicLayersWidget(QWidget):
             else:
                 configure_layer_combo(
                     self.basalContactsLayer,
-                    QgsMapLayerProxyModel.Filter.LineLayer | QgsMapLayerProxyModel.Filter.PointLayer,
+                    QgsMapLayerProxyModel.Filter.LineLayer
+                    | QgsMapLayerProxyModel.Filter.PointLayer,
                     allow_empty=True,
                 )
                 self.groupBox_basalContacts.setTitle("Basal contacts")

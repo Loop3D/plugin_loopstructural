@@ -61,9 +61,7 @@ class SectionStack(QWidget):
                 self._settings_key, {key: self.is_open(key) for key in self._sections}
             )
 
-    def add_section(
-        self, widget, key, title, *, summary=None, collapsed=False, index=None
-    ):
+    def add_section(self, widget, key, title, *, summary=None, collapsed=False, index=None):
         """Add a section and return its group box.
 
         ``widget`` is the content, or a `QgsCollapsibleGroupBox` that the stack

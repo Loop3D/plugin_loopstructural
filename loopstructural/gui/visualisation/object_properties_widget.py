@@ -31,6 +31,7 @@ from .mesh_scalar_utils import (
     render_histogram,
 )
 
+
 class ObjectPropertiesWidget(QWidget):
     """The properties of the selected viewer object.
 

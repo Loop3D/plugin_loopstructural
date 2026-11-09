@@ -179,9 +179,7 @@ class TestConstraintTypes:
         assert kwargs == {'solver': 'admm'}
         assert 'pair_id' in data
 
-    def test_with_the_native_solver_a_pairwise_inequality_needs_no_admm(
-        self, manager, monkeypatch
-    ):
+    def test_with_the_native_solver_a_pairwise_inequality_needs_no_admm(self, manager, monkeypatch):
         monkeypatch.setattr(solver_choice, 'use_native', lambda setting: True)
         df = _points(order=lambda p: 1 if p.x < 50 else 2)
         layer = {'type': 'Pairwise Inequality', 'pair_field': 'order', 'df': df}
@@ -199,9 +197,7 @@ class TestConstraintTypes:
             'vector_z_field': 'nz',
             'df': _points(nx=lambda p: 1.0, ny=lambda p: 0.0, nz=lambda p: 0.0),
         }
-        manager.add_foliation(
-            's1', {'values': values, 'normals': normals}, use_z_coordinate=True
-        )
+        manager.add_foliation('s1', {'values': values, 'normals': normals}, use_z_coordinate=True)
         manager.update_all_features(notify_observers=False)
         result = manager.model['s1'].evaluate_value(np.array([[50.0, 50.0, 0.0]]))
         assert not np.any(np.isnan(result))

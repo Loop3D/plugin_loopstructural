@@ -148,9 +148,7 @@ class ModellingWidget(QWidget):
     def _neighbour(self, direction, index=None):
         """Return the index of the next visible step, or ``index`` if there is none."""
         index = self.current_index if index is None else index
-        candidates = [
-            i for i in self._visible_indices() if (i - index) * direction > 0
-        ]
+        candidates = [i for i in self._visible_indices() if (i - index) * direction > 0]
         if not candidates:
             return index
         return min(candidates, key=lambda i: abs(i - index))
@@ -162,7 +160,10 @@ class ModellingWidget(QWidget):
         for page in self.pages:
             self.step_bar.set_step_visible(page.key, page.key in visible)
         self.data_step.set_workflow_mode(mode)
-        if self.stack.currentIndex() >= 0 and self.pages[self.stack.currentIndex()].key not in visible:
+        if (
+            self.stack.currentIndex() >= 0
+            and self.pages[self.stack.currentIndex()].key not in visible
+        ):
             self.go_to(self.stack.currentIndex())
         else:
             self.refresh_status()
